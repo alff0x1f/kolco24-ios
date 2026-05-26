@@ -63,7 +63,6 @@ struct MarksView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 10)
                 .padding(.bottom, 14)
 
                 NFCStripView()
