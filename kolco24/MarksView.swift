@@ -74,7 +74,7 @@ struct MarksView: View {
         }
         .background(Color.paper)
         .navigationTitle("Отметки")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             FloatingCTAView(onNFC: { showScan = true }, onPhoto: {})
         }

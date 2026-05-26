@@ -63,7 +63,7 @@ struct LegendView: View {
                 }
                 .pickerStyle(.segmented)
                 .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 0, leading: DS.hPad, bottom: 0, trailing: DS.hPad))
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                 .listRowSeparator(.hidden)
             }
 
@@ -79,10 +79,12 @@ struct LegendView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(8)
+        .contentMargins(.top, 8, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.paper)
         .navigationTitle("Легенда")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -127,11 +129,11 @@ private struct ScoreStripView: View {
             }
             .frame(height: 6)
         }
-        .padding(16)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: .black.opacity(0.04), radius: 1, y: 0.5)
-        .padding(.horizontal, DS.hPad)
     }
 }
 

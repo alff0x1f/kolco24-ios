@@ -30,43 +30,62 @@ struct TeamView: View {
     private var boundCount: Int { members.filter(\.isBound).count }
 
     var body: some View {
-        List {
-            // Hero card
-            Section {
+        ScrollView {
+            VStack(spacing: 0) {
                 TeamHeroView(bound: boundCount, total: members.count)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-                    .listRowSeparator(.hidden)
-            }
+                    .padding(.top, 8)
 
-            // Members
-            Section(
-                header: Text("Состав · \(members.count)")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.sub)
-                    .textCase(nil),
-                footer: Text("Привяжите NFC-чип каждому участнику до старта — без него отметки не засчитаются.")
-                    .foregroundStyle(Color.sub)
-            ) {
-                ForEach(members) { m in
-                    MemberRowView(member: m)
-                        .listRowBackground(Color.white)
+                SectionHeader("Состав · \(members.count)")
+                    .padding(.top, 20)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(members.enumerated()), id: \.element.id) { idx, m in
+                        MemberRowView(member: m)
+                            .padding(.horizontal, DS.hPad)
+                            .padding(.vertical, 8)
+                        if idx < members.count - 1 {
+                            Rectangle()
+                                .fill(Color.black.opacity(0.06))
+                                .frame(height: 0.5)
+                                .padding(.leading, DS.hPad + 38 + 12)
+                        }
+                    }
                 }
-            }
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+                .padding(.horizontal, DS.hPad)
 
-            // Misc
-            Section("Прочее") {
-                MiscRowView(systemImage: "gearshape.fill",      iconBg: Color.charcoal,    label: "Настройки",        sub: "Соревнование, сервер, NFC")
-                    .listRowBackground(Color.white)
-                MiscRowView(systemImage: "questionmark.circle.fill", iconBg: Color.kolcoOrange, label: "Справка и правила", sub: "Регламент, FAQ, контакты оргкомитета")
-                    .listRowBackground(Color.white)
+                Text("Привяжите NFC-чип каждому участнику до старта — без него отметки не засчитаются.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.sub)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, DS.hPad + 4)
+                    .padding(.top, 8)
+
+                SectionHeader("Прочее")
+                    .padding(.top, 20)
+
+                VStack(spacing: 0) {
+                    MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: "Настройки", sub: "Соревнование, сервер, NFC")
+                        .padding(.horizontal, DS.hPad)
+                        .padding(.vertical, 8)
+                    Rectangle()
+                        .fill(Color.black.opacity(0.06))
+                        .frame(height: 0.5)
+                        .padding(.leading, DS.hPad + 30 + 12)
+                    MiscRowView(systemImage: "questionmark.circle.fill", iconBg: Color.kolcoOrange, label: "Справка и правила", sub: "Регламент, FAQ, контакты оргкомитета")
+                        .padding(.horizontal, DS.hPad)
+                        .padding(.vertical, 8)
+                }
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+                .padding(.horizontal, DS.hPad)
+                .padding(.bottom, 32)
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
         .background(Color.paper)
         .navigationTitle("Команда")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
