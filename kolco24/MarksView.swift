@@ -188,6 +188,7 @@ private struct NFCStripView: View {
             .font(.system(size: 12))
             .lineLimit(2)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

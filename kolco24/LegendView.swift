@@ -58,10 +58,13 @@ struct LegendView: View {
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
                 .listRowSeparator(.hidden)
 
-                Picker("Фильтр", selection: $filter) {
-                    ForEach(CPFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                CPFilterPicker(
+                    filter: $filter,
+                    totalCount: mockCPs.count,
+                    openCount: mockCPs.count - takenCount
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 6)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                 .listRowSeparator(.hidden)
@@ -163,6 +166,48 @@ private struct LegendRowView: View {
             }
         }
         .padding(.vertical, 3)
+    }
+}
+
+// MARK: - CPFilterPicker
+private struct CPFilterPicker: View {
+    @Binding var filter: CPFilter
+    let totalCount: Int
+    let openCount: Int
+
+    var body: some View {
+        HStack(spacing: 0) {
+            filterButton(.all,  count: totalCount)
+            filterButton(.open, count: openCount)
+        }
+        .padding(2)
+        .background(Color(hex: "787880").opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 9))
+    }
+
+    @ViewBuilder
+    private func filterButton(_ option: CPFilter, count: Int) -> some View {
+        Button {
+            filter = option
+        } label: {
+            HStack(spacing: 6) {
+                Text(option.rawValue)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.ink)
+                Text("\(count)")
+                    .font(.mono(11, weight: .bold))
+                    .foregroundStyle(filter == option ? Color.sub : Color(hex: "3C3C43").opacity(0.5))
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 28)
+            .background(filter == option ? Color.white : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .shadow(
+                color: filter == option ? Color.black.opacity(0.12) : Color.clear,
+                radius: 4, x: 0, y: 1.5
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
