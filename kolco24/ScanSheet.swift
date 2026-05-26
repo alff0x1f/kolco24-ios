@@ -226,7 +226,6 @@ private struct TimerHeroView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            // Countdown circle
             ZStack {
                 Circle()
                     .stroke(Color.white.opacity(0.1), lineWidth: 6)
@@ -269,6 +268,7 @@ private struct TimerHeroView: View {
                     .lineLimit(2)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background { DarkHeroBackground() }
         .clipShape(RoundedRectangle(cornerRadius: DS.heroRadius))
