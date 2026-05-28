@@ -112,7 +112,7 @@ struct ScanSheet: View {
                     .padding(.bottom, 2)
 
                 // Timer hero
-                TimerHeroView(seconds: 17, total: 20, remainingScans: remaining + 1)
+                TimerHeroView(seconds: 17, total: 20, remainingScans: remaining)
                     .padding(.horizontal, DS.hPad)
                     .padding(.top, 4)
                     .padding(.bottom, 14)
