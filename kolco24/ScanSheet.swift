@@ -56,10 +56,16 @@ struct ScanSheet: View {
                 .padding(.horizontal, DS.hPad)
                 .padding(.bottom, 4)
 
+                // Timer hero — stays at the top so the iOS NFC system sheet doesn't cover it
+                TimerHeroView(seconds: 17, total: 20, remainingScans: remaining)
+                    .padding(.horizontal, DS.hPad)
+                    .padding(.top, 4)
+                    .padding(.bottom, 10)
+
                 // CP Waiting card
                 CPWaitingCardView()
                     .padding(.horizontal, DS.hPad)
-                    .padding(.vertical, 10)
+                    .padding(.bottom, 10)
 
                 // Chips header
                 HStack {
@@ -110,12 +116,6 @@ struct ScanSheet: View {
                     .padding(.horizontal, DS.hPad + 2)
                     .padding(.top, 6)
                     .padding(.bottom, 2)
-
-                // Timer hero
-                TimerHeroView(seconds: 17, total: 20, remainingScans: remaining)
-                    .padding(.horizontal, DS.hPad)
-                    .padding(.top, 4)
-                    .padding(.bottom, 14)
 
                 // Cancel
                 Button("Отменить") { dismiss() }
