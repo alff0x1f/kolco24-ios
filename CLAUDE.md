@@ -21,24 +21,28 @@ Open `kolco24.xcodeproj` in Xcode to run on a simulator interactively.
 
 SwiftUI iOS app for a rogaine/orienteering event. UI language is Russian. All source files live flat in `kolco24/`.
 
-**Entry point:** `kolco24App.swift` → `ContentView.swift` (3-tab `TabView`)
+**Entry point:** `kolco24App.swift` → `ContentView.swift` (3-tab `TabView`, tinted `Color.kolcoOrange`, haptic on tab switch)
 
 **Tabs:**
-- `MarksView` — grid of taken checkpoints (КП), floating NFC/Photo CTA, scan sheet modal
-- `LegendView` — filterable list of all checkpoints with progress strip
-- `TeamView` — team members list with NFC chip binding status
+- `MarksView` — 4-column grid of taken checkpoints (КП), metrics card, floating NFC/Photo CTA, scan sheet modal
+- `LegendView` — filterable list of all checkpoints with score progress strip (`.insetGrouped` List)
+- `TeamView` — team hero card, member list with chip-binding status, misc settings rows
 
 **Design system (`DesignTokens.swift`):**
-- Color palette named "A2 Grey v2" — use `Color.ink`, `Color.sub`, `Color.paper`, `Color.brandRed`, `Color.kolcoOrange`, `Color.good`, `Color.charcoal`, `Color.amber`
-- Typography — `Font.mono(_:weight:)` wraps JetBrains Mono (must be bundled in app + declared in `Info.plist` under `UIAppFonts`)
-- Spacing constants in `enum DS` — `DS.hPad`, `DS.cardRadius`, `DS.heroRadius`, `DS.ctaRadius`
+- Color palette "A2 Grey v2": `Color.ink`, `Color.sub`, `Color.paper`, `Color.brandRed`, `Color.kolcoOrange`, `Color.good`, `Color.charcoal`, `Color.charcoalHi`, `Color.amber`
+- Typography — `Font.mono(_:weight:)` wraps JetBrains Mono (must be bundled + declared in `Info.plist` under `UIAppFonts`)
+- Spacing/radius constants in `enum DS` — `DS.hPad` (16), `DS.cardRadius` (13), `DS.heroRadius` (18), `DS.ctaRadius` (16)
 
 **Shared components (`SharedComponents.swift`):**
-- `CPBadge` — checkpoint number badge with red stripes
-- `MetricView` — labelled metric with optional unit and warning state
+- `CPBadge` — checkpoint number badge with red top/bottom stripes; `number: "?"` renders faded
+- `MetricView` — labelled metric with optional unit; `isWarning: true` renders value in `brandRed` with mono font
 - `VDivider`, `SectionHeader`, `GreenCheckCircle`
-- `DarkHeroBackground` — reused by `TeamHeroView` and `TimerHeroView` (charcoal gradient + diagonal line pattern)
+- `DarkHeroBackground` — charcoal gradient + radial red accent + diagonal `Canvas` line pattern; used by `TeamHeroView` (in `TeamView.swift`) and `TimerHeroView` (in `ScanSheet.swift`)
 
-**Data:** All views currently use local mock data (structs with hardcoded arrays). No networking or persistence layer exists yet.
+**Data model pattern:** Each view file defines its own model structs at the top (`CheckpointTile`, `LegendCP`, `TeamMember`, `ChipSlot`). All data is local mock arrays — no shared state, networking, or persistence yet.
 
-**NFC scan flow:** `FloatingCTAView` in `MarksView` presents `ScanSheet` as a `.sheet`. `ScanSheet` shows the CP waiting card, team chip slots grid, and `TimerHeroView`.
+**NFC scan flow:** `FloatingCTAView` in `MarksView` presents `ScanSheet` as a `.sheet`. `ScanSheet` contains `CPWaitingCardView` (shows scanned КП badge), a 2-column `ChipSlotView` grid, and `TimerHeroView` (countdown circle + remaining scans).
+
+**Recurring visual motif:** Diagonal `Canvas` line patterns appear in `NFCTileView`, `PhotoTileView`, and `DarkHeroBackground` — use the same approach when adding new tile/card types.
+
+**`LegendCP.display`** formats as `"{cost}-{number}"` (e.g. `"4-07"`) for the legend list identifier column.
