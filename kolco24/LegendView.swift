@@ -71,10 +71,7 @@ struct LegendView: View {
             }
 
             // CP rows
-            Section(
-                footer: Text("Слева — стоимость и номер КП.")
-                    .foregroundStyle(Color.sub)
-            ) {
+            Section {
                 ForEach(visible) { cp in
                     LegendRowView(cp: cp)
                         .listRowBackground(Color.white)
