@@ -258,7 +258,7 @@ private struct FloatingCTAView: View {
                         .foregroundStyle(Color.ink)
                 }
                 .frame(width: 96, height: 54)
-                .background(Color.card.opacity(0.92))
+                .background(Color.cardElevated.opacity(0.92))
                 .clipShape(RoundedRectangle(cornerRadius: DS.ctaRadius))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.ctaRadius)
