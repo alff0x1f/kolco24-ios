@@ -134,7 +134,7 @@ private struct NFCTileView: View {
 private struct ContactlessGlyph: View {
     var body: some View {
         Canvas { ctx, s in
-            let sx = s.width / 32, sy = s.height / 32
+            let sx = s.width / 32
             func arc(_ mx: CGFloat, _ my: CGFloat,
                      _ cx: CGFloat, _ cy: CGFloat,
                      _ ex: CGFloat, _ ey: CGFloat) -> Path {

@@ -15,6 +15,9 @@ extension Color {
     static let charcoalHi  = Color(light: "2A323C", dark: "171D25")
     static let amber       = Color(hex: "F2B36B") // unchanged in dark
 
+    // Progress bar gradient end-stop (lighter green, distinct from `good` token).
+    static let goodEnd      = Color(light: "2FA055", dark: "2EBD52")
+
     // Surfaces / lines / shadows (previously hard-coded literals in views).
     static let card        = Color(light: "FFFFFF", dark: "181D24")
     // Hairline dividers/strokes: light `rgba(60,60,67,0.13)`, dark `rgba(255,255,255,0.08)`.

@@ -118,10 +118,10 @@ private struct ScoreStripView: View {
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3).fill(Color.hairline)
+                    RoundedRectangle(cornerRadius: 3).fill(Color.sub.opacity(0.2))
                     RoundedRectangle(cornerRadius: 3)
                         .fill(LinearGradient(
-                            colors: [Color.good, Color(light: "2FA055", dark: "2EBD52")],
+                            colors: [Color.good, Color.goodEnd],
                             startPoint: .leading, endPoint: .trailing
                         ))
                         .frame(width: geo.size.width * progress)

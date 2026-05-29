@@ -168,13 +168,14 @@ private struct MemberRowView: View {
             ZStack {
                 if member.isBound {
                     LinearGradient(
-                        colors: [Color(hex: "E2E6EB"), Color(hex: "C5CCD5")],
+                        colors: [Color(light: "E2E6EB", dark: "2A3240"),
+                                 Color(light: "C5CCD5", dark: "374352")],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                     .clipShape(Circle())
                     Text(member.initials)
                         .font(.mono(13, weight: .bold))
-                        .foregroundStyle(Color(hex: "161A1F"))
+                        .foregroundStyle(Color.ink)
                 } else {
                     Circle()
                         .strokeBorder(
