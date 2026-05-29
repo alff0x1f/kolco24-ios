@@ -273,6 +273,11 @@ private struct FloatingCTAView: View {
     }
 }
 
-#Preview {
+#Preview("Light") {
     NavigationStack { MarksView() }
+}
+
+#Preview("Dark") {
+    NavigationStack { MarksView() }
+        .preferredColorScheme(.dark)
 }

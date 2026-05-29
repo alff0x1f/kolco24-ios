@@ -281,6 +281,11 @@ private struct MiscRowView: View {
     }
 }
 
-#Preview {
+#Preview("Light") {
     NavigationStack { TeamView() }
+}
+
+#Preview("Dark") {
+    NavigationStack { TeamView() }
+        .preferredColorScheme(.dark)
 }

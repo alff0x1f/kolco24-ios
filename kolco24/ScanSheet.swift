@@ -276,6 +276,11 @@ private struct TimerHeroView: View {
     }
 }
 
-#Preview {
+#Preview("Light") {
     ScanSheet()
+}
+
+#Preview("Dark") {
+    ScanSheet()
+        .preferredColorScheme(.dark)
 }

@@ -243,8 +243,8 @@ dark карточная тень `rgba(0,0,0,0.45)`. Т.к. `hairline`/`cardShad
 **Files:**
 - Modify: `kolco24/MarksView.swift`, `kolco24/LegendView.swift`, `kolco24/ScanSheet.swift`, `kolco24/TeamView.swift` (блоки `#Preview`)
 
-- [ ] в каждый `#Preview` добавить вариант `.preferredColorScheme(.dark)` (или второй preview), чтобы видеть обе темы рядом
-- [ ] собрать проект — сборка должна проходить; previews рендерятся в обеих темах
+- [x] в каждый `#Preview` добавить вариант `.preferredColorScheme(.dark)` (или второй preview), чтобы видеть обе темы рядом
+- [x] собрать проект — сборка проходит (`** BUILD SUCCEEDED **`); previews рендерятся в обеих темах
 
 ### Task 6: Verify acceptance criteria
 

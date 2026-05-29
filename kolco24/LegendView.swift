@@ -208,6 +208,11 @@ private struct CPFilterPicker: View {
     }
 }
 
-#Preview {
+#Preview("Light") {
     NavigationStack { LegendView() }
+}
+
+#Preview("Dark") {
+    NavigationStack { LegendView() }
+        .preferredColorScheme(.dark)
 }
