@@ -4,29 +4,102 @@
 **Ветка:** `feature/dark-theme`
 **Источник дизайна:** `tmp/design.html` (light) и `tmp/design_dark.html` (dark) — отличаются только таблицей цветовых токенов.
 
-## Цель
+## Overview
 
 Приложение сейчас реализует только светлую тему: цвета жёстко зашиты в `DesignTokens.swift`
 (`Color(hex:)`) и в виде литералов (`Color.white`, `Color.black.opacity(...)`) по вью.
-Нужно добавить тёмную тему, **следуя системной** настройке iOS (без экрана настроек и без хранения
-выбора). Выбранный подход — **динамические цвета в Swift** через `UIColor(dynamicProvider:)`:
-вся палитра остаётся в одном файле и построчно зеркалит таблицу токенов из `design_dark.html`,
-а система сама переключает тему по trait'у.
+Нужно добавить тёмную тему, **следуя системной** настройке iOS — без экрана настроек и без
+хранения выбора. Выбранный подход — **динамические цвета в Swift** через
+`UIColor(dynamicProvider:)`: вся палитра остаётся в одном файле и построчно зеркалит таблицу
+токенов из `design_dark.html`, а система сама переключает тему по trait'у.
+
+**Проблема, которую решаем:** в тёмной системной теме приложение выглядит сломанным (белые
+карточки, чёрные тени на чёрном). **Выгода:** единый источник правды для палитры, авто-переключение
+без UI, минимум точечных правок визуала.
+
+**Интеграция:** существующие имена токенов (`Color.ink`, `Color.card` и т.д.) сохраняются — вью
+продолжают ссылаться на них как раньше, меняется только их определение на адаптивное.
 
 ## Принципы / границы
 
-- Перекраска через токены + одно точечное изменение визуала (NFC-плитка, см. Шаг 2).
+- Перекраска через токены + одно точечное изменение визуала (NFC-плитка, см. Task 3).
   Никаких новых экранов, переключателей, persistence.
 - Контент, одинаковый в обеих темах, **не трогаем:** градиенты-превью фото КП, белый
   светоотражающий `CPBadge`/`MiniCPBadge`, белый текст и штриховка на тёмном «герое».
-- **Вне объёма:** синхронизация html-макетов в `tmp/` — они только референс, меняем
-  лишь Swift-код.
+- **Вне объёма:** синхронизация html-макетов в `tmp/` — они только референс, меняем лишь Swift-код.
 
----
+## Context (from discovery)
 
-## Шаг 1 — слой токенов (`DesignTokens.swift`)
+- **Файлы/компоненты:** `DesignTokens.swift` (палитра + `Color(hex:)` + `enum DS`),
+  `SharedComponents.swift`, `MarksView.swift`, `ScanSheet.swift`, `TeamView.swift`,
+  `LegendView.swift`.
+- **Найденные паттерны:**
+  - токены живут в `extension Color` как `static let … = Color(hex: "…")` (9 токенов);
+  - поверхности/линии/тени по вью заданы литералами (`Color.white`, `Color.black.opacity(...)`);
+  - повторяющийся визуальный мотив — диагональная штриховка через `Canvas`
+    (`NFCTileView`, `PhotoTileView`, `DarkHeroBackground`);
+  - тёмный «герой» (`DarkHeroBackground`, `TimerHeroView`, `TeamHeroView`) уже использует
+    фиксированный белый контент — он корректен в обеих темах.
+- **Зависимости:** только SwiftUI/UIKit (`UIColor(dynamicProvider:)`); сетей/persistence нет.
+- **Проверено:** ссылки на строки в `MarksView.swift` и определения токенов в
+  `DesignTokens.swift` совпадают с текущим кодом (поле `isRecent` — `MarksView.swift:10`,
+  мок — `:22`, overlay-кольцо — `:114–116` и `:155–157`).
 
-Добавить инициализатор адаптивного цвета:
+## Development Approach
+
+- **Testing approach (выбор пользователя): без авто-тестов.** Юнит-тестами реально покрывалась
+  бы только логика разрешения адаптивного цвета, но пользователь явно выбрал не добавлять их.
+  Гейт каждой задачи — **успешная сборка** (`xcodebuild … build`), для задач с заменой литералов
+  дополнительно **grep-аудит** оставшихся «поверхностных» литералов. Визуальная сверка — вручную
+  (см. Post-Completion).
+- complete each task fully before moving to the next.
+- small, focused changes; сборка зелёная перед переходом к следующей задаче — без исключений.
+- **CRITICAL: update this plan file when scope changes during implementation.**
+- maintain backward compatibility — имена токенов и публичные сигнатуры вью не меняем.
+
+## Testing Strategy
+
+Это чисто визуальная перекраска SwiftUI; автоматических unit/e2e-тестов в проекте по этой задаче
+не заводим (явный выбор пользователя). Вместо них — три гейта:
+
+- **Сборка:** `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
+  должна проходить после каждой задачи.
+- **grep-аудит литералов** (после задач с заменой и в финальной проверке):
+  `grep -rnE "\.white|Color\.black|\.black\.opacity" kolco24/*.swift` — в выдаче допустимы
+  только герой/контент/фиксированный визуал чип-карты, «поверхностных» литералов быть не должно.
+- **Визуальная сверка** (вручную, Post-Completion): Xcode previews `.dark` + Environment Overrides →
+  Appearance на 4 экранах против `tmp/design_dark.html`.
+
+> Примечание: существующие `kolco24Tests`/`kolco24UITests` (плейсхолдеры) не трогаем и не ломаем —
+> они должны продолжать собираться.
+
+## Progress Tracking
+
+- mark completed items with `[x]` immediately when done.
+- add newly discovered tasks with ➕ prefix.
+- document issues/blockers with ⚠️ prefix.
+- update plan if implementation deviates from original scope.
+
+## Solution Overview
+
+Один адаптивный инициализатор `Color(light:dark:)` поверх `UIColor(dynamicProvider:)` делает
+все токены реагирующими на `userInterfaceStyle`. Палитра остаётся единственным источником правды;
+вью переводятся с литералов на новые токены поверхностей/линий/теней. Два элемента остаются
+фиксированно-тёмными в обеих темах (тёмный «герой» — уже такой; NFC-плитка — становится такой,
+переписанная в «чип-карту»). Мёртвая фича `isRecent` удаляется заодно. Выбор темы целиком отдаётся
+системе — никакого UI, состояния и хранения.
+
+**Ключевые решения:**
+- `UIColor(dynamicProvider:)` вместо asset-каталога — вся палитра в одном Swift-файле, рядом с
+  таблицей токенов, легко ревьюить против html.
+- Прозрачные токены (`hairline`, `cardShadow`) несут alpha внутри себя — выбрать на этапе
+  реализации форму хелпера (`Color(light:dark:)` с заданной alpha либо расширение
+  `init(lightUI:darkUI:)` поверх `UIColor`).
+- NFC-плитка — фиксированный тёмный визуал (как `DarkHeroBackground`), не адаптивные токены.
+
+## Technical Details
+
+### Адаптивный инициализатор (Task 1)
 
 ```swift
 extension Color {
@@ -38,7 +111,7 @@ extension Color {
 }
 ```
 
-Сделать 9 существующих токенов адаптивными (значения dark — из `design_dark.html`):
+### 9 существующих токенов → адаптивные (значения dark — из `design_dark.html`)
 
 | токен          | light  | dark   |
 |----------------|--------|--------|
@@ -52,58 +125,25 @@ extension Color {
 | `charcoalHi`   | 2A323C | 171D25 |
 | `amber`        | F2B36B | F2B36B (без изменений — оставить `Color(hex:)`) |
 
-Добавить 3 новых токена (сейчас живут как литералы):
+### 3 новых токена (сейчас живут как литералы)
 
 | токен        | light                | dark                 | заменяет                                  |
 |--------------|----------------------|----------------------|-------------------------------------------|
 | `card`       | FFFFFF               | 181D24               | `Color.white` как фон карточек            |
-| `hairline`   | `Color(light:dark:)` поверх UIColor с alpha; light = black α0.08–0.13, dark = white α0.08–0.12 | разделители/обводки `Color.black.opacity(...)` |
+| `hairline`   | black α0.08–0.13     | white α0.08–0.12     | разделители/обводки `Color.black.opacity(...)` |
 | `cardShadow` | black α≈0.05         | black α≈0.45         | `.shadow(color: .black.opacity(...))`     |
 
-Замечания по реализации:
-- `hairline`/`cardShadow` несут прозрачность, поэтому через `Color(light:dark:)` с уже
-  заданной alpha (можно расширить хелпер до `init(lightUI:darkUI:)` принимающего `UIColor`,
-  либо хранить как функцию-провайдер). Выбрать в момент реализации, но альфа из html:
-  light HAIR `rgba(60,60,67,0.13)` / dark HAIR `rgba(255,255,255,0.08)`;
-  dark карточная тень `rgba(0,0,0,0.45)`.
+Альфа из html: light HAIR `rgba(60,60,67,0.13)` / dark HAIR `rgba(255,255,255,0.08)`;
+dark карточная тень `rgba(0,0,0,0.45)`. Т.к. `hairline`/`cardShadow` несут прозрачность —
+реализовать через `Color(light:dark:)` с заданной alpha (или расширить хелпер до
+`init(lightUI:darkUI:)`, принимающего `UIColor`); выбрать в момент реализации.
 
-## Шаг 2 — замена литералов во вью
-
-Заменить по карте классификации. **Поверхности → `Color.card`:**
-- `MarksView.swift:49` (метрики), `:228` (кнопка «Фото», `Color.white.opacity(0.92)`)
-- `ScanSheet.swift:107`, `:160`
-- `TeamView.swift:54`, `:80`, `:234`
-- `LegendView.swift:77` (`listRowBackground`), `:134`, `:200` (активный сегмент)
-
-**Линии/обводки → `Color.hairline`:**
-- `SharedComponents.swift:25`, `:65`
-- `MarksView.swift:117`, `:158`, `:232` (canvas-штрихи `:101` α0.018 — оставить как есть, субтильно)
-- `ScanSheet.swift:94`, `:101`, `:126`
-- `TeamView.swift:48`, `:73`, `:238`
-- `LegendView.swift:121`, `:203`
-
-**Тени → `Color.cardShadow`:**
-- `MarksView.swift:51`, `:234`
-- `ScanSheet.swift:109`, `:162`
-- `TeamView.swift:240`, `:262`
-- `LegendView.swift:136`
-
-**Оставить `.white` (тёмный герой / контент — корректно в обеих темах):**
-- `ScanSheet.swift:180, 231, 240, 243, 257, 263, 267` — таймер-герой
-- `TeamView.swift:105, 113, 116, 122, 133, 138, 139, 145` — TeamHero
-- `SharedComponents.swift:13` (`CPBadge` белый), `:97` (галочка на зелёном), `:124` (штриховка героя)
-- `MarksView.swift:209` (белый текст на оранжевой CTA), фото-градиенты `:127–130, 144, 148`
-
-**Сегментед-контрол (`LegendView`):** трек и активный сегмент — проверить читаемость в dark;
-при необходимости трек = `Color.sub.opacity(0.2)`, активный = `Color.card`.
-
-## Шаг 2б — переписать `NFCTileView` в тёмную «чип-карту»
+### NFC-плитка → тёмная «чип-карта» (Task 3)
 
 `NFCTileView` (`MarksView.swift:87–119`) перестаёт быть белой плиткой и становится
 **самостоятельно-тёмным элементом, одинаковым в обеих темах** (как `DarkHeroBackground`),
 по образцу NFC-плитки из `design_dark.html`. Использует фиксированные `Color(hex:)`, **не**
-адаптивные токены.
-
+адаптивные токены:
 - фон: линейный градиент `#171D25 → #232A33` (≈155°);
 - inset-тени для «утопленности» + субтильная диагональная штриховка (white α≈0.025);
 - глиф бесконтактной оплаты — три дуги цветом `#E6EAF0` (вместо текущего белого фона);
@@ -112,28 +152,120 @@ extension Color {
 
 `PhotoTileView` и её `MiniCPBadge` (белый с красной полоской) — без изменений.
 
-## Шаг 2в — удалить `isRecent`-кольцо
+## What Goes Where
 
-Зелёное кольцо `isRecent` убрать из **обеих** плиток и обеих тем:
-- удалить `.overlay { if tile.isRecent { Rectangle().strokeBorder(Color.good, ...) } }`
-  в `NFCTileView` (`MarksView.swift:114–116`) и `PhotoTileView` (`:155–157`);
-- вычистить ставшее мёртвым поле `CheckpointTile.isRecent` (`:10`) и его использование
-  в моках (`mockTiles`, `:22`).
+- **Implementation Steps** (`[ ]`): правки Swift-кода + сборка + grep-аудит — всё, что делается в репозитории.
+- **Post-Completion** (без чекбоксов): ручная визуальная сверка в симуляторе/Xcode и сравнение с
+  `design_dark.html` — требует глаз и интерактивного запуска.
 
-## Шаг 3 — проверка
+## Implementation Steps
 
-- В каждый `#Preview` добавить вариант `.preferredColorScheme(.dark)` (или second preview),
-  чтобы видеть обе темы рядом.
-- Собрать и запустить в симуляторе; в Xcode переключать Environment Overrides → Appearance
+### Task 1: Адаптивный хелпер цвета + адаптивные/новые токены
+
+**Files:**
+- Modify: `kolco24/DesignTokens.swift`
+
+- [ ] добавить `init(light:dark:)` в `extension Color` поверх `UIColor(dynamicProvider:)`
+- [ ] (при необходимости) добавить вариант хелпера для прозрачных токенов (`init(lightUI:darkUI:)` на `UIColor`)
+- [ ] перевести 9 токенов на `Color(light:dark:)` по таблице (`amber` оставить `Color(hex:)`)
+- [ ] добавить токены `card`, `hairline`, `cardShadow` с alpha из html
+- [ ] собрать проект — сборка должна проходить перед Task 2
+
+### Task 2: Замена литералов поверхностей/линий/теней во вью
+
+**Files:**
+- Modify: `kolco24/SharedComponents.swift`
+- Modify: `kolco24/ScanSheet.swift`
+- Modify: `kolco24/TeamView.swift`
+- Modify: `kolco24/LegendView.swift`
+- Modify: `kolco24/MarksView.swift` (только поверхности/линии/тени; чип-карта и `isRecent` — Task 3/4)
+
+**Поверхности → `Color.card`:**
+- [ ] `MarksView.swift:49` (метрики), `:228` (кнопка «Фото», `Color.white.opacity(0.92)`)
+- [ ] `ScanSheet.swift:107`, `:160`
+- [ ] `TeamView.swift:54`, `:80`, `:234`
+- [ ] `LegendView.swift:77` (`listRowBackground`), `:134`, `:200` (активный сегмент)
+
+**Линии/обводки → `Color.hairline`:**
+- [ ] `SharedComponents.swift:25`, `:65`
+- [ ] `MarksView.swift:117`, `:158`, `:232` (canvas-штрих `:101` α0.018 — **оставить как есть**)
+- [ ] `ScanSheet.swift:94`, `:101`, `:126`
+- [ ] `TeamView.swift:48`, `:73`, `:238`
+- [ ] `LegendView.swift:121`, `:203`
+
+**Тени → `Color.cardShadow`:**
+- [ ] `MarksView.swift:51`, `:234`
+- [ ] `ScanSheet.swift:109`, `:162`
+- [ ] `TeamView.swift:240`, `:262`
+- [ ] `LegendView.swift:136`
+
+**Сегментед-контрол (`LegendView`):**
+- [ ] проверить читаемость трека/активного сегмента в dark; при необходимости трек = `Color.sub.opacity(0.2)`, активный = `Color.card`
+
+**Не трогать (`.white` — корректно в обеих темах):** `ScanSheet.swift:180,231,240,243,257,263,267`
+(таймер-герой); `TeamView.swift:105,113,116,122,133,138,139,145` (TeamHero);
+`SharedComponents.swift:13` (`CPBadge`), `:97` (галочка), `:124` (штриховка героя);
+`MarksView.swift:209` (текст на оранжевой CTA), фото-градиенты `:127–130,144,148`.
+
+- [ ] собрать проект — сборка должна проходить
+- [ ] grep-аудит: `grep -rnE "\.white|Color\.black|\.black\.opacity" kolco24/*.swift` — остались только герой/контент/фиксированный визуал; перейти к Task 3
+
+### Task 3: Переписать `NFCTileView` в тёмную «чип-карту»
+
+**Files:**
+- Modify: `kolco24/MarksView.swift` (`NFCTileView`, ~`:87–119`)
+
+- [ ] фон: линейный градиент `#171D25 → #232A33` (≈155°), фиксированные `Color(hex:)`
+- [ ] inset-тени «утопленности» + диагональная штриховка white α≈0.025 (мотив `Canvas`)
+- [ ] глиф бесконтактной оплаты — три дуги цветом `#E6EAF0`
+- [ ] номер — белый mono (28, bold) с лёгкой тенью
+- [ ] убрать красные полоски (атрибут светлой плитки)
+- [ ] убедиться, что `PhotoTileView`/`MiniCPBadge` не затронуты
+- [ ] собрать проект — сборка должна проходить перед Task 4
+
+### Task 4: Удалить `isRecent`-кольцо и мёртвое поле
+
+**Files:**
+- Modify: `kolco24/MarksView.swift`
+
+- [ ] удалить `.overlay { if tile.isRecent { … strokeBorder(Color.good …) } }` в `NFCTileView` (`:114–116`) и `PhotoTileView` (`:155–157`)
+- [ ] удалить поле `CheckpointTile.isRecent` (`:10`)
+- [ ] вычистить `isRecent: true` из мока `mockTiles` (`:22`)
+- [ ] собрать проект — сборка должна проходить; `grep -rn "isRecent" kolco24/` пустой
+
+### Task 5: Dark-превью на всех экранах
+
+**Files:**
+- Modify: `kolco24/MarksView.swift`, `kolco24/LegendView.swift`, `kolco24/ScanSheet.swift`, `kolco24/TeamView.swift` (блоки `#Preview`)
+
+- [ ] в каждый `#Preview` добавить вариант `.preferredColorScheme(.dark)` (или второй preview), чтобы видеть обе темы рядом
+- [ ] собрать проект — сборка должна проходить; previews рендерятся в обеих темах
+
+### Task 6: Verify acceptance criteria
+
+- [ ] выполнены все требования Overview: 9 токенов адаптивны, 3 новых добавлены, литералы заменены, NFC-плитка = чип-карта, `isRecent` удалён, dark-превью есть
+- [ ] финальная сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
+- [ ] финальный grep-аудит: `grep -rnE "\.white|Color\.black|\.black\.opacity" kolco24/*.swift` — только герой/контент/чип-карта
+- [ ] `grep -rn "isRecent" kolco24/` — пусто
+
+### Task 7: [Final] Обновить документацию
+
+**Files:**
+- Modify: `CLAUDE.md`
+
+- [ ] обновить раздел «Design system» в `CLAUDE.md`: палитра теперь адаптивная (`Color(light:dark:)`), новые токены `card`/`hairline`/`cardShadow`
+- [ ] зафиксировать мотив: NFC-плитка — фиксированно-тёмная чип-карта; `isRecent` удалён
+- [ ] переместить план в `docs/plans/completed/` (создать каталог при необходимости)
+
+## Post-Completion
+*Items requiring manual intervention — no checkboxes, informational only*
+
+**Manual verification:**
+- запустить в симуляторе iPhone 16; в Xcode переключать Environment Overrides → Appearance
   (Light/Dark) на каждом из 4 экранов: Отметки, Легенда, Отметить КП (sheet), Команда.
-- Свериться визуально с `tmp/design_dark.html` по каждому экрану.
-- Проверить, что `grep -rnE "\.white|Color\.black|\.black\.opacity" kolco24/*.swift` не содержит
-  оставшихся «поверхностных» литералов (только герой/контент/фиксированный визуал чип-карты).
+- свериться визуально с `tmp/design_dark.html` по каждому экрану (поверхности, линии, тени,
+  читаемость сегментед-контрола в dark, вид чип-карты).
+- убедиться, что тёмный «герой» и фото-градиенты выглядят корректно в обеих темах.
 
-## Файлы, которые меняются
-
-- `kolco24/DesignTokens.swift` — хелпер + адаптивные токены (Шаг 1)
-- `kolco24/SharedComponents.swift`, `LegendView.swift`, `ScanSheet.swift`,
-  `TeamView.swift` — замена литералов (Шаг 2)
-- `kolco24/MarksView.swift` — замена литералов (Шаг 2), переписать `NFCTileView` в чип-карту
-  (Шаг 2б), удалить `isRecent`-кольцо и поле (Шаг 2в)
+**External system updates:**
+- html-макеты в `tmp/` синхронизировать не нужно — они только референс (вне объёма).
