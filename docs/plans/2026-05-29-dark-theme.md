@@ -165,11 +165,11 @@ dark карточная тень `rgba(0,0,0,0.45)`. Т.к. `hairline`/`cardShad
 **Files:**
 - Modify: `kolco24/DesignTokens.swift`
 
-- [ ] добавить `init(light:dark:)` в `extension Color` поверх `UIColor(dynamicProvider:)`
-- [ ] (при необходимости) добавить вариант хелпера для прозрачных токенов (`init(lightUI:darkUI:)` на `UIColor`)
-- [ ] перевести 9 токенов на `Color(light:dark:)` по таблице (`amber` оставить `Color(hex:)`)
-- [ ] добавить токены `card`, `hairline`, `cardShadow` с alpha из html
-- [ ] собрать проект — сборка должна проходить перед Task 2
+- [x] добавить `init(light:dark:)` в `extension Color` поверх `UIColor(dynamicProvider:)`
+- [x] (при необходимости) добавить вариант хелпера для прозрачных токенов (`init(lightUI:darkUI:)` на `UIColor`)
+- [x] перевести 9 токенов на `Color(light:dark:)` по таблице (`amber` оставить `Color(hex:)`)
+- [x] добавить токены `card`, `hairline`, `cardShadow` с alpha из html
+- [x] собрать проект — сборка должна проходить перед Task 2
 
 ### Task 2: Замена литералов поверхностей/линий/теней во вью
 
