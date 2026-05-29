@@ -200,7 +200,7 @@ private struct CPFilterPicker: View {
             .background(filter == option ? Color.card : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 7))
             .shadow(
-                color: filter == option ? Color.hairline : Color.clear,
+                color: filter == option ? Color.cardShadow : Color.clear,
                 radius: 4, x: 0, y: 1.5
             )
         }

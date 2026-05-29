@@ -14,15 +14,18 @@ struct CPBadge: View {
                 ctx.fill(Path(CGRect(x: 0, y: 0,               width: s.width, height: stripeH)), with: .color(Color.brandRed.opacity(0.78)))
                 ctx.fill(Path(CGRect(x: 0, y: s.height - stripeH, width: s.width, height: stripeH)), with: .color(Color.brandRed.opacity(0.78)))
             }
+            // CPBadge is a fixed-light card (white fill in both themes), so its
+            // number/border use fixed colors — adaptive ink/hairline would turn
+            // near-white in dark mode and vanish against the white badge.
             Text(number)
                 .font(.mono(size * 0.38, weight: .bold))
-                .foregroundStyle(number == "?" ? Color.sub.opacity(0.4) : Color.ink)
+                .foregroundStyle(number == "?" ? Color(hex: "56606A").opacity(0.4) : Color(hex: "161A1F"))
         }
         .frame(width: size, height: size * 0.84)
         .clipShape(RoundedRectangle(cornerRadius: max(3, size * 0.08)))
         .overlay(
             RoundedRectangle(cornerRadius: max(3, size * 0.08))
-                .stroke(Color.hairline, lineWidth: 1)
+                .stroke(Color.black.opacity(0.15), lineWidth: 1)
         )
     }
 }

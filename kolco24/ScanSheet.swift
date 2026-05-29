@@ -123,7 +123,7 @@ struct ScanSheet: View {
                     .foregroundStyle(Color.ink)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(Color.hairline)
+                    .background(Color.sub.opacity(0.2))
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .padding(.horizontal, DS.hPad)
                     .padding(.bottom, 22)
