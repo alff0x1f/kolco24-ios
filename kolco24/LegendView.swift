@@ -121,7 +121,7 @@ private struct ScoreStripView: View {
                     RoundedRectangle(cornerRadius: 3).fill(Color.hairline)
                     RoundedRectangle(cornerRadius: 3)
                         .fill(LinearGradient(
-                            colors: [Color.good, Color(hex: "2FA055")],
+                            colors: [Color.good, Color(light: "2FA055", dark: "2EBD52")],
                             startPoint: .leading, endPoint: .trailing
                         ))
                         .frame(width: geo.size.width * progress)

@@ -174,7 +174,7 @@ private struct MemberRowView: View {
                     .clipShape(Circle())
                     Text(member.initials)
                         .font(.mono(13, weight: .bold))
-                        .foregroundStyle(Color.ink)
+                        .foregroundStyle(Color(hex: "161A1F"))
                 } else {
                     Circle()
                         .strokeBorder(
@@ -208,7 +208,7 @@ private struct MemberRowView: View {
                             .frame(width: 5, height: 5)
                         Text("Чип не привязан")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color(hex: "A1431F"))
+                            .foregroundStyle(Color.kolcoOrange)
                     }
                 }
             }

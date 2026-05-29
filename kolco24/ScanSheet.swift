@@ -222,7 +222,7 @@ private struct TimerHeroView: View {
     let total: Int
     let remainingScans: Int
 
-    private var progress: Double { Double(seconds) / Double(total) }
+    private var progress: Double { total > 0 ? Double(seconds) / Double(total) : 0 }
 
     var body: some View {
         HStack(spacing: 14) {
