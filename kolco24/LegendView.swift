@@ -74,7 +74,7 @@ struct LegendView: View {
             Section {
                 ForEach(visible) { cp in
                     LegendRowView(cp: cp)
-                        .listRowBackground(Color.white)
+                        .listRowBackground(Color.card)
                 }
             }
         }
@@ -118,7 +118,7 @@ private struct ScoreStripView: View {
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3).fill(Color.black.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 3).fill(Color.hairline)
                     RoundedRectangle(cornerRadius: 3)
                         .fill(LinearGradient(
                             colors: [Color.good, Color(hex: "2FA055")],
@@ -131,9 +131,9 @@ private struct ScoreStripView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color.white)
+        .background(Color.card)
         .clipShape(RoundedRectangle(cornerRadius: 18))
-        .shadow(color: .black.opacity(0.04), radius: 1, y: 0.5)
+        .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
     }
 }
 
@@ -178,7 +178,7 @@ private struct CPFilterPicker: View {
             filterButton(.open, count: openCount)
         }
         .padding(2)
-        .background(Color(hex: "787880").opacity(0.12))
+        .background(Color.sub.opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 9))
     }
 
@@ -193,14 +193,14 @@ private struct CPFilterPicker: View {
                     .foregroundStyle(Color.ink)
                 Text("\(count)")
                     .font(.mono(11, weight: .bold))
-                    .foregroundStyle(filter == option ? Color.sub : Color(hex: "3C3C43").opacity(0.5))
+                    .foregroundStyle(filter == option ? Color.sub : Color.sub.opacity(0.5))
             }
             .padding(.horizontal, 14)
             .frame(height: 28)
-            .background(filter == option ? Color.white : Color.clear)
+            .background(filter == option ? Color.card : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 7))
             .shadow(
-                color: filter == option ? Color.black.opacity(0.12) : Color.clear,
+                color: filter == option ? Color.hairline : Color.clear,
                 radius: 4, x: 0, y: 1.5
             )
         }

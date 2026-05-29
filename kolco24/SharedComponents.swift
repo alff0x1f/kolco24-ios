@@ -22,7 +22,7 @@ struct CPBadge: View {
         .clipShape(RoundedRectangle(cornerRadius: max(3, size * 0.08)))
         .overlay(
             RoundedRectangle(cornerRadius: max(3, size * 0.08))
-                .stroke(Color.black.opacity(0.15), lineWidth: 1)
+                .stroke(Color.hairline, lineWidth: 1)
         )
     }
 }
@@ -62,7 +62,7 @@ struct MetricView: View {
 struct VDivider: View {
     var body: some View {
         Rectangle()
-            .fill(Color.black.opacity(0.08))
+            .fill(Color.hairline)
             .frame(width: 0.5)
             .padding(.vertical, 10)
     }

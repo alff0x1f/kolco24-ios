@@ -46,9 +46,9 @@ struct MarksView: View {
                     MetricView(label: "До КВ", value: "10:19", isWarning: true)
                 }
                 .padding(.horizontal, 18)
-                .background(Color.white)
+                .background(Color.card)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
-                .shadow(color: .black.opacity(0.04), radius: 1, y: 0.5)
+                .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
                 .padding(.horizontal, DS.hPad)
                 .padding(.bottom, 14)
 
@@ -114,7 +114,7 @@ private struct NFCTileView: View {
         .overlay {
             if tile.isRecent { Rectangle().strokeBorder(Color.good, lineWidth: 2) }
         }
-        .overlay { Rectangle().stroke(Color.black.opacity(0.06), lineWidth: 0.5) }
+        .overlay { Rectangle().stroke(Color.hairline, lineWidth: 0.5) }
     }
 }
 
@@ -155,7 +155,7 @@ private struct PhotoTileView: View {
         .overlay {
             if tile.isRecent { Rectangle().strokeBorder(Color.good, lineWidth: 2) }
         }
-        .overlay { Rectangle().stroke(Color.black.opacity(0.06), lineWidth: 0.5) }
+        .overlay { Rectangle().stroke(Color.hairline, lineWidth: 0.5) }
     }
 }
 
@@ -225,13 +225,13 @@ private struct FloatingCTAView: View {
                         .foregroundStyle(Color.ink)
                 }
                 .frame(width: 96, height: 54)
-                .background(Color.white.opacity(0.92))
+                .background(Color.card.opacity(0.92))
                 .clipShape(RoundedRectangle(cornerRadius: DS.ctaRadius))
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.ctaRadius)
-                        .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                        .stroke(Color.hairline, lineWidth: 0.5)
                 )
-                .shadow(color: .black.opacity(0.06), radius: 18, x: 0, y: 8)
+                .shadow(color: Color.cardShadow, radius: 18, x: 0, y: 8)
             }
             .buttonStyle(.plain)
         }

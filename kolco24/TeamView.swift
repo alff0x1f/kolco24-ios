@@ -45,13 +45,13 @@ struct TeamView: View {
                             .padding(.vertical, 8)
                         if idx < members.count - 1 {
                             Rectangle()
-                                .fill(Color.black.opacity(0.06))
+                                .fill(Color.hairline)
                                 .frame(height: 0.5)
                                 .padding(.leading, DS.hPad + 38 + 12)
                         }
                     }
                 }
-                .background(Color.white)
+                .background(Color.card)
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
                 .padding(.horizontal, DS.hPad)
 
@@ -70,14 +70,14 @@ struct TeamView: View {
                         .padding(.horizontal, DS.hPad)
                         .padding(.vertical, 8)
                     Rectangle()
-                        .fill(Color.black.opacity(0.06))
+                        .fill(Color.hairline)
                         .frame(height: 0.5)
                         .padding(.leading, DS.hPad + 30 + 12)
                     MiscRowView(systemImage: "questionmark.circle.fill", iconBg: Color.kolcoOrange, label: "Справка и правила", sub: "Регламент, FAQ, контакты оргкомитета")
                         .padding(.horizontal, DS.hPad)
                         .padding(.vertical, 8)
                 }
-                .background(Color.white)
+                .background(Color.card)
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
                 .padding(.horizontal, DS.hPad)
                 .padding(.bottom, 32)
@@ -231,13 +231,13 @@ private struct MemberRowView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.white)
+                    .background(Color.card)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
+                            .stroke(Color.hairline, lineWidth: 0.5)
                     )
-                    .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 4)
+                    .shadow(color: Color.cardShadow, radius: 10, x: 0, y: 4)
                 }
                 .buttonStyle(.plain)
             }
@@ -259,7 +259,7 @@ private struct MiscRowView: View {
                 RoundedRectangle(cornerRadius: 7)
                     .fill(iconBg)
                     .frame(width: 30, height: 30)
-                    .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+                    .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
                 Image(systemName: systemImage)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white)

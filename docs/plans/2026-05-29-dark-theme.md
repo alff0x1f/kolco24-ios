@@ -181,34 +181,39 @@ dark карточная тень `rgba(0,0,0,0.45)`. Т.к. `hairline`/`cardShad
 - Modify: `kolco24/MarksView.swift` (только поверхности/линии/тени; чип-карта и `isRecent` — Task 3/4)
 
 **Поверхности → `Color.card`:**
-- [ ] `MarksView.swift:49` (метрики), `:228` (кнопка «Фото», `Color.white.opacity(0.92)`)
-- [ ] `ScanSheet.swift:107`, `:160`
-- [ ] `TeamView.swift:54`, `:80`, `:234`
-- [ ] `LegendView.swift:77` (`listRowBackground`), `:134`, `:200` (активный сегмент)
+- [x] `MarksView.swift:49` (метрики), `:228` (кнопка «Фото» → `Color.card.opacity(0.92)` — сохранена полупрозрачность над `.ultraThinMaterial`)
+- [x] `ScanSheet.swift:107`, `:160`
+- [x] `TeamView.swift:54`, `:80`, `:234`
+- [x] `LegendView.swift:77` (`listRowBackground`), `:134`, `:200` (активный сегмент)
 
 **Линии/обводки → `Color.hairline`:**
-- [ ] `SharedComponents.swift:25`, `:65`
-- [ ] `MarksView.swift:117`, `:158`, `:232` (canvas-штрих `:101` α0.018 — **оставить как есть**)
-- [ ] `ScanSheet.swift:94`, `:101`, `:126`
-- [ ] `TeamView.swift:48`, `:73`, `:238`
-- [ ] `LegendView.swift:121`, `:203`
+- [x] `SharedComponents.swift:25`, `:65`
+- [x] `MarksView.swift:117`, `:158`, `:232` (canvas-штрих `:101` α0.018 — **оставлено как есть**)
+- [x] `ScanSheet.swift:94`, `:101`, `:126`
+- [x] `TeamView.swift:48`, `:73`, `:238`
+- [x] `LegendView.swift:121`, `:203`
 
 **Тени → `Color.cardShadow`:**
-- [ ] `MarksView.swift:51`, `:234`
-- [ ] `ScanSheet.swift:109`, `:162`
-- [ ] `TeamView.swift:240`, `:262`
-- [ ] `LegendView.swift:136`
+- [x] `MarksView.swift:51`, `:234`
+- [x] `ScanSheet.swift:109`, `:162`
+- [x] `TeamView.swift:240`, `:262`
+- [x] `LegendView.swift:136`
 
 **Сегментед-контрол (`LegendView`):**
-- [ ] проверить читаемость трека/активного сегмента в dark; при необходимости трек = `Color.sub.opacity(0.2)`, активный = `Color.card`
+- [x] трек переведён на `Color.sub.opacity(0.2)`, активный сегмент — на `Color.card` (читаемость в dark; финальная сверка — Post-Completion)
+
+➕ **Дополнительно найдено и исправлено (литералы вне исходного списка, ломались в dark):**
+- `ScanSheet.swift:34` — ручка sheet `Color.black.opacity(0.2)` → `Color.sub.opacity(0.35)` (на тёмном `paper` чёрная ручка была невидима).
+- `LegendView.swift:196` — счётчик неактивного сегмента `Color(hex: "3C3C43").opacity(0.5)` → `Color.sub.opacity(0.5)` (тёмно-серый на тёмном фоне был нечитаем).
 
 **Не трогать (`.white` — корректно в обеих темах):** `ScanSheet.swift:180,231,240,243,257,263,267`
-(таймер-герой); `TeamView.swift:105,113,116,122,133,138,139,145` (TeamHero);
+(таймер-герой); `TeamView.swift:105,113,116,122,133,138,139,145` (TeamHero) + `:265` (белый глиф иконки на цветном фоне MiscRow);
 `SharedComponents.swift:13` (`CPBadge`), `:97` (галочка), `:124` (штриховка героя);
-`MarksView.swift:209` (текст на оранжевой CTA), фото-градиенты `:127–130,144,148`.
+`MarksView.swift:209` (текст на оранжевой CTA), фото-градиенты `:144,148`;
+`MarksView.swift:94,101` (заливка/штриховка NFC-плитки — переписываются в Task 3).
 
-- [ ] собрать проект — сборка должна проходить
-- [ ] grep-аудит: `grep -rnE "\.white|Color\.black|\.black\.opacity" kolco24/*.swift` — остались только герой/контент/фиксированный визуал; перейти к Task 3
+- [x] собрать проект — сборка проходит (`** BUILD SUCCEEDED **`)
+- [x] grep-аудит: `grep -rnE "\.white|Color\.black|\.black\.opacity" kolco24/*.swift` — остались только герой/контент/фиксированный визуал + NFC-плитка (Task 3); перейти к Task 3
 
 ### Task 3: Переписать `NFCTileView` в тёмную «чип-карту»
 
