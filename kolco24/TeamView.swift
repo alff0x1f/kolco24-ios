@@ -238,7 +238,7 @@ private struct MemberRowView: View {
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(Color.hairline, lineWidth: 0.5)
                     )
-                    .shadow(color: Color.cardShadow, radius: 10, x: 0, y: 4)
+                    .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 4)
                 }
                 .buttonStyle(.plain)
             }
@@ -260,7 +260,7 @@ private struct MiscRowView: View {
                 RoundedRectangle(cornerRadius: 7)
                     .fill(iconBg)
                     .frame(width: 30, height: 30)
-                    .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+                    .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
                 Image(systemName: systemImage)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white)
