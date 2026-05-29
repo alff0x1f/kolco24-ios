@@ -20,6 +20,9 @@ extension Color {
 
     // Surfaces / lines / shadows (previously hard-coded literals in views).
     static let card        = Color(light: "FFFFFF", dark: "181D24")
+    // Elevated control surface (buttons on card): same as card in light (shadow provides lift),
+    // visibly lighter than card in dark so button affordance is distinct from parent surface.
+    static let cardElevated = Color(light: "FFFFFF", dark: "252C38")
     // Hairline dividers/strokes: light `rgba(60,60,67,0.13)`, dark `rgba(255,255,255,0.08)`.
     static let hairline    = Color(lightUI: UIColor(red: 60/255, green: 60/255, blue: 67/255, alpha: 0.13),
                                    darkUI:  UIColor(white: 1, alpha: 0.08))

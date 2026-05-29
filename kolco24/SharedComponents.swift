@@ -11,8 +11,8 @@ struct CPBadge: View {
             Canvas { ctx, s in
                 let stripeH = max(2.0, s.height * 0.12)
                 ctx.fill(Path(CGRect(origin: .zero, size: s)), with: .color(.white))
-                ctx.fill(Path(CGRect(x: 0, y: 0,               width: s.width, height: stripeH)), with: .color(Color.brandRed.opacity(0.78)))
-                ctx.fill(Path(CGRect(x: 0, y: s.height - stripeH, width: s.width, height: stripeH)), with: .color(Color.brandRed.opacity(0.78)))
+                ctx.fill(Path(CGRect(x: 0, y: 0,               width: s.width, height: stripeH)), with: .color(Color(hex: "C3011C").opacity(0.78)))
+                ctx.fill(Path(CGRect(x: 0, y: s.height - stripeH, width: s.width, height: stripeH)), with: .color(Color(hex: "C3011C").opacity(0.78)))
             }
             // CPBadge is a fixed-light card (white fill in both themes), so its
             // number/border use fixed colors — adaptive ink/hairline would turn
