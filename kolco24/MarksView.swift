@@ -124,7 +124,7 @@ private struct NFCTileView: View {
                         .shadow(color: .black.opacity(0.5), radius: 0, y: 1)
                 }
             }
-            .overlay { Rectangle().stroke(Color.black.opacity(0.45), lineWidth: 0.5) }
+            .overlay { Rectangle().stroke(Color.white.opacity(0.06), lineWidth: 0.5) }
         }
         .aspectRatio(1, contentMode: .fit)
     }
