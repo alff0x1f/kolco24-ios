@@ -47,7 +47,7 @@ SwiftUI iOS app for a rogaine/orienteering event. UI language is Russian. All so
 
 **Recurring visual motif:** Diagonal `Canvas` line patterns appear in `NFCTileView`, `PhotoTileView`, and `DarkHeroBackground` — use the same approach when adding new tile/card types.
 
-**Fixed-dark surfaces:** Some elements are intentionally dark in *both* themes (white content reads correctly on them either way) and use literal `Color(hex:)`, **not** adaptive tokens — `DarkHeroBackground` (and its `TeamHeroView` / `TimerHeroView` users) and `NFCTileView`. The NFC tile is a "chip card": a `#171D25 → #232A33` gradient with inset depth, a faint diagonal `Canvas` hatch, a three-arc contactless glyph (`#E6EAF0`), and a white mono number — no red reflective stripes (those belong to the light `CPBadge` / `MiniCPBadge`, which are unchanged).
+**Fixed-dark surfaces:** `DarkHeroBackground` (and its `TeamHeroView` / `TimerHeroView` users) and `NFCTileView` stay dark in *both* themes, so their white content reads correctly either way — but by different means. `DarkHeroBackground`'s gradient is built from the **adaptive** `charcoal`/`charcoalHi` tokens (both dark-valued in either theme, so it mirrors each design: `1D242D → 2A323C` light, `27313D → 171D25` dark); only its text/hatch content is theme-independent. `NFCTileView` is fully fixed via literal `Color(hex:)`, **not** adaptive tokens — a "chip card": a `#171D25 → #232A33` gradient with inset depth, a faint diagonal `Canvas` hatch, a three-arc contactless glyph (`#E6EAF0`), and a white mono number — no red reflective stripes (those belong to the light `CPBadge`, which is unchanged).
 
 **Removed:** the `isRecent` field/feature (green ring overlay on tiles) no longer exists — don't reintroduce it.
 
