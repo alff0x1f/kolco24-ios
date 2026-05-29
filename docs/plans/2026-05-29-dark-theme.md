@@ -248,10 +248,10 @@ dark карточная тень `rgba(0,0,0,0.45)`. Т.к. `hairline`/`cardShad
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] выполнены все требования Overview: 9 токенов адаптивны, 3 новых добавлены, литералы заменены, NFC-плитка = чип-карта, `isRecent` удалён, dark-превью есть
-- [ ] финальная сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
-- [ ] финальный grep-аудит: `grep -rnE "\.white|Color\.black|\.black\.opacity" kolco24/*.swift` — только герой/контент/чип-карта
-- [ ] `grep -rn "isRecent" kolco24/` — пусто
+- [x] выполнены все требования Overview: 9 токенов адаптивны, 3 новых добавлены, литералы заменены, NFC-плитка = чип-карта, `isRecent` удалён, dark-превью есть
+- [x] финальная сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build` → `** BUILD SUCCEEDED **`
+- [x] финальный grep-аудит: `grep -rnE "\.white|Color\.black|\.black\.opacity" kolco24/*.swift` — только герой (TeamHero/TimerHero), контент (CPBadge/галочка/фото-градиенты/CTA-текст) и фиксированная чип-карта
+- [x] `grep -rn "isRecent" kolco24/` — пусто
 
 ### Task 7: [Final] Обновить документацию
 
