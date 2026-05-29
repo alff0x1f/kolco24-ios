@@ -272,7 +272,7 @@ private struct TimerHeroView: View {
         .padding(16)
         .background { DarkHeroBackground() }
         .clipShape(RoundedRectangle(cornerRadius: DS.heroRadius))
-        .shadow(color: Color.cardShadow, radius: 36, x: 0, y: 18)
+        .shadow(color: Color.heroShadow, radius: 36, x: 0, y: 18)
     }
 }
 

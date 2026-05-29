@@ -29,6 +29,9 @@ extension Color {
     // Card shadow: light black α≈0.05, dark black α≈0.45.
     static let cardShadow  = Color(lightUI: UIColor(white: 0, alpha: 0.05),
                                    darkUI:  UIColor(white: 0, alpha: 0.45))
+    // Hero-card drop shadow (radius ≥ 18): warmer charcoal tint in light (0.45), pure-black in dark (0.45).
+    static let heroShadow  = Color(lightUI: UIColor(red: 29/255, green: 36/255, blue: 45/255, alpha: 0.45),
+                                   darkUI:  UIColor(white: 0, alpha: 0.45))
 
     /// Adaptive opaque color from two hex strings, resolved per `userInterfaceStyle`.
     init(light: String, dark: String) {

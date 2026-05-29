@@ -152,7 +152,7 @@ private struct TeamHeroView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background { DarkHeroBackground() }
         .clipShape(RoundedRectangle(cornerRadius: DS.heroRadius))
-        .shadow(color: Color.cardShadow, radius: 36, x: 0, y: 18)
+        .shadow(color: Color.heroShadow, radius: 36, x: 0, y: 18)
         .padding(.horizontal, DS.hPad)
         .padding(.bottom, 14)
     }
@@ -260,7 +260,7 @@ private struct MiscRowView: View {
                 RoundedRectangle(cornerRadius: 7)
                     .fill(iconBg)
                     .frame(width: 30, height: 30)
-                    .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+                    .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
                 Image(systemName: systemImage)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(.white)

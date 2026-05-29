@@ -25,7 +25,7 @@ struct CPBadge: View {
         .clipShape(RoundedRectangle(cornerRadius: max(3, size * 0.08)))
         .overlay(
             RoundedRectangle(cornerRadius: max(3, size * 0.08))
-                .stroke(Color.black.opacity(0.15), lineWidth: 1)
+                .stroke(Color.black.opacity(0.15), lineWidth: 1) // Fixed: badge fill is always white, border must match
         )
     }
 }
