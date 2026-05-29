@@ -96,7 +96,7 @@ struct ScanSheet: View {
                                 }
                             }
                             .overlay(alignment: .bottom) {
-                                if i < chips.count - 2 {
+                                if i / 2 < (chips.count - 1) / 2 {
                                     Rectangle()
                                         .fill(Color.hairline)
                                         .frame(height: 0.5)
