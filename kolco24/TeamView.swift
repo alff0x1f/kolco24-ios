@@ -238,7 +238,7 @@ private struct MemberRowView: View {
                         RoundedRectangle(cornerRadius: 10)
                             .stroke(Color.hairline, lineWidth: 0.5)
                     )
-                    .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 4)
+                    .shadow(color: Color.cardShadow, radius: 10, x: 0, y: 4)
                 }
                 .buttonStyle(.plain)
             }
