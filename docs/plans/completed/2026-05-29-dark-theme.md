@@ -258,9 +258,9 @@ dark карточная тень `rgba(0,0,0,0.45)`. Т.к. `hairline`/`cardShad
 **Files:**
 - Modify: `CLAUDE.md`
 
-- [ ] обновить раздел «Design system» в `CLAUDE.md`: палитра теперь адаптивная (`Color(light:dark:)`), новые токены `card`/`hairline`/`cardShadow`
-- [ ] зафиксировать мотив: NFC-плитка — фиксированно-тёмная чип-карта; `isRecent` удалён
-- [ ] переместить план в `docs/plans/completed/` (создать каталог при необходимости)
+- [x] обновить раздел «Design system» в `CLAUDE.md`: палитра теперь адаптивная (`Color(light:dark:)`), новые токены `card`/`hairline`/`cardShadow`
+- [x] зафиксировать мотив: NFC-плитка — фиксированно-тёмная чип-карта; `isRecent` удалён
+- [x] переместить план в `docs/plans/completed/` (создать каталог при необходимости)
 
 ## Post-Completion
 *Items requiring manual intervention — no checkboxes, informational only*
