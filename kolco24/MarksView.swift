@@ -84,37 +84,76 @@ struct MarksView: View {
 }
 
 // MARK: - NFC Tile
+// Dark "chip card": fixed-dark in both themes (like DarkHeroBackground),
+// not adaptive tokens. Contactless arcs glyph + big mono number.
 private struct NFCTileView: View {
     let tile: CheckpointTile
 
     var body: some View {
-        ZStack {
-            Canvas { ctx, s in
-                let stripeH = max(2.0, s.height * 0.1)
-                ctx.fill(Path(CGRect(origin: .zero, size: s)), with: .color(.white))
-                let step: CGFloat = 5
-                var x: CGFloat = -s.height
-                while x < s.width + s.height {
-                    var p = Path()
-                    p.move(to: CGPoint(x: x, y: 0))
-                    p.addLine(to: CGPoint(x: x + s.height, y: s.height))
-                    ctx.stroke(p, with: .color(Color.black.opacity(0.018)), lineWidth: 1)
-                    x += step
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            ZStack {
+                // background gradient (#171D25 → #232A33, ≈155°) with inset depth
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "171D25"), Color(hex: "232A33")],
+                            startPoint: UnitPoint(x: 0.29, y: 0),
+                            endPoint: UnitPoint(x: 0.71, y: 1)
+                        )
+                        .shadow(.inner(color: .black.opacity(0.6), radius: side * 0.1, y: 2))
+                        .shadow(.inner(color: .white.opacity(0.04), radius: 0.5, y: -1))
+                    )
+                // subtle diagonal sheen (white α≈0.025)
+                Canvas { ctx, s in
+                    let step: CGFloat = 4
+                    var x: CGFloat = -s.height
+                    while x < s.width + s.height {
+                        var p = Path()
+                        p.move(to: CGPoint(x: x, y: 0))
+                        p.addLine(to: CGPoint(x: x + s.height, y: s.height))
+                        ctx.stroke(p, with: .color(Color.white.opacity(0.025)), lineWidth: 1)
+                        x += step
+                    }
                 }
-                ctx.fill(Path(CGRect(x: 0, y: 0, width: s.width, height: stripeH)),
-                         with: .color(Color.brandRed.opacity(0.78)))
-                ctx.fill(Path(CGRect(x: 0, y: s.height - stripeH, width: s.width, height: stripeH)),
-                         with: .color(Color.brandRed.opacity(0.78)))
+                VStack(spacing: side * 0.04) {
+                    ContactlessGlyph()
+                        .frame(width: side * 0.38, height: side * 0.38)
+                    Text(tile.number)
+                        .font(.mono(28, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.5), radius: 0, y: 1)
+                }
             }
-            Text(tile.number)
-                .font(.mono(28, weight: .bold))
-                .foregroundStyle(Color.ink)
+            .overlay { Rectangle().stroke(Color.black.opacity(0.45), lineWidth: 0.5) }
         }
         .aspectRatio(1, contentMode: .fit)
         .overlay {
             if tile.isRecent { Rectangle().strokeBorder(Color.good, lineWidth: 2) }
         }
-        .overlay { Rectangle().stroke(Color.hairline, lineWidth: 0.5) }
+    }
+}
+
+// Three contactless-payment arcs (matches design_dark.html NFCTile glyph).
+private struct ContactlessGlyph: View {
+    var body: some View {
+        Canvas { ctx, s in
+            let sx = s.width / 32, sy = s.height / 32
+            func arc(_ mx: CGFloat, _ my: CGFloat,
+                     _ cx: CGFloat, _ cy: CGFloat,
+                     _ ex: CGFloat, _ ey: CGFloat) -> Path {
+                var p = Path()
+                p.move(to: CGPoint(x: mx * sx, y: my * sy))
+                p.addQuadCurve(to: CGPoint(x: ex * sx, y: ey * sy),
+                               control: CGPoint(x: cx * sx, y: cy * sy))
+                return p
+            }
+            let shading = GraphicsContext.Shading.color(Color(hex: "E6EAF0"))
+            let style = StrokeStyle(lineWidth: 2.2 * sx, lineCap: .round)
+            ctx.stroke(arc(8, 10, 14, 16, 8, 22), with: shading, style: style)
+            ctx.stroke(arc(13, 6, 22, 16, 13, 26), with: shading, style: style)
+            ctx.stroke(arc(18, 2, 30, 16, 18, 30), with: shading, style: style)
+        }
     }
 }
 
