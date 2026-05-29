@@ -233,10 +233,10 @@ dark карточная тень `rgba(0,0,0,0.45)`. Т.к. `hairline`/`cardShad
 **Files:**
 - Modify: `kolco24/MarksView.swift`
 
-- [ ] удалить `.overlay { if tile.isRecent { … strokeBorder(Color.good …) } }` в `NFCTileView` (`:114–116`) и `PhotoTileView` (`:155–157`)
-- [ ] удалить поле `CheckpointTile.isRecent` (`:10`)
-- [ ] вычистить `isRecent: true` из мока `mockTiles` (`:22`)
-- [ ] собрать проект — сборка должна проходить; `grep -rn "isRecent" kolco24/` пустой
+- [x] удалить `.overlay { if tile.isRecent { … strokeBorder(Color.good …) } }` в `NFCTileView` (`:114–116`) и `PhotoTileView` (`:155–157`)
+- [x] удалить поле `CheckpointTile.isRecent` (`:10`)
+- [x] вычистить `isRecent: true` из мока `mockTiles` (`:22`)
+- [x] собрать проект — сборка проходит (`** BUILD SUCCEEDED **`); `grep -rn "isRecent" kolco24/` пустой
 
 ### Task 5: Dark-превью на всех экранах
 

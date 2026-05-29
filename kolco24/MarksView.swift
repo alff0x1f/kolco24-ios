@@ -7,7 +7,6 @@ struct CheckpointTile: Identifiable {
     let number: String
     let cost: Int
     let time: String
-    var isRecent: Bool = false
     var thumb: Thumb?
 
     enum Kind { case nfc, photo }
@@ -19,7 +18,7 @@ private let mockTiles: [CheckpointTile] = [
     .init(kind: .nfc,   number: "00", cost: 0, time: "10:16"),
     .init(kind: .photo, number: "02", cost: 2, time: "11:42", thumb: .birch),
     .init(kind: .nfc,   number: "04", cost: 3, time: "12:08"),
-    .init(kind: .photo, number: "07", cost: 4, time: "13:22", isRecent: true, thumb: .triangle),
+    .init(kind: .photo, number: "07", cost: 4, time: "13:22", thumb: .triangle),
     .init(kind: .nfc,   number: "11", cost: 5, time: "13:34"),
     .init(kind: .nfc,   number: "13", cost: 5, time: "13:58"),
     .init(kind: .photo, number: "16", cost: 3, time: "14:21", thumb: .rock),
@@ -128,9 +127,6 @@ private struct NFCTileView: View {
             .overlay { Rectangle().stroke(Color.black.opacity(0.45), lineWidth: 0.5) }
         }
         .aspectRatio(1, contentMode: .fit)
-        .overlay {
-            if tile.isRecent { Rectangle().strokeBorder(Color.good, lineWidth: 2) }
-        }
     }
 }
 
@@ -190,9 +186,6 @@ private struct PhotoTileView: View {
         .overlay(alignment: .topLeading) {
             CPBadge(number: tile.number, size: 28)
                 .padding(4)
-        }
-        .overlay {
-            if tile.isRecent { Rectangle().strokeBorder(Color.good, lineWidth: 2) }
         }
         .overlay { Rectangle().stroke(Color.hairline, lineWidth: 0.5) }
     }
