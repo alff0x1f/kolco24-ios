@@ -31,7 +31,7 @@ struct ScanSheet: View {
             VStack(spacing: 0) {
                 // Sheet handle
                 Capsule()
-                    .fill(Color.black.opacity(0.2))
+                    .fill(Color.sub.opacity(0.35))
                     .frame(width: 36, height: 5)
                     .padding(.top, 8)
                     .padding(.bottom, 4)
@@ -91,22 +91,22 @@ struct ScanSheet: View {
                             .overlay(alignment: .trailing) {
                                 if i % 2 == 0 {
                                     Rectangle()
-                                        .fill(Color.black.opacity(0.08))
+                                        .fill(Color.hairline)
                                         .frame(width: 0.5)
                                 }
                             }
                             .overlay(alignment: .bottom) {
-                                if i < chips.count - 2 {
+                                if i / 2 < (chips.count - 1) / 2 {
                                     Rectangle()
-                                        .fill(Color.black.opacity(0.08))
+                                        .fill(Color.hairline)
                                         .frame(height: 0.5)
                                 }
                             }
                     }
                 }
-                .background(Color.white)
+                .background(Color.card)
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
-                .shadow(color: .black.opacity(0.04), radius: 1, y: 0.5)
+                .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
                 .padding(.horizontal, DS.hPad)
 
                 Text("Сканировать чипы можно в любом порядке")
@@ -123,7 +123,7 @@ struct ScanSheet: View {
                     .foregroundStyle(Color.ink)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(Color.black.opacity(0.08))
+                    .background(Color.sub.opacity(0.2))
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                     .padding(.horizontal, DS.hPad)
                     .padding(.bottom, 22)
@@ -157,9 +157,9 @@ private struct CPWaitingCardView: View {
             Spacer()
         }
         .padding(16)
-        .background(Color.white)
+        .background(Color.card)
         .clipShape(RoundedRectangle(cornerRadius: 18))
-        .shadow(color: .black.opacity(0.04), radius: 1, y: 0.5)
+        .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
     }
 }
 
@@ -222,7 +222,7 @@ private struct TimerHeroView: View {
     let total: Int
     let remainingScans: Int
 
-    private var progress: Double { Double(seconds) / Double(total) }
+    private var progress: Double { min(1.0, total > 0 ? Double(seconds) / Double(total) : 0) }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -272,10 +272,15 @@ private struct TimerHeroView: View {
         .padding(16)
         .background { DarkHeroBackground() }
         .clipShape(RoundedRectangle(cornerRadius: DS.heroRadius))
-        .shadow(color: Color.charcoal.opacity(0.45), radius: 36, x: 0, y: 18)
+        .shadow(color: Color.heroShadow, radius: 36, x: 0, y: 18)
     }
 }
 
-#Preview {
+#Preview("Light") {
     ScanSheet()
+}
+
+#Preview("Dark") {
+    ScanSheet()
+        .preferredColorScheme(.dark)
 }

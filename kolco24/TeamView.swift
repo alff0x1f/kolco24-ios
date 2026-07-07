@@ -45,13 +45,13 @@ struct TeamView: View {
                             .padding(.vertical, 8)
                         if idx < members.count - 1 {
                             Rectangle()
-                                .fill(Color.black.opacity(0.06))
+                                .fill(Color.hairline)
                                 .frame(height: 0.5)
                                 .padding(.leading, DS.hPad + 38 + 12)
                         }
                     }
                 }
-                .background(Color.white)
+                .background(Color.card)
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
                 .padding(.horizontal, DS.hPad)
 
@@ -70,14 +70,14 @@ struct TeamView: View {
                         .padding(.horizontal, DS.hPad)
                         .padding(.vertical, 8)
                     Rectangle()
-                        .fill(Color.black.opacity(0.06))
+                        .fill(Color.hairline)
                         .frame(height: 0.5)
                         .padding(.leading, DS.hPad + 30 + 12)
                     MiscRowView(systemImage: "questionmark.circle.fill", iconBg: Color.kolcoOrange, label: "Справка и правила", sub: "Регламент, FAQ, контакты оргкомитета")
                         .padding(.horizontal, DS.hPad)
                         .padding(.vertical, 8)
                 }
-                .background(Color.white)
+                .background(Color.card)
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
                 .padding(.horizontal, DS.hPad)
                 .padding(.bottom, 32)
@@ -152,7 +152,7 @@ private struct TeamHeroView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background { DarkHeroBackground() }
         .clipShape(RoundedRectangle(cornerRadius: DS.heroRadius))
-        .shadow(color: Color.charcoal.opacity(0.45), radius: 36, x: 0, y: 18)
+        .shadow(color: Color.heroShadow, radius: 36, x: 0, y: 18)
         .padding(.horizontal, DS.hPad)
         .padding(.bottom, 14)
     }
@@ -168,7 +168,8 @@ private struct MemberRowView: View {
             ZStack {
                 if member.isBound {
                     LinearGradient(
-                        colors: [Color(hex: "E2E6EB"), Color(hex: "C5CCD5")],
+                        colors: [Color(light: "E2E6EB", dark: "2A3240"),
+                                 Color(light: "C5CCD5", dark: "374352")],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                     .clipShape(Circle())
@@ -208,7 +209,7 @@ private struct MemberRowView: View {
                             .frame(width: 5, height: 5)
                         Text("Чип не привязан")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color(hex: "A1431F"))
+                            .foregroundStyle(Color.kolcoOrange)
                     }
                 }
             }
@@ -231,13 +232,13 @@ private struct MemberRowView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.white)
+                    .background(Color.cardElevated)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
+                            .stroke(Color.hairline, lineWidth: 0.5)
                     )
-                    .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 4)
+                    .shadow(color: Color.cardShadow, radius: 10, x: 0, y: 4)
                 }
                 .buttonStyle(.plain)
             }
@@ -281,6 +282,11 @@ private struct MiscRowView: View {
     }
 }
 
-#Preview {
+#Preview("Light") {
     NavigationStack { TeamView() }
+}
+
+#Preview("Dark") {
+    NavigationStack { TeamView() }
+        .preferredColorScheme(.dark)
 }

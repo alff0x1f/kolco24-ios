@@ -11,18 +11,21 @@ struct CPBadge: View {
             Canvas { ctx, s in
                 let stripeH = max(2.0, s.height * 0.12)
                 ctx.fill(Path(CGRect(origin: .zero, size: s)), with: .color(.white))
-                ctx.fill(Path(CGRect(x: 0, y: 0,               width: s.width, height: stripeH)), with: .color(Color.brandRed.opacity(0.78)))
-                ctx.fill(Path(CGRect(x: 0, y: s.height - stripeH, width: s.width, height: stripeH)), with: .color(Color.brandRed.opacity(0.78)))
+                ctx.fill(Path(CGRect(x: 0, y: 0,               width: s.width, height: stripeH)), with: .color(Color(hex: "C3011C").opacity(0.78)))
+                ctx.fill(Path(CGRect(x: 0, y: s.height - stripeH, width: s.width, height: stripeH)), with: .color(Color(hex: "C3011C").opacity(0.78)))
             }
+            // CPBadge is a fixed-light card (white fill in both themes), so its
+            // number/border use fixed colors — adaptive ink/hairline would turn
+            // near-white in dark mode and vanish against the white badge.
             Text(number)
                 .font(.mono(size * 0.38, weight: .bold))
-                .foregroundStyle(number == "?" ? Color.sub.opacity(0.4) : Color.ink)
+                .foregroundStyle(number == "?" ? Color(hex: "56606A").opacity(0.4) : Color(hex: "161A1F"))
         }
         .frame(width: size, height: size * 0.84)
         .clipShape(RoundedRectangle(cornerRadius: max(3, size * 0.08)))
         .overlay(
             RoundedRectangle(cornerRadius: max(3, size * 0.08))
-                .stroke(Color.black.opacity(0.15), lineWidth: 1)
+                .stroke(Color.black.opacity(0.15), lineWidth: 1) // Fixed: badge fill is always white, border must match
         )
     }
 }
@@ -62,7 +65,7 @@ struct MetricView: View {
 struct VDivider: View {
     var body: some View {
         Rectangle()
-            .fill(Color.black.opacity(0.08))
+            .fill(Color.hairline)
             .frame(width: 0.5)
             .padding(.vertical, 10)
     }
