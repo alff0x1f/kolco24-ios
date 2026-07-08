@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Kolco24APIBaseURL</key>
+	<string>$(API_BASE_URL)</string>
+	<key>Kolco24AppKeyId</key>
+	<string>$(APP_KEY_ID)</string>
+	<key>Kolco24AppSecret</key>
+	<string>$(APP_SECRET)</string>
+	<key>Kolco24LocalAPIBaseURL</key>
+	<string>$(LOCAL_API_BASE_URL)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>
