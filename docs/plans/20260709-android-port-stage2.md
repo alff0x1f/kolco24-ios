@@ -131,10 +131,10 @@
 - Create: `kolco24/Data/AppDatabase.swift`
 - Create: `kolco24Tests/Data/AppDatabaseSchemaTests.swift`
 
-- [ ] `struct AppDatabase`: `let writer: any DatabaseWriter`, `init` прогоняет `DatabaseMigrator` с единственной миграцией `"v1"` — все 13 таблиц дословно из `schemas/5.json` (типы, nullability, PK — включая 4 композитных, все индексы; **без** SQL-`DEFAULT` — в `createSql` их нет)
-- [ ] `makeShared()`: `DatabasePool` + WAL, `kolco24.db` в Application Support (создать каталог при необходимости); `makeInMemory()`: `DatabaseQueue()`
-- [ ] `AppDatabaseSchemaTests`: миграция отрабатывает на пустой базе; инвентарь таблиц/колонок (имя, тип, notnull, dflt_value, pk) и индексов совпадает с транскрипцией `5.json` (замена Android `MigrationTest`)
-- [ ] прогнать тесты — must pass before task 3
+- [x] `struct AppDatabase`: `let writer: any DatabaseWriter`, `init` прогоняет `DatabaseMigrator` с единственной миграцией `"v1"` — все 13 таблиц дословно из `schemas/5.json` (типы, nullability, PK — включая 4 композитных, все индексы; **без** SQL-`DEFAULT` — в `createSql` их нет)
+- [x] `makeShared()`: `DatabasePool` + WAL, `kolco24.db` в Application Support (создать каталог при необходимости); `makeInMemory()`: `DatabaseQueue()`
+- [x] `AppDatabaseSchemaTests`: миграция отрабатывает на пустой базе; инвентарь таблиц/колонок (имя, тип, notnull, dflt_value, pk) и индексов совпадает с транскрипцией `5.json` (замена Android `MigrationTest`)
+- [x] прогнать тесты — must pass before task 3
 
 ### Task 3: Record-конформансы + JSON-кодеки
 
