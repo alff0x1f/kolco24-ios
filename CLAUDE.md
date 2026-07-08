@@ -17,6 +17,21 @@ xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platfor
 
 Open `kolco24.xcodeproj` in Xcode to run on a simulator interactively.
 
+## Building from Scratch (Secrets)
+
+A fresh clone does not build until secrets are in place:
+
+```bash
+cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
+# then fill in the real values
+```
+
+Without it the build fails with `could not find included file 'Secrets.xcconfig'` — a deliberate hard gate: the committed `Config/App.xcconfig` (base configuration of the app target) does a non-optional `#include "Secrets.xcconfig"`, and `Config/Secrets.xcconfig` is gitignored. Values flow xcconfig → `kolco24/Info.plist` (`Kolco24*` keys, merged with the generated plist) → `enum Secrets` in `kolco24/Secrets.swift` (`apiBaseURL`, `appKeyId`, `appSecret`, `localAPIBaseURL`; missing/empty value → `fatalError`). Gotcha: `//` starts a comment in xcconfig, so URLs use the `$()` trick (`https:/$()/...`).
+
+**ATS:** `Info.plist` sets `NSAppTransportSecurity` → `NSAllowsLocalNetworking = YES` — cleartext HTTP is allowed only to the LAN race server; the cloud API stays HTTPS-only.
+
+**Dependencies:** GRDB.swift 7.x via SPM (SQLite, Room analog), linked to the app target only — tests import it through the host application.
+
 ## Architecture
 
 SwiftUI iOS app for a rogaine/orienteering event. UI language is Russian. All source files live flat in `kolco24/`.
