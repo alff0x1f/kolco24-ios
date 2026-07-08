@@ -187,10 +187,10 @@
 - Create: `kolco24/Data/Stores/TrackStore.swift`, `kolco24/Data/Stores/JudgeScanStore.swift`
 - Create: `kolco24Tests/Data/JudgeScanStoreTests.swift`, `kolco24Tests/Data/TrackStoreTests.swift`
 
-- [ ] методы по инвентарю; `insertAll` c IGNORE (повторный UUID не дублируется), сортировки `COALESCE(...)`
-- [ ] `JudgeScanStoreTests` ← `JudgeScanDaoTest.kt` (7 кейсов): скоупинг raceId; trusted-then-wall порядок; `markUploaded*` — только указанные строки; `pendingUploadRaces` distinct; `uploadCounts` по вставкам / независимость local-cloud / исключение чужих гонок
-- [ ] `TrackStoreTests` (бонус): IGNORE-идемпотентность, порядок `observeForTeam`, дренаж с limit, `pendingUploadScopes`
-- [ ] прогнать тесты — must pass before task 8
+- [x] методы по инвентарю; `insertAll` c IGNORE (повторный UUID не дублируется), сортировки `COALESCE(...)`
+- [x] `JudgeScanStoreTests` ← `JudgeScanDaoTest.kt` (7 кейсов): скоупинг raceId; trusted-then-wall порядок; `markUploaded*` — только указанные строки; `pendingUploadRaces` distinct; `uploadCounts` по вставкам / независимость local-cloud / исключение чужих гонок
+- [x] `TrackStoreTests` (бонус): IGNORE-идемпотентность, порядок `observeForTeam`, дренаж с limit, `pendingUploadScopes`
+- [x] прогнать тесты — must pass before task 8
 
 ### Task 8: InstallId + ClockAnchorStore + TrustedClock.makeDefault()
 
