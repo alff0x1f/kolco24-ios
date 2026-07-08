@@ -176,10 +176,10 @@
 - Create: `kolco24/Data/Stores/UploadTypes.swift` (`UploadCounts`, `TrackScope`, `PhotoFrameRow` — общие для Mark/Track/JudgeScan)
 - Create: `kolco24Tests/Data/MarkStoreTests.swift`
 
-- [ ] полный инвентарь: `addMember`, `attachLocation`, `attachPhotos`, version-guarded семейство `…IfUnchanged`, CASE-агрегаты `uploadCounts`/`uploadCountsMetadata`, `photoFrameRows`, дренаж `unuploaded*`/`framePending*`, `pendingUploadScopes`
-- [ ] `MarkStoreTests` ← `MarkDaoTest.kt` (12 кейсов): `unuploaded*` включают фото-отметки; `uploadCounts` (фото-строка только при metadata+frames); `uploadCountsMetadata` игнорирует frames; `photoFrameRows`; `pendingUploadScopes` (вкл. photo-only и frame-only расширение); `framePending*`-фильтры; выбор строк с нулём frames; `setPhotosUploadedIfUnchanged` — stale no-op; `attachPhotos` merge/скоупинг/отсутствующая строка/сброс frames при сохранении metadata
-- [ ] бонус-тесты (в Android покрыты только репо-тестами на фейках): `addMember` (set-семантика present/presentDetails, пересчёт `complete`, сброс `uploaded*`), `attachLocation`, version-guarded `markUploaded*IfUnchanged`/`…AndNoLocation`
-- [ ] прогнать тесты — must pass before task 7
+- [x] полный инвентарь: `addMember`, `attachLocation`, `attachPhotos`, version-guarded семейство `…IfUnchanged`, CASE-агрегаты `uploadCounts`/`uploadCountsMetadata`, `photoFrameRows`, дренаж `unuploaded*`/`framePending*`, `pendingUploadScopes`
+- [x] `MarkStoreTests` ← `MarkDaoTest.kt` (12 кейсов): `unuploaded*` включают фото-отметки; `uploadCounts` (фото-строка только при metadata+frames); `uploadCountsMetadata` игнорирует frames; `photoFrameRows`; `pendingUploadScopes` (вкл. photo-only и frame-only расширение); `framePending*`-фильтры; выбор строк с нулём frames; `setPhotosUploadedIfUnchanged` — stale no-op; `attachPhotos` merge/скоупинг/отсутствующая строка/сброс frames при сохранении metadata
+- [x] бонус-тесты (в Android покрыты только репо-тестами на фейках): `addMember` (set-семантика present/presentDetails, пересчёт `complete`, сброс `uploaded*`), `attachLocation`, version-guarded `markUploaded*IfUnchanged`/`…AndNoLocation`
+- [x] прогнать тесты — must pass before task 7
 
 ### Task 7: TrackStore + JudgeScanStore
 
