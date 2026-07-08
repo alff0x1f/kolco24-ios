@@ -29,6 +29,9 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 - `ScanSession`/`classifyTag` (state machine 20-секундного окна сканирования), `decideBind`, `decidePhotoTarget`, `nextSegmentId`/`shouldLiveUpload`, парсинг/сборка формата чипа `K24`, `normalizeNfcUid`, `pluralRu`.
 
 ### Этап 2. Данные: БД и хранилища
+
+✅ выполнен — см. [детальный план](completed/20260709-android-port-stage2.md).
+
 - Схема GRDB, зеркалящая Room v5: races, categories, teams, selected_team, checkpoints, tags, member_tags, member_chip_bindings, marks (самая богатая — UUID, снапшоты участников, trusted-время, GPS-поля), track_points, judge_scans, sync_meta (ETags), legend_meta.
 - UserDefaults-хранилища: `InstallId`, `ThemePreference`, `TrackProfilePreference`, `ClockAnchorStore`; Keychain для админ-токена (`AdminTokenStore`).
 

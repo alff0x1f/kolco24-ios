@@ -1,6 +1,6 @@
 # Этап 2 портирования: данные — БД (GRDB) и хранилища
 
-Детализация этапа 2 из [android-port.md](android-port.md). Этапы 0 (инфраструктура) и 1 (чистая логика) выполнены.
+Детализация этапа 2 из [android-port.md](../android-port.md). Этапы 0 (инфраструктура) и 1 (чистая логика) выполнены.
 
 ## Overview
 
@@ -220,9 +220,9 @@
 - Modify: `docs/plans/android-port.md`
 - Modify: `CLAUDE.md`
 
-- [ ] в `android-port.md` пометить этап 2 ✅ со ссылкой на этот план (по образцу этапов 0–1)
-- [ ] в `CLAUDE.md` описать `Data/` (AppDatabase, Records, Stores), правило «SQL дословно», grep-инварианты, key-value-сторы и что отложено (Theme/TrackProfile/AdminToken/RaceLease)
-- [ ] переместить этот план в `docs/plans/completed/` (поправить ссылку в шапке на `../android-port.md`)
+- [x] в `android-port.md` пометить этап 2 ✅ со ссылкой на этот план (по образцу этапов 0–1)
+- [x] в `CLAUDE.md` описать `Data/` (AppDatabase, Records, Stores), правило «SQL дословно», grep-инварианты, key-value-сторы и что отложено (Theme/TrackProfile/AdminToken/RaceLease)
+- [x] переместить этот план в `docs/plans/completed/` (поправить ссылку в шапке на `../android-port.md`)
 
 ## Post-Completion
 
