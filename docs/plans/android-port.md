@@ -20,6 +20,9 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 - ATS-исключение для cleartext LAN-хоста (аналог `network_security_config.xml`).
 
 ### Этап 1. Чистая логика (порт 1:1 + тесты)
+
+✅ выполнен — см. [детальный план](completed/20260708-android-port-stage1.md).
+
 Всё Android-free и уже протестировано в Kotlin — переносится напрямую, тесты зеркалируются:
 - `LegendCrypto` → CryptoKit (bid = sha256[:16], HKDF-SHA256 c нулевой солью, AES-256-GCM с AAD; сверить с Python-референсом сервера).
 - HMAC-подпись запросов (`buildCanonical`/`sign`) и `TrustedClock` (доверенное время: серверный якорь + монотонные часы).
