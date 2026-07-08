@@ -11,14 +11,6 @@ import Testing
 
 struct GRDBSmokeTests {
 
-    @Test func inMemoryDatabaseQueueExecutesTrivialQuery() throws {
-        let dbQueue = try DatabaseQueue()
-        let value = try dbQueue.read { db in
-            try Int.fetchOne(db, sql: "SELECT 1 + 1")
-        }
-        #expect(value == 2)
-    }
-
     @Test func createTableInsertAndFetch() throws {
         let dbQueue = try DatabaseQueue()
         try dbQueue.write { db in

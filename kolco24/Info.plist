@@ -15,5 +15,7 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Приложение подключается к серверу гонки в локальной сети, чтобы передавать отметки о взятых контрольных пунктах.</string>
 </dict>
 </plist>

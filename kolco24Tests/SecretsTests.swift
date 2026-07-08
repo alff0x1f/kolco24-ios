@@ -3,7 +3,8 @@
 //  kolco24Tests
 //
 //  Смоук-тесты цепочки Config/Secrets.xcconfig → Info.plist → Bundle.main → Secrets.
-//  Внимание: сообщения ассертов не должны печатать реальные значения секретов.
+//  Внимание: сообщения ассертов не должны печатать реальные значения секретов —
+//  сравнения с секретами считаем в локальные булевы до #expect.
 //
 
 import Foundation
@@ -12,7 +13,7 @@ import Testing
 
 struct SecretsTests {
 
-    // MARK: - Все значения непустые и без неподставленных $(VAR)
+    // MARK: - Непустота
 
     @Test func allValuesAreNonEmpty() {
         #expect(!Secrets.apiBaseURL.isEmpty)
@@ -21,29 +22,57 @@ struct SecretsTests {
         #expect(!Secrets.localAPIBaseURL.isEmpty)
     }
 
-    @Test func noValueContainsUnexpandedVariable() {
-        // Реальные значения не печатаем — только факт наличия "$(".
-        #expect(!Secrets.apiBaseURL.contains("$("))
-        #expect(!Secrets.appKeyId.contains("$("))
-        #expect(!Secrets.appSecret.contains("$("))
-        #expect(!Secrets.localAPIBaseURL.contains("$("))
+    // MARK: - Плейсхолдеры
+
+    @Test func valuesAreNotExamplePlaceholders() throws {
+        // Дословная копия Secrets.example.xcconfig проходит остальные проверки
+        // (плейсхолдеры непустые, https://api.example.com — валидный URL с host),
+        // поэтому ловим их явно. При провале #expect печатает только плейсхолдер,
+        // не реальный секрет.
+        let url = try #require(URL(string: Secrets.apiBaseURL))
+        #expect(url.host(percentEncoded: false) != "api.example.com")
+        let keyIdIsPlaceholder = Secrets.appKeyId == "your-app-key-id"
+        #expect(!keyIdIsPlaceholder)
+        let secretIsPlaceholder = Secrets.appSecret == "your-hex-secret"
+        #expect(!secretIsPlaceholder)
     }
 
-    // MARK: - URL-ы: парсятся, схема верная, host непустой
+    // MARK: - URL
 
     @Test func apiBaseURLIsValidHTTPSWithHost() throws {
         let url = try #require(URL(string: Secrets.apiBaseURL))
         #expect(url.scheme == "https")
         // Именно host ловит сломанный $()-трюк в xcconfig: обрезанное "https:"
         // парсится как валидный URL со схемой, но без host.
-        let host = try #require(url.host)
+        let host = try #require(url.host(percentEncoded: false))
         #expect(!host.isEmpty)
     }
 
     @Test func localAPIBaseURLIsValidHTTPWithHost() throws {
         let url = try #require(URL(string: Secrets.localAPIBaseURL))
         #expect(url.scheme == "http")
-        let host = try #require(url.host)
+        let host = try #require(url.host(percentEncoded: false))
         #expect(!host.isEmpty)
+    }
+
+    // MARK: - value(forInfoPlistKey:in:)
+
+    @Test func valueLookupReturnsNonEmptyString() {
+        let info: [String: Any] = ["Key": "value"]
+        #expect(Secrets.value(forInfoPlistKey: "Key", in: info) == "value")
+    }
+
+    @Test func valueLookupRejectsMissingEmptyAndNonString() {
+        #expect(Secrets.value(forInfoPlistKey: "Missing", in: [:]) == nil)
+        #expect(Secrets.value(forInfoPlistKey: "Empty", in: ["Empty": ""]) == nil)
+        #expect(Secrets.value(forInfoPlistKey: "Number", in: ["Number": 42]) == nil)
+    }
+
+    @Test func valueLookupRejectsUnexpandedBuildSettingLiteral() {
+        // Xcode разворачивает неопределённую переменную в пустую строку,
+        // но шов отвергает и сырой литерал — на случай plist, собранного
+        // в обход подстановки. Литерал — плейсхолдер, не секрет.
+        #expect(Secrets.value(forInfoPlistKey: "Raw", in: ["Raw": "$(APP_SECRET)"]) == nil)
+        #expect(Secrets.value(forInfoPlistKey: "Partial", in: ["Partial": "https://$(HOST)/api"]) == nil)
     }
 }
