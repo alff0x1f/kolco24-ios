@@ -142,11 +142,11 @@
 - Create: `kolco24/Data/Records/` — 13 файлов `<Тип>+GRDB.swift` (Checkpoint, Mark, MemberChipBinding — конформансы существующим типам этапа 1; остальные 10 — новым)
 - Create: `kolco24Tests/Data/IntListCodecTests.swift`, `MarkMemberSnapshotListCodecTests.swift`, `TeamMembersCodecTests.swift`
 
-- [ ] extension'ы `FetchableRecord`/`PersistableRecord` (`init(row:)` + `encode(to:)` вручную), `databaseTableName` = Room-имя; JSON-колонки (`teams.members`, `marks.present`, `marks.presentDetails`) кодируются внутри конформансов (`.sortedKeys`; decode-fallback `[]`/`nil` + лог)
-- [ ] `TeamMemberItem` — CodingKeys с `number_in_team`
-- [ ] grep-инвариант: `import GRDB` только под `Data/`, в `Model/` не появился
-- [ ] тесты-зеркала 3 Kotlin-конвертер-тестов: round-trip списков, пустой список, NULL ↔ nil (`presentDetails`), битый JSON → fallback без краша, незнакомые ключи игнорируются
-- [ ] прогнать тесты — must pass before task 4
+- [x] extension'ы `FetchableRecord`/`PersistableRecord` (`init(row:)` + `encode(to:)` вручную), `databaseTableName` = Room-имя; JSON-колонки (`teams.members`, `marks.present`, `marks.presentDetails`) кодируются внутри конформансов (`.sortedKeys`; decode-fallback `[]`/`nil` + лог)
+- [x] `TeamMemberItem` — CodingKeys с `number_in_team`
+- [x] grep-инвариант: `import GRDB` только под `Data/`, в `Model/` не появился
+- [x] тесты-зеркала 3 Kotlin-конвертер-тестов: round-trip списков, пустой список, NULL ↔ nil (`presentDetails`), битый JSON → fallback без краша, незнакомые ключи игнорируются
+- [x] прогнать тесты — must pass before task 4
 
 ### Task 4: Простые store'ы (8 шт.) + базовые тесты
 
