@@ -24,7 +24,7 @@ struct TrackStore {
 
     // MARK: - Observation / чтение
 
-    /// `SELECT * FROM track_points WHERE teamId AND raceId ORDER BY
+    /// `SELECT * FROM track_points WHERE teamId = ? AND raceId = ? ORDER BY
     /// COALESCE(trustedMs, wallMs), COALESCE(bootCount, -1), elapsedRealtimeAt, id`.
     /// Сортировка по моменту фикса: trusted, если есть, иначе wall; тай-брейк по
     /// boot-сессии и монотонному моменту захвата.

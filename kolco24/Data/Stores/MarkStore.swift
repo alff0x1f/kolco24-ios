@@ -39,16 +39,22 @@ enum MarkPhotoPaths {
     }
 
     /// `marks/<markId>/<uuid>.jpg`: 3-сегментный относительный путь под `marks/`, без
-    /// абсолютного префикса, без `..`, оканчивающийся на `.jpg`.
+    /// абсолютного префикса, без `..`, оканчивающийся на `.jpg`. Пустые и состоящие только из
+    /// пробелов сегменты отбрасываются (зеркало Kotlin `isBlank()`).
     static func isSafeRelativePhotoPath(_ path: String) -> Bool {
-        if path.isEmpty { return false }
+        if isBlank(path) { return false }
         if path.hasPrefix("/") { return false }
         if !path.hasSuffix(".jpg") { return false }
         let segments = path.components(separatedBy: "/")
         if segments.count != 3 { return false }
         if segments.first != "marks" { return false }
-        if segments.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) { return false }
+        if segments.contains(where: { isBlank($0) || $0 == "." || $0 == ".." }) { return false }
         return true
+    }
+
+    /// Зеркало Kotlin `String.isBlank()`: пусто или только whitespace.
+    private static func isBlank(_ s: String) -> Bool {
+        s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

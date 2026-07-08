@@ -495,4 +495,27 @@ struct MarkStoreTests {
         try await store.upsert(mark("b", method: "photo"))
         #expect(Set(try await store.allIds()) == ["a", "b"])
     }
+
+    // MARK: - Зеркало PhotoPathsTest.kt (валидация формы пути)
+
+    /// Зеркало `PhotoPathsTest.wrongShapeEntriesAreDropped` + whitespace-only сегменты
+    /// (Kotlin `isBlank()` их отбрасывает — Swift-порт обязан вести себя так же).
+    @Test func decode_dropsWrongShapeAndBlankSegments() {
+        let raw = MarkPhotoPaths.encode([
+            "other/m1/a.jpg",   // неправильный корень
+            "marks/m1/a.png",   // неправильное расширение
+            "marks/m1",         // слишком мало сегментов
+            "marks/m1/sub/a.jpg", // слишком много сегментов
+            "marks//a.jpg",     // пустой сегмент
+            "marks/ /a.jpg",    // whitespace-only сегмент
+            "marks/m1/a.jpg",   // единственный валидный
+        ])
+        #expect(MarkPhotoPaths.decode(raw) == ["marks/m1/a.jpg"])
+    }
+
+    @Test func isSafeRelativePhotoPath_rejectsWhitespaceOnlySegment() {
+        #expect(!MarkPhotoPaths.isSafeRelativePhotoPath("marks/ /a.jpg")) // whitespace-only middle segment
+        #expect(!MarkPhotoPaths.isSafeRelativePhotoPath("   ")) // whitespace-only path
+        #expect(MarkPhotoPaths.isSafeRelativePhotoPath("marks/m1/a.jpg"))
+    }
 }
