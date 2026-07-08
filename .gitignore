@@ -1,0 +1,2 @@
+# Local API secrets — copy Config/Secrets.example.xcconfig and fill in
+Config/Secrets.xcconfig
