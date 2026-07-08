@@ -165,9 +165,9 @@
 - Create: `kolco24/Data/Stores/CheckpointStore.swift`
 - Create: `kolco24Tests/Data/CheckpointStoreTests.swift`
 
-- [ ] методы по инвентарю; `replaceAllForRace` — снапшот revealed → wipe+insert → re-apply plaintext, всё в одной транзакции
-- [ ] `CheckpointStoreTests` ← `CheckpointDaoTest.kt` (4 кейса): reveal-then-resync сохраняет контент; resync не раскрывает нераскрытое; открытая строка перезаписывается; выпавший КП удаляется
-- [ ] прогнать тесты — must pass before task 6
+- [x] методы по инвентарю; `replaceAllForRace` — снапшот revealed → wipe+insert → re-apply plaintext, всё в одной транзакции
+- [x] `CheckpointStoreTests` ← `CheckpointDaoTest.kt` (4 кейса): reveal-then-resync сохраняет контент; resync не раскрывает нераскрытое; открытая строка перезаписывается; выпавший КП удаляется
+- [x] прогнать тесты — must pass before task 6
 
 ### Task 6: MarkStore (ядро слоя данных)
 
