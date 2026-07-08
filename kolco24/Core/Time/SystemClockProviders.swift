@@ -59,3 +59,17 @@ enum SystemClockProviders {
         )
     }
 }
+
+extension TrustedClock {
+
+    /// Продовая фабрика: системные провайдеры времени + персистенция якоря через `ClockAnchorStore`
+    /// (тёплый старт из `store.read()`). Собственно подключение к приложению — этапы 3–4.
+    static func makeDefault(
+        store: ClockAnchorStore = .fromUserDefaults()
+    ) -> TrustedClock {
+        SystemClockProviders.makeClock(
+            persist: { store.write($0) },
+            persisted: store.read()
+        )
+    }
+}

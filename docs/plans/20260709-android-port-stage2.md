@@ -200,11 +200,11 @@
 - Modify: `kolco24/Core/Time/SystemClockProviders.swift` (фабрика `makeDefault()`)
 - Create: `kolco24Tests/Core/InstallIdTests.swift`, `kolco24Tests/Core/ClockAnchorStoreTests.swift`
 
-- [ ] `InstallId` ← `data/InstallId.kt`: get-or-create UUID через `load`/`save`-seam, ключ `install_id`; адаптер `UserDefaults.standard`
-- [ ] `ClockAnchorStore` ← `data/time/ClockAnchorStore.kt`: ключ `anchor`, формат `"serverEpochMs|anchorElapsedMs|capturedWallMs|bootCount?"` 1:1, чистые parse/format, seam + адаптер; парсинг через `components(separatedBy: "|")`, ровно 4 компоненты (Swift `split` отбрасывает хвостовой пустой сегмент при `bootCount == nil` — см. Technical Details)
-- [ ] `TrustedClock.makeDefault()`: системные провайдеры + `persist`/`persisted` из `ClockAnchorStore` (подключение к приложению — этапы 3–4)
-- [ ] `InstallIdTests` ← `InstallIdTest.kt`, `ClockAnchorStoreTests` ← `ClockAnchorStoreTest.kt` (in-memory seam; round-trip, битые строки → nil, `bootCount` опционален)
-- [ ] прогнать тесты — must pass before task 9
+- [x] `InstallId` ← `data/InstallId.kt`: get-or-create UUID через `load`/`save`-seam, ключ `install_id`; адаптер `UserDefaults.standard`
+- [x] `ClockAnchorStore` ← `data/time/ClockAnchorStore.kt`: ключ `anchor`, формат `"serverEpochMs|anchorElapsedMs|capturedWallMs|bootCount?"` 1:1, чистые parse/format, seam + адаптер; парсинг через `components(separatedBy: "|")`, ровно 4 компоненты (Swift `split` отбрасывает хвостовой пустой сегмент при `bootCount == nil` — см. Technical Details)
+- [x] `TrustedClock.makeDefault()`: системные провайдеры + `persist`/`persisted` из `ClockAnchorStore` (подключение к приложению — этапы 3–4)
+- [x] `InstallIdTests` ← `InstallIdTest.kt`, `ClockAnchorStoreTests` ← `ClockAnchorStoreTest.kt` (in-memory seam; round-trip, битые строки → nil, `bootCount` опционален)
+- [x] прогнать тесты — must pass before task 9
 
 ### Task 9: Verify acceptance criteria
 
