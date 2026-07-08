@@ -119,11 +119,11 @@
 **Files:**
 - Create: `kolco24/Model/Race.swift`, `Category.swift`, `Team.swift` (+ вложенный `TeamMemberItem`), `SelectedTeam.swift`, `Tag.swift`, `MemberTag.swift`, `LegendMeta.swift`, `TrackPoint.swift`, `JudgeScan.swift`, `SyncMeta.swift`
 
-- [ ] структуры по образцу этапа 1 (`let`-поля, camelCase, опционалы как в Kotlin, `Equatable`, без суффикса `Entity`, дефолты котлиновских полей — в инициализаторах); `Long`→`Int64`, `Float`→`Float`, `Double`→`Double`
-- [ ] `Category.sortOrder` (серверное `order` уже переименовано в Android — сохранить), `SelectedTeam.id = 1` по умолчанию, `JudgeScan.elapsedRealtimeAt` non-null (в отличие от `Mark`)
-- [ ] doc-комментарии в стиле существующих `Model/`-файлов (зеркало какой сущности, назначение)
-- [ ] сборка проходит; типы без логики — покрываются store-тестами задач 4–7
-- [ ] прогнать тесты — must pass before task 2
+- [x] структуры по образцу этапа 1 (`let`-поля, camelCase, опционалы как в Kotlin, `Equatable`, без суффикса `Entity`, дефолты котлиновских полей — в инициализаторах); `Long`→`Int64`, `Float`→`Float`, `Double`→`Double`
+- [x] `Category.sortOrder` (серверное `order` уже переименовано в Android — сохранить), `SelectedTeam.id = 1` по умолчанию, `JudgeScan.elapsedRealtimeAt` non-null (в отличие от `Mark`)
+- [x] doc-комментарии в стиле существующих `Model/`-файлов (зеркало какой сущности, назначение)
+- [x] сборка проходит; типы без логики — покрываются store-тестами задач 4–7
+- [x] прогнать тесты — must pass before task 2
 
 ### Task 2: AppDatabase + схема v1 + snapshot-тест
 
