@@ -3,8 +3,8 @@
 //  kolco24
 //
 //  Доменный тип «точка GPS-трека» (**локальная**). Зеркало Room-сущности
-//  `TrackPointEntity` (`data/db/TrackPointEntity.kt`). GRDB-конформанс добавит
-//  этап 2.
+//  `TrackPointEntity` (`data/db/TrackPointEntity.kt`). GRDB-конформанс — в
+//  `Data/Records/TrackPoint+GRDB.swift` (этап 2).
 //
 //  Как и `Mark`, таблица рассчитана на будущую двойную загрузку (local wifi +
 //  cloud): [id] — сгенерированный клиентом UUID (идемпотентный merge двух

@@ -4,7 +4,7 @@
 //
 //  Доменный тип «категория гонки» (дистанция/группа). Зеркало Room-сущности
 //  `CategoryEntity` (`data/db/CategoryEntity.kt`) — зеркало `CategoryDto`.
-//  GRDB-конформанс добавит этап 2.
+//  GRDB-конформанс — в `Data/Records/Category+GRDB.swift` (этап 2).
 //
 //  Принадлежит гонке через [raceId]. Серверное поле `order` — зарезервированное
 //  SQL-слово, поэтому колонка называется [sortOrder].
