@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		96426CB22F84020000D652EA /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 96426CB12F84020000D652EA /* GRDB */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		96426C752F83FD3D00D652EA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,11 +28,11 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		96426CA12F84010000D652EA /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
-		96426CA22F84010000D652EA /* Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.example.xcconfig; sourceTree = "<group>"; };
 		96426C642F83FD3C00D652EA /* kolco24.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = kolco24.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		96426C742F83FD3D00D652EA /* kolco24Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = kolco24Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		96426C7E2F83FD3D00D652EA /* kolco24UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = kolco24UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		96426CA12F84010000D652EA /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
+		96426CA22F84010000D652EA /* Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.example.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -67,6 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				96426CB22F84020000D652EA /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -98,15 +103,6 @@
 			);
 			sourceTree = "<group>";
 		};
-		96426CA02F84010000D652EA /* Config */ = {
-			isa = PBXGroup;
-			children = (
-				96426CA12F84010000D652EA /* App.xcconfig */,
-				96426CA22F84010000D652EA /* Secrets.example.xcconfig */,
-			);
-			path = Config;
-			sourceTree = "<group>";
-		};
 		96426C652F83FD3C00D652EA /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -115,6 +111,15 @@
 				96426C7E2F83FD3D00D652EA /* kolco24UITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		96426CA02F84010000D652EA /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				96426CA12F84010000D652EA /* App.xcconfig */,
+				96426CA22F84010000D652EA /* Secrets.example.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -137,6 +142,7 @@
 			);
 			name = kolco24;
 			packageProductDependencies = (
+				96426CB12F84020000D652EA /* GRDB */,
 			);
 			productName = kolco24;
 			productReference = 96426C642F83FD3C00D652EA /* kolco24.app */;
@@ -220,6 +226,9 @@
 			);
 			mainGroup = 96426C5B2F83FD3C00D652EA;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				96426CB02F84020000D652EA /* XCRemoteSwiftPackageReference "GRDB" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 96426C652F83FD3C00D652EA /* Products */;
 			projectDirPath = "";
@@ -587,6 +596,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		96426CB02F84020000D652EA /* XCRemoteSwiftPackageReference "GRDB" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		96426CB12F84020000D652EA /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96426CB02F84020000D652EA /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 96426C5C2F83FD3C00D652EA /* Project object */;
 }
