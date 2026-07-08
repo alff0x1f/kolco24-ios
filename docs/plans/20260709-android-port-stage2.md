@@ -154,10 +154,10 @@
 - Create: `kolco24/Data/Stores/RaceStore.swift`, `TeamStore.swift`, `SelectedTeamStore.swift`, `TagStore.swift`, `MemberTagStore.swift`, `MemberChipBindingStore.swift`, `SyncMetaStore.swift`, `LegendMetaStore.swift`
 - Create: `kolco24Tests/Data/SimpleStoresTests.swift` (или по файлу на store — по вкусу при реализации)
 
-- [ ] 8 store-структур, методы 1:1 по инвентарю из Technical Details; observation'ы через `ValueObservation…values(in:)`, транзакции (`replaceAll*`, `reassign`) — один `write`
-- [ ] сортировка команд по `startNumber` — дословный SQL из `TeamDao.kt`
-- [ ] базовые тесты (бонус, в Android этот SQL не покрыт): скоупинг по raceId, сортировки (в т.ч. `startNumber` с NULL/''/числами), upsert-семантика, `replaceAllForRace` над двумя таблицами, `reassign` атомарен, `observeEtagsExist`
-- [ ] прогнать тесты — must pass before task 5
+- [x] 8 store-структур, методы 1:1 по инвентарю из Technical Details; observation'ы через `ValueObservation…values(in:)`, транзакции (`replaceAll*`, `reassign`) — один `write`
+- [x] сортировка команд по `startNumber` — дословный SQL из `TeamDao.kt`
+- [x] базовые тесты (бонус, в Android этот SQL не покрыт): скоупинг по raceId, сортировки (в т.ч. `startNumber` с NULL/''/числами), upsert-семантика, `replaceAllForRace` над двумя таблицами, `reassign` атомарен, `observeEtagsExist`
+- [x] прогнать тесты — must pass before task 5
 
 ### Task 5: CheckpointStore (preserve-reveal)
 
