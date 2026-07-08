@@ -1,0 +1,6 @@
+// Base configuration for the kolco24 app target.
+//
+// Жёсткий гейт: без Config/Secrets.xcconfig сборка падает с ошибкой
+// "could not find included file 'Secrets.xcconfig'".
+// Скопируй Config/Secrets.example.xcconfig -> Config/Secrets.xcconfig и заполни значения.
+#include "Secrets.xcconfig"

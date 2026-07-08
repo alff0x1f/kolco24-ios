@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run
 
+Prerequisite: `Config/Secrets.xcconfig` must exist (see next section) — both build and tests fail without it. Tests run hosted in the app, so an empty secret value crashes the test run with `fatalError` rather than a normal assertion failure.
+
 ```bash
 # Build (simulator)
 xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build
@@ -12,10 +14,29 @@ xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS
 xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'
 
 # Run a single test class
-xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:kolco24Tests/kolco24Tests
+xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' -only-testing:kolco24Tests/SecretsTests
 ```
 
+If the name-based destination is flaky, resolve a UDID via `xcrun simctl list devices available` and use `-destination 'platform=iOS Simulator,id=<UDID>'` (may also need `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`).
+
 Open `kolco24.xcodeproj` in Xcode to run on a simulator interactively.
+
+## Building from Scratch (Secrets)
+
+A fresh clone does not build until secrets are in place:
+
+```bash
+cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
+# then fill in the real values
+```
+
+Without it the build fails with `could not find included file 'Secrets.xcconfig'` — a deliberate hard gate: the committed `Config/App.xcconfig` (base configuration of the app target) does a non-optional `#include "Secrets.xcconfig"`, and `Config/Secrets.xcconfig` is gitignored. Values flow xcconfig → `kolco24/Info.plist` (`Kolco24*` keys, merged with the generated plist) → `enum Secrets` in `kolco24/Secrets.swift` (`apiBaseURL`, `appKeyId`, `appSecret`, `localAPIBaseURL`; missing/empty value → `fatalError`). Gotcha: `//` starts a comment in xcconfig, so URLs use the `$()` trick (`https:/$()/...`).
+
+**ATS:** `Info.plist` sets `NSAppTransportSecurity` → `NSAllowsLocalNetworking = YES` — cleartext HTTP is allowed only within the local network (any LAN/.local host, deliberately broader than Android's per-IP pin: `NSExceptionDomains` can't take IP addresses); the cloud API stays HTTPS-only.
+
+**Dependencies:** GRDB.swift 7.x via SPM (SQLite, Room analog), linked to the app target only — tests import it through the host application.
+
+**Project file gotcha:** `kolco24/` is a synchronized group (`PBXFileSystemSynchronizedRootGroup` — files dropped there auto-join the target), so `kolco24/Info.plist` is excluded via a `PBXFileSystemSynchronizedBuildFileExceptionSet` with `membershipExceptions = (Info.plist)` to keep it from being copied into the bundle as a resource; any file under `kolco24/` needing special target membership needs the same treatment. `GENERATE_INFOPLIST_FILE = YES` stays on — Xcode merges the partial plist with the generated keys (locked in by `InfoPlistTests`).
 
 ## Architecture
 

@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		96426CB22F84020000D652EA /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 96426CB12F84020000D652EA /* GRDB */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		96426C752F83FD3D00D652EA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,11 +31,26 @@
 		96426C642F83FD3C00D652EA /* kolco24.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = kolco24.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		96426C742F83FD3D00D652EA /* kolco24Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = kolco24Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		96426C7E2F83FD3D00D652EA /* kolco24UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = kolco24UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		96426CA12F84010000D652EA /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
+		96426CA22F84010000D652EA /* Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.example.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		96426CA42F84010000D652EA /* Exceptions for "kolco24" folder in "kolco24" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 96426C632F83FD3C00D652EA /* kolco24 */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		96426C662F83FD3C00D652EA /* kolco24 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				96426CA42F84010000D652EA /* Exceptions for "kolco24" folder in "kolco24" target */,
+			);
 			path = kolco24;
 			sourceTree = "<group>";
 		};
@@ -52,6 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				96426CB22F84020000D652EA /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,6 +95,7 @@
 		96426C5B2F83FD3C00D652EA = {
 			isa = PBXGroup;
 			children = (
+				96426CA02F84010000D652EA /* Config */,
 				96426C662F83FD3C00D652EA /* kolco24 */,
 				96426C772F83FD3D00D652EA /* kolco24Tests */,
 				96426C812F83FD3D00D652EA /* kolco24UITests */,
@@ -90,6 +111,15 @@
 				96426C7E2F83FD3D00D652EA /* kolco24UITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		96426CA02F84010000D652EA /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				96426CA12F84010000D652EA /* App.xcconfig */,
+				96426CA22F84010000D652EA /* Secrets.example.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +142,7 @@
 			);
 			name = kolco24;
 			packageProductDependencies = (
+				96426CB12F84020000D652EA /* GRDB */,
 			);
 			productName = kolco24;
 			productReference = 96426C642F83FD3C00D652EA /* kolco24.app */;
@@ -195,6 +226,9 @@
 			);
 			mainGroup = 96426C5B2F83FD3C00D652EA;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				96426CB02F84020000D652EA /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 96426C652F83FD3C00D652EA /* Products */;
 			projectDirPath = "";
@@ -390,6 +424,7 @@
 		};
 		96426C892F83FD3D00D652EA /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 96426CA12F84010000D652EA /* App.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -400,6 +435,7 @@
 				DEVELOPMENT_TEAM = N9XCY9HK5G;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = kolco24/Info.plist;
 				INFOPLIST_KEY_NFCReaderUsageDescription = "Чтение чипов на контрольных пунктах";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -421,6 +457,7 @@
 		};
 		96426C8A2F83FD3D00D652EA /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 96426CA12F84010000D652EA /* App.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -431,6 +468,7 @@
 				DEVELOPMENT_TEAM = N9XCY9HK5G;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = kolco24/Info.plist;
 				INFOPLIST_KEY_NFCReaderUsageDescription = "Чтение чипов на контрольных пунктах";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -558,6 +596,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		96426CB02F84020000D652EA /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		96426CB12F84020000D652EA /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96426CB02F84020000D652EA /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 96426C5C2F83FD3C00D652EA /* Project object */;
 }

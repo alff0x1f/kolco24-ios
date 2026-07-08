@@ -11,6 +11,9 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 ## Этапы (в порядке выполнения)
 
 ### Этап 0. Инфраструктура проекта
+
+✅ выполнен — см. [детальный план](completed/20260708-android-port-stage0.md).
+
 - Секреты: `API_BASE_URL` / `APP_KEY_ID` / `APP_SECRET` / `LOCAL_API_BASE_URL` через `.xcconfig` (не в git) → Info.plist, по аналогии с `local.properties` в Android.
 - Зависимости: GRDB (SQLite, аналог Room). Остальное — системные фреймворки (CryptoKit, CoreNFC, CoreLocation, AVFoundation).
 - Тестовый таргет для переносимых unit-тестов.
