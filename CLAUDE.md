@@ -40,7 +40,7 @@ Without it the build fails with `could not find included file 'Secrets.xcconfig'
 
 ## Architecture
 
-SwiftUI iOS app for a rogaine/orienteering event. UI language is Russian. All source files live flat in `kolco24/`.
+SwiftUI iOS app for a rogaine/orienteering event. UI language is Russian. The 8 UI/app files (`kolco24App`, `ContentView`, `MarksView`, `LegendView`, `TeamView`, `ScanSheet`, `SharedComponents`, `DesignTokens`) plus `Secrets` and `NFCReader` live flat in the root of `kolco24/`; the pure-logic port lives in the `kolco24/Core/` and `kolco24/Model/` subfolders (see "Pure logic layer" below).
 
 **Entry point:** `kolco24App.swift` → `ContentView.swift` (3-tab `TabView`, tinted `Color.kolcoOrange`, haptic on tab switch)
 
@@ -73,3 +73,27 @@ SwiftUI iOS app for a rogaine/orienteering event. UI language is Russian. All so
 **Removed:** the `isRecent` field/feature (green ring overlay on tiles) no longer exists — don't reintroduce it.
 
 **`LegendCP.display`** formats as `"{cost}-{number}"` (e.g. `"4-07"`) for the legend list identifier column.
+
+## Pure logic layer (`Core/` + `Model/`)
+
+Android-port stage 1 (see [`docs/plans/completed/20260708-android-port-stage1.md`](docs/plans/completed/20260708-android-port-stage1.md)) added the Android-free logic slab, ported 1:1 from `kolco24_app_v2` (Kotlin) together with its JVM tests mirrored into `kolco24Tests/Core/` (~160 Swift Testing cases). Layout is idiomatic Swift, **not** a mirror of Android packages — no `import UIKit`/`import SwiftUI` anywhere under `Core/`/`Model/`.
+
+- **`kolco24/Core/`** — pure functions and value logic, grouped by concern:
+  - `Util/` — `HexBytes` (hex codec, see hex trap below), `PluralRu` (Russian plurals + points/segments/relative-time words)
+  - `Nfc/` — `NfcUid` (`normalizeNfcUid`), `ChipRecord` (`K24` chip format: `buildChipRecord`/`parseChipRecord`/`chipCodeHex`/`chipCodeFromHex`/`chipModelFromVersion` + `protocol NfcTransport` with header-last `writeRecord`/`readRecord`)
+  - `Api/` — `Signing` (`sha256Hex`, `buildCanonical`, `sign` HMAC-SHA256, `EMPTY_BODY_SHA256`); the OkHttp interceptor stays behind for the stage-3 URLSession port
+  - `Crypto/` — `LegendCrypto` (offline legend crypto: `bid` = sha256[:16], HKDF-SHA256 with an explicit 32-byte zero salt, AES-256-GCM with AAD)
+  - `Scan/` — `ScanSession` (`reduce`/`classifyTag`, 20 s window state machine), `ScanFeedback`
+  - `Team/` — `BindDecision` (`decideBind`, chip-to-member binding)
+  - `Marks/` — `PhotoTarget` (`decidePhotoTarget`/`resolvePhotoCheckpoint`/`filterCheckpointsByQuery`)
+  - `Track/` — `Segments` (`nextSegmentId`/`shouldLiveUpload`)
+  - `Time/` — `TrustedClock` + `SystemClockProviders`
+- **`kolco24/Model/`** — domain value types mirroring Room v5 (no `Entity` suffix, no GRDB yet — conformances land in stage 2): `Checkpoint`, `Mark` (+ nested `MarkMemberSnapshot`), `MemberChipBinding`, and the `UnlockOutcome` enum (`revealed`/`identityOnly`/`unknown`/`failed`). Kotlin sealed hierarchies became Swift `enum`s with associated values; data classes became `Equatable` structs; `ByteArray` → `Data`/`[UInt8]`; `Long` → `Int64`, `Float` → `Float`.
+
+**`TrustedClock` (actor).** Ports `data/time/TrustedClock.kt` behavior 1:1 (server anchor pinned to a monotonic `elapsedRealtime`-style read, boot-session identity, monotonic-regression reboot detection, skew) but swaps the concurrency idiom: an `actor` (isolation serializes all reads/writes; callers `await`) replaces Kotlin's `AtomicReference` + `synchronized`. Instead of `StateFlow` it exposes an isolated `status: ClockStatus` (`noSync`/`ok`/`skewed(skewMs:)`, `SKEW_THRESHOLD_MS = 60_000`) plus a `nonisolated statusUpdates: AsyncStream<ClockStatus>` (`.bufferingNewest(1)`, equal values deduped by hand — the stage-11 skew banner is the consumer). Time sources are injected closures (`elapsedProvider`, `wallProvider`, `bootCountProvider`, `persist`/`persisted`), so the core is Android-/UI-free and async-unit-testable with fakes. Production providers live in `SystemClockProviders.swift`: elapsed = `mach_continuous_time()` in ms (keeps running while the device sleeps, unlike `systemUptime`/`CLOCK_UPTIME_RAW`), wall = `Date().timeIntervalSince1970 * 1000`, and `bootCount` is always `nil` (no iOS analog of `Settings.Global.BOOT_COUNT` — the ported logic treats `nil` as "no reboot evidence" and catches reboots via monotonic-clock regression against the saved anchor).
+
+**KAT (known-answer test) vectors — byte-for-byte server interop.**
+- `LegendCrypto`: `LegendCryptoTests` embeds a server-generated vector (`bid`, `wrapKey`, `iv`/`ct`, `aad`, plaintext) produced by a throwaway scratchpad script over the server reference `crypto.py`/`legend_crypto.py` (`src/apps/mobile/`) — importing `seal`/`derive_wrap_key`, reproducing the Django-ORM-bound `bid` and bundle-map one-liners. This proves HKDF (`salt=None` → 32 zero bytes), `bid`, and AAD interop. (The 4 corresponding Android tests are `@Ignore`d with `TODO(server-vector)`.)
+- HMAC: the signing KAT is inline in `SigningTests` — `sign("test-secret-123", <canonical>)` = `cf1c254fb2eac6c7efde1cff6efe9553878370299cd60a42be4d2105a8072588`, cross-checked against a Python `hmac` one-liner.
+
+**Main port trap — hex from signed bytes.** Kotlin smears `"%02x".format(byte)` / `b.toInt() and 0xFF` across files; `%02x` on a negative `Int8` in Swift sign-extends and corrupts the output. Everything therefore runs on `UInt8`/`Data`, and hex encode/decode goes through the single `Core/Util/HexBytes.swift` helper (nibble-indexed digit table — `v >> 4` / `v & 0x0F`) — it centralizes the hex logic Kotlin spreads across files as `%02x` / `b.toInt() and 0xFF` (the raw `& 0xFF` byte normalizations live in `ChipRecord.swift`).
