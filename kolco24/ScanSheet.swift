@@ -21,6 +21,8 @@ private let mockChips: [ChipSlot] = [
 // MARK: - ScanSheet
 struct ScanSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var reader = NFCChipReader()
+    @State private var readResult: ChipReadResult?
 
     private let chips = mockChips
     private var scanned:   Int { chips.filter(\.isFilled).count }
@@ -66,6 +68,13 @@ struct ScanSheet: View {
                 CPWaitingCardView()
                     .padding(.horizontal, DS.hPad)
                     .padding(.bottom, 10)
+
+                // Тестовый вывод чтения NFC (спайк)
+                if let readResult {
+                    NFCTestResultCard(result: readResult)
+                        .padding(.horizontal, DS.hPad)
+                        .padding(.bottom, 10)
+                }
 
                 // Chips header
                 HStack {
@@ -117,6 +126,19 @@ struct ScanSheet: View {
                     .padding(.top, 6)
                     .padding(.bottom, 2)
 
+                // Scan (тестовый спайк чтения NFC)
+                Button("Сканировать чип") {
+                    reader.beginScan { readResult = $0 }
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.kolcoOrange)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, DS.hPad)
+                .padding(.bottom, 10)
+
                 // Cancel
                 Button("Отменить") { dismiss() }
                     .font(.system(size: 15, weight: .semibold))
@@ -132,6 +154,9 @@ struct ScanSheet: View {
         .background(Color.paper)
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
+        .onAppear {
+            reader.beginScan { readResult = $0 }
+        }
     }
 }
 
@@ -160,6 +185,54 @@ private struct CPWaitingCardView: View {
         .background(Color.card)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+    }
+}
+
+// MARK: - NFC Test Result (спайк)
+private struct NFCTestResultCard: View {
+    let result: ChipReadResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Тест NFC")
+                .font(.system(size: 9.5, weight: .bold))
+                .foregroundStyle(Color.sub)
+                .textCase(.uppercase)
+                .tracking(1.2)
+
+            switch result {
+            case let .success(uid, codeHex):
+                row(label: "UID", value: uid)
+                if let codeHex {
+                    row(label: "Code", value: codeHex)
+                } else {
+                    Text("Не K24-чип")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.sub)
+                }
+            case let .failure(message):
+                Text(message)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.brandRed)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.card)
+        .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+        .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+    }
+
+    private func row(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.sub)
+            Text(value)
+                .font(.mono(13, weight: .medium))
+                .foregroundStyle(Color.ink)
+                .textSelection(.enabled)
+        }
     }
 }
 
