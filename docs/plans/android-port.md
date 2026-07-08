@@ -33,7 +33,7 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 ✅ выполнен — см. [детальный план](completed/20260709-android-port-stage2.md).
 
 - Схема GRDB, зеркалящая Room v5: races, categories, teams, selected_team, checkpoints, tags, member_tags, member_chip_bindings, marks (самая богатая — UUID, снапшоты участников, trusted-время, GPS-поля), track_points, judge_scans, sync_meta (ETags), legend_meta.
-- UserDefaults-хранилища: `InstallId`, `ThemePreference`, `TrackProfilePreference`, `ClockAnchorStore`; Keychain для админ-токена (`AdminTokenStore`).
+- UserDefaults-хранилища: `InstallId`, `ClockAnchorStore` + `TrustedClock.makeDefault()`. `ThemePreference`/`TrackProfilePreference` и Keychain-`AdminTokenStore` отложены (этапы 8–10).
 
 ### Этап 3. Сеть и синхронизация
 - `ApiClient` на URLSession: подпись 6 заголовками (`X-App-Platform: ios`), `ServerTimeInterceptor` (якорь TrustedClock по заголовку Date), retry-once на 403 для GET.

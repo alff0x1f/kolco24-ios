@@ -13,43 +13,22 @@
 
 import Foundation
 import GRDB
-import os
 
 // MARK: - JSON-кодек колонки `teams.members` (аналог `TeamMembersConverter`)
 
 /// Кодек JSON-колонки `teams.members`. Порт `TeamMembersConverter`:
 /// `.sortedKeys` для стабильного вывода в тестах; незнакомые ключи игнорируются
 /// (Swift `Decodable` по умолчанию, аналог kotlinx `ignoreUnknownKeys = true`);
-/// битый JSON → пустой список + лог, не краш.
+/// битый JSON → пустой список + лог, не краш. Делегирует общему `JSONColumnCodec`.
 enum TeamMembersCodec {
-    private static let logger = Logger(subsystem: "kolco24", category: "TeamMembersCodec")
-
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        return encoder
-    }()
-
-    private static let decoder = JSONDecoder()
-
     /// `[TeamMemberItem]` → JSON-строка. Пустой список → `"[]"`.
     static func encode(_ members: [TeamMemberItem]) -> String {
-        guard let data = try? encoder.encode(members),
-              let json = String(data: data, encoding: .utf8) else {
-            return "[]"
-        }
-        return json
+        JSONColumnCodec.encode(members, fallback: "[]")
     }
 
     /// JSON-строка → `[TeamMemberItem]`; битый JSON → `[]` + лог (не краш).
     static func decode(_ value: String) -> [TeamMemberItem] {
-        guard let data = value.data(using: .utf8) else { return [] }
-        do {
-            return try decoder.decode([TeamMemberItem].self, from: data)
-        } catch {
-            logger.error("Failed to decode members JSON: \(String(describing: error))")
-            return []
-        }
+        JSONColumnCodec.decode(value, as: [TeamMemberItem].self, category: "TeamMembersCodec", fallback: [])
     }
 }
 

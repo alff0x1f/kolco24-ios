@@ -16,78 +16,37 @@
 
 import Foundation
 import GRDB
-import os
 
 // MARK: - JSON-кодеки колонок `marks.present` / `marks.presentDetails`
 
 /// Кодек JSON-колонки `marks.present` (`[Int]`, non-null; аналог `IntListConverter`).
 /// `.sortedKeys` не влияет на массив, но держим общий стиль; битый JSON → `[]` + лог.
+/// Делегирует общему `JSONColumnCodec`.
 enum MarkPresentCodec {
-    private static let logger = Logger(subsystem: "kolco24", category: "MarkPresentCodec")
-
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        return encoder
-    }()
-
-    private static let decoder = JSONDecoder()
-
     /// `[Int]` → JSON-строка; порядок и дубликаты сохраняются. Пустой список → `"[]"`.
     static func encode(_ values: [Int]) -> String {
-        guard let data = try? encoder.encode(values),
-              let json = String(data: data, encoding: .utf8) else {
-            return "[]"
-        }
-        return json
+        JSONColumnCodec.encode(values, fallback: "[]")
     }
 
     /// JSON-строка → `[Int]`; битый JSON → `[]` + лог (не краш).
     static func decode(_ value: String) -> [Int] {
-        guard let data = value.data(using: .utf8) else { return [] }
-        do {
-            return try decoder.decode([Int].self, from: data)
-        } catch {
-            logger.error("Failed to decode Int list JSON: \(String(describing: error))")
-            return []
-        }
+        JSONColumnCodec.decode(value, as: [Int].self, category: "MarkPresentCodec", fallback: [])
     }
 }
 
 /// Кодек JSON-колонки `marks.presentDetails` (`[MarkMemberSnapshot]?`, **nullable**;
 /// аналог `MarkMemberSnapshotListConverter`). NULL ↔ nil (легаси-строки без снапшота
-/// остаются nil); битый JSON → nil + лог, не краш.
+/// остаются nil); битый JSON → nil + лог, не краш. Делегирует общему `JSONColumnCodec`.
 enum MarkPresentDetailsCodec {
-    private static let logger = Logger(subsystem: "kolco24", category: "MarkPresentDetailsCodec")
-
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        return encoder
-    }()
-
-    private static let decoder = JSONDecoder()
-
     /// `[MarkMemberSnapshot]?` → JSON-строка?; nil → nil, пустой список → `"[]"`.
     static func encode(_ values: [MarkMemberSnapshot]?) -> String? {
         guard let values else { return nil }
-        guard let data = try? encoder.encode(values),
-              let json = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        return json
+        return JSONColumnCodec.encodeOptional(values)
     }
 
     /// JSON-строка? → `[MarkMemberSnapshot]?`; nil → nil, битый JSON → nil + лог.
     static func decode(_ value: String?) -> [MarkMemberSnapshot]? {
-        guard let value else { return nil }
-        guard let data = value.data(using: .utf8) else { return nil }
-        do {
-            return try decoder.decode([MarkMemberSnapshot].self, from: data)
-        } catch {
-            logger.error("Failed to decode snapshot list JSON: \(String(describing: error))")
-            return nil
-        }
+        JSONColumnCodec.decodeOptional(value, as: [MarkMemberSnapshot].self, category: "MarkPresentDetailsCodec")
     }
 }
 

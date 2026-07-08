@@ -80,6 +80,40 @@ struct TrackStoreTests {
         #expect(ordered == ["earlier-trusted", "middle", "later"])
     }
 
+    /// Вторичные ключи ORDER BY: `COALESCE(bootCount, -1), elapsedRealtimeAt, id`.
+    /// Все точки совпадают по первичному ключу `COALESCE(trustedMs, wallMs) = 1000`,
+    /// поэтому проверяются только тай-брейки (bootCount → elapsedRealtimeAt → id).
+    @Test func observeForTeam_tieBreaksByBootThenElapsedThenId() async throws {
+        let store = try makeStore()
+        try await store.insertAll([
+            // одинаковые boot=2 и elapsed=200 → тай-брейк по id (asc: "id-a" < "id-b")
+            point("id-b", bootCount: 2, elapsedRealtimeAt: 200, wallMs: 1_000),
+            point("id-a", bootCount: 2, elapsedRealtimeAt: 200, wallMs: 1_000),
+            // boot=2, но elapsed больше → после id-a/id-b
+            point("boot2-late", bootCount: 2, elapsedRealtimeAt: 800, wallMs: 1_000),
+            // boot=nil → COALESCE(-1) → раньше любого boot>=0
+            point("boot-nil", bootCount: nil, elapsedRealtimeAt: 900, wallMs: 1_000),
+            // самый большой boot → в конец
+            point("boot5", bootCount: 5, elapsedRealtimeAt: 100, wallMs: 1_000),
+        ])
+
+        let ordered = try await firstValue(store.observeForTeam(teamId: 7, raceId: 1)).map(\.id)
+        #expect(ordered == ["boot-nil", "id-a", "id-b", "boot2-late", "boot5"])
+    }
+
+    /// Тот же полный ORDER BY, но по отдельной SQL-строке `unuploadedLocal`.
+    @Test func unuploadedLocal_tieBreaksByBootThenElapsedThenId() async throws {
+        let store = try makeStore()
+        try await store.insertAll([
+            point("id-b", bootCount: 2, elapsedRealtimeAt: 200, wallMs: 1_000),
+            point("id-a", bootCount: 2, elapsedRealtimeAt: 200, wallMs: 1_000),
+            point("boot-nil", bootCount: nil, elapsedRealtimeAt: 900, wallMs: 1_000),
+        ])
+
+        let drained = try await store.unuploadedLocal(raceId: 1, teamId: 7, limit: 100).map(\.id)
+        #expect(drained == ["boot-nil", "id-a", "id-b"])
+    }
+
     @Test func observeForTeam_isScopedByTeamAndRace() async throws {
         let store = try makeStore()
         try await store.insertAll([

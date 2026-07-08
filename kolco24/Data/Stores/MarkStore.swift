@@ -15,30 +15,16 @@
 
 import Foundation
 import GRDB
-import os
 
 /// Кодек и валидатор JSON-списка относительных путей фото в колонке `marks.photoPath`
 /// — 1:1 из Kotlin `data/marks/PhotoPaths.kt`. Пути хранятся **относительно** каталога
 /// приложения (`marks/<markId>/<uuid>.jpg`); абсолютный путь и любой сегмент `..`
 /// отбрасываются (guard от path traversal).
 enum MarkPhotoPaths {
-    private static let logger = Logger(subsystem: "kolco24", category: "MarkPhotoPaths")
-
-    private static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        return encoder
-    }()
-
-    private static let decoder = JSONDecoder()
-
     /// JSON-кодирование списка относительных путей; порядок сохраняется.
+    /// Делегирует общему `JSONColumnCodec`.
     static func encode(_ paths: [String]) -> String {
-        guard let data = try? encoder.encode(paths),
-              let json = String(data: data, encoding: .utf8) else {
-            return "[]"
-        }
-        return json
+        JSONColumnCodec.encode(paths, fallback: "[]")
     }
 
     /// Декодирование `photoPath`-колонки в список **валидированных** относительных путей.
@@ -48,15 +34,8 @@ enum MarkPhotoPaths {
         guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return []
         }
-        guard let data = raw.data(using: .utf8) else { return [] }
-        let decoded: [String]
-        do {
-            decoded = try decoder.decode([String].self, from: data)
-        } catch {
-            logger.error("Failed to decode photo paths JSON: \(String(describing: error))")
-            return []
-        }
-        return decoded.filter(isSafeRelativePhotoPath)
+        return JSONColumnCodec.decode(raw, as: [String].self, category: "MarkPhotoPaths", fallback: [])
+            .filter(isSafeRelativePhotoPath)
     }
 
     /// `marks/<markId>/<uuid>.jpg`: 3-сегментный относительный путь под `marks/`, без
