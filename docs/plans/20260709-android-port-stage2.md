@@ -208,11 +208,11 @@
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] полный `xcodebuild test` зелёный (включая все ~193 существующих кейса этапов 0–1)
-- [ ] grep-инварианты: `import GRDB` отсутствует в `kolco24/Model/` и `kolco24/Core/`; `import UIKit|SwiftUI` отсутствует в `Core/`, `Model/`, `Data/`
-- [ ] UI не тронут: `git diff --stat` — ни один из 8 корневых UI-файлов не изменён; `project.pbxproj` не изменён
-- [ ] сверка покрытия: `MarkDaoTest` 12/12, `CheckpointDaoTest` 4/4, `JudgeScanDaoTest` 7/7, 3 конвертер-теста, `InstallIdTest`, `ClockAnchorStoreTest` — все имеют Swift-зеркало; бонус-тесты помечены
-- [ ] инвентарь store'ов: 12/12 DAO имеют store, все методы DAO перенесены (пройтись по списку из Technical Details)
+- [x] полный `xcodebuild test` зелёный (включая все ~193 существующих кейса этапов 0–1) — 290 `@Test`-кейсов, `** TEST SUCCEEDED **`, 0 падений
+- [x] grep-инварианты: `import GRDB` отсутствует в `kolco24/Model/` и `kolco24/Core/`; `import UIKit|SwiftUI` отсутствует в `Core/`, `Model/`, `Data/` — все три grep'а чисты
+- [x] UI не тронут: `git diff --stat main...HEAD` — ни один из 8 корневых UI-файлов не изменён; `project.pbxproj` не в коммит-диффе (только рабочая копия, не стейджится)
+- [x] сверка покрытия: `MarkDaoTest` 12/12, `CheckpointDaoTest` 4/4, `JudgeScanDaoTest` 7/7, 3 конвертер-теста, `InstallIdTest`, `ClockAnchorStoreTest` — все имеют Swift-зеркало (header-комментарии «Зеркало …»); бонус-тесты помечены (`// MARK: - БОНУС-тесты`)
+- [x] инвентарь store'ов: 12/12 DAO имеют store, все методы DAO перенесены (пройдено по списку из Technical Details — совпадение 1:1)
 
 ### Task 10: [Final] Документация
 
