@@ -416,6 +416,488 @@ struct ApiClientTests {
         if case .error(let code) = result { #expect(code == nil) }
         else { Issue.record("ожидался .error(nil), получено \(result)") }
     }
+
+    // MARK: - Часть 2: эндпоинты и условные GET (Зеркало `ApiClientTest.kt` fetch-группа)
+    //
+    // login/logout/bindTag (типизированные POST-методы `ApiClientTest.kt`) — контракт загрузки,
+    // этап 6; здесь не зеркалируются. Generic `post` — часть 1 выше.
+
+    private let racesJson = """
+        {
+          "races": [
+            {
+              "id": 8,
+              "name": "Кольцо24 2026",
+              "slug": "kolco24-2026",
+              "date": "2026-06-20",
+              "date_end": "2026-06-21",
+              "place": "Сосновый бор",
+              "reg_status": "open",
+              "is_legend_visible": true
+            }
+          ]
+        }
+        """
+
+    // MARK: fetchRaces
+
+    @Test func fetchRaces_success_returnsRacesAndEtag_andSendsSignedRequest() async {
+        // Зеркало `success_returnsRacesAndEtag_andSendsAllSignatureHeaders` (result+path часть;
+        // заголовки покрыты в части 1).
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, headers: ["ETag": #""a1b2c3d4e5f6a7b8""#], bodyString: racesJson)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.fetchRaces(etag: #""old-etag""#)
+
+        guard case .success(let races, let etag) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(races.count == 1)
+        #expect(races[0].id == 8)
+        #expect(races[0].name == "Кольцо24 2026")
+        #expect(etag == #""a1b2c3d4e5f6a7b8""#)
+
+        let recorded = transport.last!
+        #expect(recorded.httpMethod == "GET")
+        #expect(fullPath(recorded.url!) == "/app/races/")
+        #expect(recorded.value(forHTTPHeaderField: "If-None-Match") == #""old-etag""#)
+    }
+
+    @Test func fetchRaces_pathIsRacesWithTrailingSlash_andSignatureMatches() async {
+        // Зеркало `request_pathIsRacesWithTrailingSlash_andSignatureMatches`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: racesJson)
+        let client = fixedTsClient(transport: transport)
+
+        _ = await client.fetchRaces(etag: nil)
+
+        let recorded = transport.last!
+        #expect(fullPath(recorded.url!) == "/app/races/")
+        let sentTs = recorded.value(forHTTPHeaderField: "X-App-Ts")!
+        let expectedSig = sign(
+            secret: secret,
+            canonical: buildCanonical(
+                method: "GET", fullPath: "/app/races/", ts: sentTs, bodyHash: EMPTY_BODY_SHA256
+            )
+        )
+        #expect(recorded.value(forHTTPHeaderField: "X-App-Sig") == expectedSig)
+        #expect(recorded.value(forHTTPHeaderField: "If-None-Match") == nil)
+    }
+
+    @Test func fetchRaces_notModified_returnsNotModified() async {
+        // Зеркало `notModified_returnsNotModified`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 304)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchRaces(etag: #""e""#)
+        if case .notModified = result {} else { Issue.record("ожидался .notModified, получено \(result)") }
+    }
+
+    @Test func fetchRaces_forbidden_returnsForbidden() async {
+        // Зеркало `forbidden_returnsForbidden`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 403, bodyString: #"{"detail":"Forbidden"}"#)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchRaces(etag: nil)
+        if case .forbidden = result {} else { Issue.record("ожидался .forbidden, получено \(result)") }
+    }
+
+    @Test func fetchRaces_serverError_returnsErrorWithCode() async {
+        // Зеркало `serverError_returnsErrorWithCode`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 500)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchRaces(etag: nil)
+        if case .error(let code) = result { #expect(code == 500) }
+        else { Issue.record("ожидался .error(500), получено \(result)") }
+    }
+
+    @Test func fetchRaces_connectionDrop_returnsErrorWithNullCode() async {
+        // Зеркало `connectionDrop_returnsErrorWithNullCode`: URLError → .error(nil).
+        let transport = FakeTransport()
+        transport.enqueueError(URLError(.networkConnectionLost))
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchRaces(etag: nil)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error(nil), получено \(result)") }
+    }
+
+    @Test func fetchRaces_invalidJson_returnsError() async {
+        // Зеркало `invalidJson_returnsError`: битый JSON → .error(nil).
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: "{ not json")
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchRaces(etag: nil)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error, получено \(result)") }
+    }
+
+    // MARK: fetchTeams
+
+    private let teamsJson = """
+        {
+          "race": 8,
+          "categories": [
+            { "id": 1, "code": "M", "short_name": "Муж", "name": "Мужская", "order": 1 }
+          ],
+          "teams": [
+            {
+              "id": 42,
+              "teamname": "Лоси",
+              "start_number": "201",
+              "category2": 1,
+              "ucount": 2,
+              "paid_people": 2.0,
+              "start_time": 1718200000,
+              "finish_time": 0,
+              "members": [
+                { "name": "Иван", "number_in_team": 1 }
+              ]
+            }
+          ]
+        }
+        """
+
+    @Test func fetchTeams_success_returnsParsedBodyAndEtag() async {
+        // Зеркало `fetchTeams_success_returnsParsedBodyAndEtag`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, headers: ["ETag": #""teams-v1""#], bodyString: teamsJson)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.fetchTeams(raceId: 8, etag: #""old""#)
+
+        guard case .success(let data, let etag) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(data.race == 8)
+        #expect(data.categories.count == 1)
+        #expect(data.teams.count == 1)
+        #expect(data.teams[0].teamname == "Лоси")
+        #expect(data.teams[0].startNumber == "201")
+        #expect(etag == #""teams-v1""#)
+
+        let recorded = transport.last!
+        #expect(fullPath(recorded.url!) == "/app/race/8/teams/")
+        #expect(recorded.value(forHTTPHeaderField: "If-None-Match") == #""old""#)
+    }
+
+    @Test func fetchTeams_notModified_returnsNotModified() async {
+        // Зеркало `fetchTeams_notModified_returnsNotModified`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 304)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchTeams(raceId: 8, etag: #""e""#)
+        if case .notModified = result {} else { Issue.record("ожидался .notModified, получено \(result)") }
+    }
+
+    @Test func fetchTeams_forbidden_returnsForbidden() async {
+        // Зеркало `fetchTeams_forbidden_returnsForbidden`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 403)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchTeams(raceId: 8, etag: nil)
+        if case .forbidden = result {} else { Issue.record("ожидался .forbidden, получено \(result)") }
+    }
+
+    @Test func fetchTeams_serverError_returnsErrorWithCode() async {
+        // Зеркало `fetchTeams_serverError_returnsErrorWithCode`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 500)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchTeams(raceId: 8, etag: nil)
+        if case .error(let code) = result { #expect(code == 500) }
+        else { Issue.record("ожидался .error(500), получено \(result)") }
+    }
+
+    @Test func fetchTeams_connectionDrop_returnsErrorWithNullCode() async {
+        // Зеркало `fetchTeams_connectionDrop_returnsErrorWithNullCode`.
+        let transport = FakeTransport()
+        transport.enqueueError(URLError(.networkConnectionLost))
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchTeams(raceId: 8, etag: nil)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error(nil), получено \(result)") }
+    }
+
+    @Test func fetchTeams_invalidJson_returnsError() async {
+        // Зеркало `fetchTeams_invalidJson_returnsError`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: "{ not json")
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchTeams(raceId: 8, etag: nil)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error, получено \(result)") }
+    }
+
+    // MARK: fetchLegend
+
+    private let legendJson = """
+        {
+          "race": 8,
+          "checkpoints": [
+            {
+              "id": 101,
+              "number": 5,
+              "cost": 10,
+              "type": "kp",
+              "description": "У пня"
+            }
+          ]
+        }
+        """
+
+    @Test func fetchLegend_success_returnsParsedBodyAndEtag() async {
+        // Зеркало `fetchLegend_success_returnsParsedBodyAndEtag`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, headers: ["ETag": #""legend-v1""#], bodyString: legendJson)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.fetchLegend(raceId: 8, etag: #""old""#)
+
+        guard case .success(let data, let etag) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(data.race == 8)
+        #expect(data.checkpoints.count == 1)
+        #expect(data.checkpoints[0].id == 101)
+        #expect(data.checkpoints[0].number == 5)
+        #expect(data.checkpoints[0].cost == 10)
+        #expect(data.checkpoints[0].type == "kp")
+        #expect(data.checkpoints[0].description == "У пня")
+        #expect(etag == #""legend-v1""#)
+
+        let recorded = transport.last!
+        #expect(fullPath(recorded.url!) == "/app/race/8/legend/")
+        #expect(recorded.value(forHTTPHeaderField: "If-None-Match") == #""old""#)
+    }
+
+    @Test func fetchLegend_emptyCheckpoints_returnsSuccessWithEmptyList() async {
+        // Зеркало `fetchLegend_emptyCheckpoints_returnsSuccessWithEmptyList`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: #"{"race":8,"checkpoints":[]}"#)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.fetchLegend(raceId: 8, etag: nil)
+        guard case .success(let data, _) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(data.race == 8)
+        #expect(data.checkpoints.isEmpty)
+    }
+
+    @Test func fetchLegend_notModified_returnsNotModified() async {
+        // Зеркало `fetchLegend_notModified_returnsNotModified`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 304)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchLegend(raceId: 8, etag: #""e""#)
+        if case .notModified = result {} else { Issue.record("ожидался .notModified, получено \(result)") }
+    }
+
+    @Test func fetchLegend_forbidden_returnsForbidden() async {
+        // Зеркало `fetchLegend_forbidden_returnsForbidden`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 403)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchLegend(raceId: 8, etag: nil)
+        if case .forbidden = result {} else { Issue.record("ожидался .forbidden, получено \(result)") }
+    }
+
+    @Test func fetchLegend_serverError_returnsErrorWithCode() async {
+        // Зеркало `fetchLegend_serverError_returnsErrorWithCode`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 500)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchLegend(raceId: 8, etag: nil)
+        if case .error(let code) = result { #expect(code == 500) }
+        else { Issue.record("ожидался .error(500), получено \(result)") }
+    }
+
+    @Test func fetchLegend_connectionDrop_returnsErrorWithNullCode() async {
+        // Зеркало `fetchLegend_connectionDrop_returnsErrorWithNullCode`.
+        let transport = FakeTransport()
+        transport.enqueueError(URLError(.networkConnectionLost))
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchLegend(raceId: 8, etag: nil)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error(nil), получено \(result)") }
+    }
+
+    // MARK: fetchMemberTags
+
+    private let memberTagsJson = """
+        {
+          "member_tags": [
+            {"number": 101, "nfc_uid": "04A2B3C4D5E680"},
+            {"number": 102, "nfc_uid": "0489AB12CD34EF"}
+          ]
+        }
+        """
+
+    @Test func fetchMemberTags_success_returnsParsedBodyAndEtag() async {
+        // Зеркало `fetchMemberTags_success_returnsParsedBodyAndEtag`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, headers: ["ETag": #""tags-v1""#], bodyString: memberTagsJson)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.fetchMemberTags(raceId: 8, etag: #""old""#)
+
+        guard case .success(let data, let etag) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(data.memberTags.count == 2)
+        #expect(data.memberTags[0].number == 101)
+        #expect(data.memberTags[0].nfcUid == "04A2B3C4D5E680")
+        #expect(etag == #""tags-v1""#)
+
+        let recorded = transport.last!
+        #expect(fullPath(recorded.url!) == "/app/race/8/member_tags/")
+        #expect(recorded.value(forHTTPHeaderField: "If-None-Match") == #""old""#)
+    }
+
+    @Test func fetchMemberTags_notModified_returnsNotModified() async {
+        // Зеркало `fetchMemberTags_notModified_returnsNotModified`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 304)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchMemberTags(raceId: 8, etag: #""e""#)
+        if case .notModified = result {} else { Issue.record("ожидался .notModified, получено \(result)") }
+    }
+
+    @Test func fetchMemberTags_forbidden_returnsForbidden() async {
+        // Зеркало `fetchMemberTags_forbidden_returnsForbidden`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 403)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchMemberTags(raceId: 8, etag: nil)
+        if case .forbidden = result {} else { Issue.record("ожидался .forbidden, получено \(result)") }
+    }
+
+    @Test func fetchMemberTags_serverError_returnsErrorWithCode() async {
+        // Зеркало `fetchMemberTags_serverError_returnsErrorWithCode`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 500)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchMemberTags(raceId: 8, etag: nil)
+        if case .error(let code) = result { #expect(code == 500) }
+        else { Issue.record("ожидался .error(500), получено \(result)") }
+    }
+
+    @Test func fetchMemberTags_connectionDrop_returnsErrorWithNullCode() async {
+        // Зеркало `fetchMemberTags_connectionDrop_returnsErrorWithNullCode`.
+        let transport = FakeTransport()
+        transport.enqueueError(URLError(.networkConnectionLost))
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchMemberTags(raceId: 8, etag: nil)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error(nil), получено \(result)") }
+    }
+
+    @Test func fetchMemberTags_invalidJson_returnsError() async {
+        // Зеркало `fetchMemberTags_invalidJson_returnsError`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: "{ not json")
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchMemberTags(raceId: 8, etag: nil)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error, получено \(result)") }
+    }
+
+    // MARK: fetchSync (без ETag)
+
+    @Test func fetchSync_fullManifest_parsesBothLeaseFields() async {
+        // Зеркало `fetchSync_fullManifest_parsesBothLeaseFields`.
+        let transport = FakeTransport()
+        transport.enqueue(
+            statusCode: 200,
+            bodyString: #"{"race":8,"data_source":"local","lease_ttl_seconds":43200,"lease_expires_at":1718300000}"#
+        )
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.fetchSync(raceId: 8)
+        guard case .success(let data, let etag) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(data.race == 8)
+        #expect(data.dataSource == "local")
+        #expect(data.leaseTtlSeconds == 43200)
+        #expect(data.leaseExpiresAt == 1718300000)
+        #expect(etag == nil)
+
+        let recorded = transport.last!
+        #expect(fullPath(recorded.url!) == "/app/race/8/sync/")
+        #expect(recorded.value(forHTTPHeaderField: "If-None-Match") == nil)
+    }
+
+    @Test func fetchSync_stubbedManifest_bothLeaseFieldsNull() async {
+        // Зеркало `fetchSync_stubbedManifest_bothLeaseFieldsNull`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: #"{"race":8,"data_source":"cloud"}"#)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.fetchSync(raceId: 8)
+        guard case .success(let data, _) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(data.dataSource == "cloud")
+        #expect(data.leaseTtlSeconds == nil)
+        #expect(data.leaseExpiresAt == nil)
+    }
+
+    @Test func fetchSync_unknownVersionsKey_isIgnored() async {
+        // Зеркало `fetchSync_unknownVersionsKey_isIgnored`.
+        let transport = FakeTransport()
+        transport.enqueue(
+            statusCode: 200,
+            bodyString: #"{"race":8,"data_source":"local","versions":{"teams":"abc123","legend":"def456"}}"#
+        )
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.fetchSync(raceId: 8)
+        guard case .success(let data, _) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(data.dataSource == "local")
+    }
+
+    @Test func fetchSync_404_returnsErrorWith404() async {
+        // Зеркало `fetchSync_404_returnsErrorWith404`.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 404)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchSync(raceId: 999)
+        if case .error(let code) = result { #expect(code == 404) }
+        else { Issue.record("ожидался .error(404), получено \(result)") }
+    }
+
+    @Test func fetchSync_connectionDrop_returnsErrorWithNullCode() async {
+        // Зеркало `fetchSync_connectionDrop_returnsErrorWithNullCode`.
+        let transport = FakeTransport()
+        transport.enqueueError(URLError(.networkConnectionLost))
+        let client = fixedTsClient(transport: transport)
+        let result = await client.fetchSync(raceId: 8)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error(nil), получено \(result)") }
+    }
+
+    // MARK: - БОНУС-тесты
+
+    @Test func conditionalGet_parserNotInvokedOnNon200() async {
+        // Свыше Kotlin: явно фиксируем «parse не вызывается на не-200» для условного GET (у Kotlin
+        // это только у POST; для GET доказывается тем, что ветки 304/403/500 не парсят тело).
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 304, bodyString: "{ not json")
+        let client = fixedTsClient(transport: transport)
+
+        let result: FetchResult<String> = await client.conditionalGet(
+            url: url("/app/races/"), etag: #""e""#
+        ) { _ in
+            Issue.record("parse не должен вызываться на не-200 ветке")
+            return ""
+        }
+        if case .notModified = result {} else { Issue.record("ожидался .notModified, получено \(result)") }
+    }
 }
 
 // MARK: - Хелперы

@@ -179,10 +179,10 @@ enum RefreshResult: Equatable { case updated, notModified, offline, forbidden, h
 - Modify: `kolco24/Net/ApiClient.swift`
 - Modify: `kolco24Tests/Net/ApiClientTests.swift` (часть 2: эндпоинты)
 
-- [ ] `conditionalGet` поверх пайплайна: `If-None-Match` verbatim, `200` → `.success(data:etag:)`, `304` → `.notModified`, `403` → `.forbidden`, прочие → `.error(code)`, `URLError` → `.error(nil)`, парс-ошибка → `.error(nil)`
-- [ ] эндпоинты: `fetchRaces(etag:)`, `fetchTeams(raceId:etag:)`, `fetchLegend(raceId:etag:)`, `fetchMemberTags(raceId:etag:)`, `fetchSync(raceId:)` (без ETag) — пути с завершающим слэшем от `baseURL` без хвостового `/`
-- [ ] тесты (остаток ~48 зеркал `ApiClientTest.kt`): точный путь + завершающий слэш на каждом эндпоинте, `If-None-Match` отправлен/опущен, разбор 200 (данные+etag)/304/403/500, обрыв соединения (транспорт бросает `URLError`), битый JSON → `.error(nil)`, парсер не вызывается на не-200
-- [ ] прогнать тесты — must pass before task 5
+- [x] `conditionalGet` поверх пайплайна: `If-None-Match` verbatim, `200` → `.success(data:etag:)`, `304` → `.notModified`, `403` → `.forbidden`, прочие → `.error(code)`, `URLError` → `.error(nil)`, парс-ошибка → `.error(nil)`
+- [x] эндпоинты: `fetchRaces(etag:)`, `fetchTeams(raceId:etag:)`, `fetchLegend(raceId:etag:)`, `fetchMemberTags(raceId:etag:)`, `fetchSync(raceId:)` (без ETag) — пути с завершающим слэшем от `baseURL` без хвостового `/`
+- [x] тесты (остаток ~48 зеркал `ApiClientTest.kt`): точный путь + завершающий слэш на каждом эндпоинте, `If-None-Match` отправлен/опущен, разбор 200 (данные+etag)/304/403/500, обрыв соединения (транспорт бросает `URLError`), битый JSON → `.error(nil)`, парсер не вызывается на не-200
+- [x] прогнать тесты — must pass before task 5
 
 ### Task 5: RaceRepository (эталон refresh-потока)
 

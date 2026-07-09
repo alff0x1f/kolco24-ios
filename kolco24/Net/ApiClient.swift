@@ -123,6 +123,92 @@ struct ApiClient {
         }
     }
 
+    // MARK: - Эндпоинты (условные GET)
+
+    /// `GET /app/races/`. При `etag != nil` он echo'ится **verbatim, с кавычками** в `If-None-Match`.
+    /// `200` → `.success` с распарсенным списком гонок и ETag ответа; `304` → `.notModified`;
+    /// `403` → `.forbidden`; прочее → `.error(code)`.
+    func fetchRaces(etag: String?) async -> FetchResult<[RaceDto]> {
+        await conditionalGet(url: endpoint("/app/races/"), etag: etag) {
+            try JSONDecoder().decode(RacesResponse.self, from: $0).races
+        }
+    }
+
+    /// `GET /app/race/<raceId>/teams/`. Та же условная семантика, что и `fetchRaces`;
+    /// `200` → `.success` с распарсенным `TeamsResponse` и ETag ответа.
+    func fetchTeams(raceId: Int, etag: String?) async -> FetchResult<TeamsResponse> {
+        await conditionalGet(url: endpoint("/app/race/\(raceId)/teams/"), etag: etag) {
+            try JSONDecoder().decode(TeamsResponse.self, from: $0)
+        }
+    }
+
+    /// `GET /app/race/<raceId>/legend/`. Та же условная семантика; `200` → `.success` с
+    /// распарсенным `LegendResponse` и ETag. Скрытая легенда всё равно возвращает `200` с пустым
+    /// списком `checkpoints`.
+    func fetchLegend(raceId: Int, etag: String?) async -> FetchResult<LegendResponse> {
+        await conditionalGet(url: endpoint("/app/race/\(raceId)/legend/"), etag: etag) {
+            try JSONDecoder().decode(LegendResponse.self, from: $0)
+        }
+    }
+
+    /// `GET /app/race/<raceId>/member_tags/`. Та же условная семантика; `200` → `.success` с
+    /// распарсенным `MemberTagsResponse` (пул NFC-браслетов гонки) и ETag.
+    func fetchMemberTags(raceId: Int, etag: String?) async -> FetchResult<MemberTagsResponse> {
+        await conditionalGet(url: endpoint("/app/race/\(raceId)/member_tags/"), etag: etag) {
+            try JSONDecoder().decode(MemberTagsResponse.self, from: $0)
+        }
+    }
+
+    /// `GET /app/race/<raceId>/sync/` — lease-манифест локального режима (`data_source` + lease-поля,
+    /// см. `SyncManifestDto`). У эндпоинта нет ETag/304 by design, потому `etag` всегда `nil`; `200`
+    /// → `.success` с распарсенным манифестом (ETag результата всегда `nil`). Работает через любой
+    /// экземпляр `ApiClient` (cloud или LAN). Потребитель-координатор — этап 9.
+    func fetchSync(raceId: Int) async -> FetchResult<SyncManifestDto> {
+        await conditionalGet(url: endpoint("/app/race/\(raceId)/sync/"), etag: nil) {
+            try JSONDecoder().decode(SyncManifestDto.self, from: $0)
+        }
+    }
+
+    /// URL эндпоинта из `baseURL` (без хвостового `/`) + `path` (с завершающим слэшем — он входит в
+    /// подписанную канонику).
+    private func endpoint(_ path: String) -> URL {
+        URL(string: baseURL + path)!
+    }
+
+    /// Общий условный `GET` поверх пайплайна `send`: подписывает/шлёт запрос, echo'ит `etag`
+    /// verbatim в `If-None-Match` при `etag != nil`, маппит ответ. `parse` превращает тело `200` в
+    /// `T` и вызывается **только** на ветке `200` — тела ошибок/304 не парсятся. `URLError`
+    /// (транспорт) и ошибка парсинга сворачиваются в `.error(nil)`; прочие коды → `.error(code)`.
+    func conditionalGet<T>(
+        url: URL,
+        etag: String?,
+        parse: (Data) throws -> T
+    ) async -> FetchResult<T> {
+        do {
+            let (data, response) = try await send(
+                method: "GET", url: url, body: nil, contentType: nil, ifNoneMatch: etag
+            )
+            switch response.statusCode {
+            case 200:
+                // parse вызывается ТОЛЬКО здесь — на не-200 ветках тело не трогаем.
+                let parsed = try parse(data)
+                return .success(data: parsed, etag: response.value(forHTTPHeaderField: "ETag"))
+            case 304:
+                return .notModified
+            case 403:
+                return .forbidden
+            default:
+                return .error(code: response.statusCode)
+            }
+        } catch is URLError {
+            // Транспортный обрыв на GET → error(nil) (асимметрия с POST → .offline).
+            return .error(code: nil)
+        } catch {
+            // Ошибка парсинга (или прочее не-URLError) → error(nil).
+            return .error(code: nil)
+        }
+    }
+
     // MARK: - Pipeline (подпись + серверное время + 403-retry)
 
     /// Единый пайплайн одного запроса (заменяет оба OkHttp-интерсептора). Подписывает `usedTs`,
