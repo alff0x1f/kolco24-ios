@@ -145,6 +145,58 @@ final class AppModel {
         MarksModel(env: env)
     }
 
+    /// Фабрика хост-редьюсера скан-оверлея (этап 5). Собирается из графа (`legendRepository`, сторы,
+    /// `trustedClock.sample` для монотонного окна, `locationProvider`, `feedback`) + ростер выбранной
+    /// команды. Возвращает `nil`, когда команда не выбрана (нет ростера — сканировать некуда). Сканер
+    /// (`any ChipScanning`) подаётся отдельно через `ScanModel.start(scanner:)` — прод `NfcChipScanner`
+    /// подключит вьюха в задаче 8; тесты задачи 4 передают `FakeChipScanner`.
+    func makeScanModel() -> ScanModel? {
+        guard case let .present(team) = selectedTeamState,
+              let raceId = selectedRaceId,
+              let teamId = selectedTeamId
+        else { return nil }
+        let clock = env.trustedClock
+        let model = ScanModel(
+            raceId: raceId,
+            teamId: teamId,
+            roster: team.members,
+            legendRepository: env.legendRepository,
+            markStore: env.markStore,
+            bindingStore: env.memberChipBindingStore,
+            locationProvider: env.locationProvider,
+            feedback: env.feedback,
+            elapsedNowMs: { await clock.sample().elapsedMs }
+        )
+        // Прод-сканер `NfcChipScanner` (из `Nfc/`) инстанцируется здесь — App-слой в одном модуле,
+        // импорт CoreNFC не нужен (grep-инвариант). Семпл доверенного времени берётся ДО чтения чипа
+        // (§8) синхронным мостом к актору-часам (вызов на выделенной NFC-очереди, не на кооперативном
+        // пуле — блокировка безопасна); `shouldRestart` читает потокобезопасный `liveness` (не @MainActor
+        // `closeRequested` с чужой очереди — то была бы гонка данных, Finding-3), §60-с рестарт.
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
+    /// Синхронный мост к актору `TrustedClock` для `NfcChipScanner.sampleNow` (§8). Вызывается на
+    /// выделенной NFC-делегатной очереди (не на кооперативном пуле Swift Concurrency), поэтому
+    /// короткое семафорное ожидание не роняет рантайм — та же санкционированная кодовой базой техника,
+    /// что и мост `sendMiFareCommand` в `MiFareTransport`.
+    nonisolated static func syncSample(_ clock: TrustedClock) -> TimeSample {
+        final class Box: @unchecked Sendable { var value: TimeSample? }
+        let box = Box()
+        let sem = DispatchSemaphore(value: 0)
+        Task.detached {
+            box.value = await clock.sample()
+            sem.signal()
+        }
+        sem.wait()
+        return box.value ?? TimeSample(wallMs: 0, elapsedMs: 0, trustedMs: nil, bootCount: nil)
+    }
+
     // MARK: - Refresh-оркестрация (всё .cloud)
 
     /// Launch A (порт `Kolco24App.kt`): одноразовый refresh гонок + прогрев ближайшей текущей гонки

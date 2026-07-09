@@ -7,7 +7,8 @@
 //  готов). Данные и derived — из `MarksModel` (наблюдение взятий/КП/агрегатов/привязок).
 //
 //  Тайл на complete-взятие (oldest-first), существующий дизайн (`NFCTileView`/`PhotoTileView`).
-//  `PhotoTile`/лайтбокс и `ScanSheet` остаются заглушками (этапы 5/7). «ДО КВ» в метриках —
+//  `ScanSheet` теперь на реальных данных (этап 5, `ScanModel`); `PhotoTile`/лайтбокс — заглушка (этап 7).
+//  «ДО КВ» в метриках —
 //  плейсхолдер «—» (источника нет, как в Android). Нудж «привяжи чипы» ведёт на вкладку «Команда»
 //  (`onBindChips`).
 //
@@ -18,7 +19,9 @@ import SwiftUI
 struct MarksView: View {
     @Environment(AppModel.self) private var appModel
     @State private var model: MarksModel?
-    @State private var showScan = false
+    /// Скан-модель текущего оверлея; ненулевая ⇒ шит открыт (`.sheet(item:)`). Строится по тапу FAB
+    /// через `AppModel.makeScanModel()` (nil, когда команда не выбрана — тогда ведём в выбор команды).
+    @State private var scanModel: ScanModel?
     /// Точка входа во флоу выбора команды (пробрасывается хостом; в превью — no-op).
     var onChooseTeam: () -> Void = {}
     /// Переход на вкладку «Команда» для привязки чипов (нудж пустого состояния).
@@ -34,11 +37,21 @@ struct MarksView: View {
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                FloatingCTAView(onNFC: { showScan = true }, onPhoto: {})
+                FloatingCTAView(onNFC: openScan, onPhoto: {})
             }
-            .sheet(isPresented: $showScan) {
-                ScanSheet()
+            .sheet(item: $scanModel) { model in
+                ScanSheet(model: model)
             }
+    }
+
+    /// Тап FAB «Отметить КП»: строим скан-модель выбранной команды. Нет команды (`makeScanModel` →
+    /// nil) — сканировать некуда, поэтому ведём в выбор команды вместо пустого шита.
+    private func openScan() {
+        if let scan = appModel.makeScanModel() {
+            scanModel = scan
+        } else {
+            onChooseTeam()
+        }
     }
 
     @ViewBuilder
