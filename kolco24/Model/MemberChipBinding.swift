@@ -5,7 +5,7 @@
 //  Доменный тип «привязка браслета к участнику». Зеркало Room-сущности
 //  `MemberChipBindingEntity` (`data/db/MemberChipBindingEntity.kt`) — локальная
 //  привязка физического NFC-браслета к слоту участника выбранной команды.
-//  GRDB-конформанс добавит этап 2.
+//  GRDB-конформанс — в `Data/Records/MemberChipBinding+GRDB.swift` (этап 2).
 //
 //  Слот определяется парой `(teamId, numberInTeam)`, т.к. у участника нет
 //  стабильного id — только имя и `number_in_team`. Эта таблица никогда не
