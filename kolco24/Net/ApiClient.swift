@@ -318,7 +318,10 @@ struct ApiClient {
     /// Именно эта строка входит в подписанную канонику, так что берём проценто-кодированный вид.
     private static func fullPath(of url: URL) -> String {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-            return url.path
+            // Не должно случаться для валидных endpoint-URL. Молчаливый fallback на `url.path`
+            // отбросил бы query → подпись пошла бы по неверной канонике и словила бы тихий 403,
+            // поэтому падаем громко вместо скрытия рассинхрона.
+            preconditionFailure("URLComponents failed for endpoint URL: \(url)")
         }
         var path = components.percentEncodedPath
         if let query = components.percentEncodedQuery {

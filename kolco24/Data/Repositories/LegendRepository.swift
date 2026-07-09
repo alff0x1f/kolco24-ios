@@ -56,29 +56,13 @@ struct LegendRepository {
     /// ещё), схлопывая бар в 0% вместо перекоса; сервер всегда шлёт поле, так что это только
     /// пред-синк-окно.
     func totalCostForRace(_ raceId: Int) -> AsyncValueObservation<Int> {
-        ValueObservation
-            .tracking { db in
-                try LegendMeta.fetchOne(
-                    db,
-                    sql: "SELECT * FROM legend_meta WHERE raceId = ?",
-                    arguments: [raceId]
-                )?.totalCost ?? 0
-            }
-            .values(in: legendMetaStore.dbWriter)
+        legendMetaStore.observeTotalCost(raceId)
     }
 
     /// Оффлайн-читаемое число **зачётных** КП (`cost > 0`, открытых + запертых) — знаменатель
     /// счётчика взятых КП, симметрично `totalCostForRace`. Эмитит `0` до первого `200`.
     func scoringCountForRace(_ raceId: Int) -> AsyncValueObservation<Int> {
-        ValueObservation
-            .tracking { db in
-                try LegendMeta.fetchOne(
-                    db,
-                    sql: "SELECT * FROM legend_meta WHERE raceId = ?",
-                    arguments: [raceId]
-                )?.scoringCount ?? 0
-            }
-            .values(in: legendMetaStore.dbWriter)
+        legendMetaStore.observeScoringCount(raceId)
     }
 
     /// Разовый снимок — перечитывается после оффлайн-`unlock`, чтобы взять только что раскрытую `cost`.
