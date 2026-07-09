@@ -129,15 +129,15 @@
 - Create: `kolco24Tests/Core/MarksDisplayTests.swift`
 - Create: `kolco24Tests/Core/RefreshErrorMessageTests.swift`
 
-- [ ] `LegendDisplay` ← `ui/legend/CheckpointColor.kt` + чистые функции `LegendScreen.kt`: `parseCheckpointColor`, `isScoring`, `groupCheckpointsByColor`, скелетон-ширины locked-строки (детерминированы от `cp.id`)
-- [ ] `MarkMetrics` ← чистые хелперы `data/MarkRepository.kt`: `takenPoints`, `takenPointCount` (обе перегрузки), `totalScore` (обе перегрузки)
-- [ ] `MarksDisplay` ← чистые функции `ui/marks/MarksScreen.kt` (без фото): `marksToTiles` (+ `costOf`/`colorOf`-джойны), `tileFill`/`TileFill`, `hiddenTakenTokens`, `tokensLabel`, empty-лестница (`enum MarksEmptyState`: `none/chooseTeam/bindChips/ready` — NFC-ветки этапа 5 не портируются)
-- [ ] `RefreshErrorMessage` ← `refreshErrorMessage` из `ui/common/PullToRefresh.kt`: `RefreshResult → String?`, русские тексты 1:1
-- [ ] `LegendDisplayTests` ← `CheckpointColorTest.kt` (5) + `IsScoringTest.kt` (5) + `GroupCheckpointsByColorTest.kt` (6)
-- [ ] `MarkMetricsTests` ← чистая часть `MarkRepositoryTest.kt` (кейсы `takenPoints*`/`totalScore*`; DAO-кейсы уже зеркалированы `MarkStore`-тестами этапа 2 — не дублировать)
-- [ ] `MarksDisplayTests` ← не-фото кейсы `MarksMappingTest.kt` + `TileFillTest.kt` (5); фото-кейсы перечислить в шапке как «этап 7»; лестница empty-состояний — бонус-кейсы по урезанной логике
-- [ ] `RefreshErrorMessageTests`: все ветки `RefreshResult`
-- [ ] прогнать тесты — must pass before task 3
+- [x] `LegendDisplay` ← `ui/legend/CheckpointColor.kt` + чистые функции `LegendScreen.kt`: `parseCheckpointColor`, `isScoring`, `groupCheckpointsByColor`, скелетон-ширины locked-строки (детерминированы от `cp.id`)
+- [x] `MarkMetrics` ← чистые хелперы `data/MarkRepository.kt`: `takenPoints`, `takenPointCount` (обе перегрузки), `totalScore` (обе перегрузки)
+- [x] `MarksDisplay` ← чистые функции `ui/marks/MarksScreen.kt` (без фото): `marksToTiles` (+ `costOf`/`colorOf`-джойны), `tileFill`/`TileFill`, `hiddenTakenTokens`, `tokensLabel`, empty-лестница (`enum MarksEmptyState`: `none/chooseTeam/bindChips/ready` — NFC-ветки этапа 5 не портируются)
+- [x] `RefreshErrorMessage` ← `refreshErrorMessage` из `ui/common/PullToRefresh.kt`: `RefreshResult → String?`, русские тексты 1:1
+- [x] `LegendDisplayTests` ← `CheckpointColorTest.kt` (5) + `IsScoringTest.kt` (5) + `GroupCheckpointsByColorTest.kt` (6)
+- [x] `MarkMetricsTests` ← чистая часть `MarkRepositoryTest.kt` (кейсы `takenPoints*`/`totalScore*`; DAO-кейсы уже зеркалированы `MarkStore`-тестами этапа 2 — не дублировать)
+- [x] `MarksDisplayTests` ← не-фото кейсы `MarksMappingTest.kt` + `TileFillTest.kt` (5); фото-кейсы перечислить в шапке как «этап 7»; лестница empty-состояний — бонус-кейсы по урезанной логике
+- [x] `RefreshErrorMessageTests`: все ветки `RefreshResult`
+- [x] прогнать тесты — must pass before task 3
 
 ### Task 3: AppEnvironment + AppModel (selected team + refresh-оркестрация)
 
