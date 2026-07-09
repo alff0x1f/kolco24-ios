@@ -111,11 +111,11 @@
 - Create: `kolco24Tests/Core/RaceDatesTests.swift`
 - Create: `kolco24Tests/Core/TeamPickerLogicTests.swift`
 
-- [ ] `RaceDates` ← `data/DateUtils.kt`: `todayIso()` (локальная дата `yyyy-MM-dd`; в чистой функции — параметр `Date`/провайдер, без скрытого `Date()`), `effectiveEnd(race)` (Kotlin: `dateEnd ?: date` — в iOS-модели `Race` поле называется `date`, не `dateStart`), `nearestRaceId(races, today)`
-- [ ] `TeamPickerLogic` ← `ui/teampicker/TeamPickerLogic.kt`: `splitRaces`, `RaceStatusPill`/`raceStatusPill`, `filterTeams`, `peopleLine`/`peopleWord` (поверх готового `PluralRu`), `teamToken`, `displayTeamName`, `initials`
-- [ ] `TeamPickerLogicTests` ← `TeamPickerLogicTest.kt` (39 кейсов, header «Зеркало …»)
-- [ ] `RaceDatesTests` — бонус-сьют (JVM-зеркала нет, задокументировать в шапке): edge-кейсы `effectiveEnd`/`nearestRaceId` (пустой список, все в прошлом, ties)
-- [ ] прогнать тесты — must pass before task 2
+- [x] `RaceDates` ← `data/DateUtils.kt`: `todayIso()` (локальная дата `yyyy-MM-dd`; в чистой функции — параметр `Date`/провайдер, без скрытого `Date()`), `effectiveEnd(race)` (Kotlin: `dateEnd ?: date` — в iOS-модели `Race` поле называется `date`, не `dateStart`), `nearestRaceId(races, today)`
+- [x] `TeamPickerLogic` ← `ui/teampicker/TeamPickerLogic.kt`: `splitRaces`, `RaceStatusPill`/`raceStatusPill`, `filterTeams`, `peopleLine`/`peopleWord` (поверх готового `PluralRu`), `teamToken`, `displayTeamName`, `initials`
+- [x] `TeamPickerLogicTests` ← `TeamPickerLogicTest.kt` (39 кейсов, header «Зеркало …»)
+- [x] `RaceDatesTests` — бонус-сьют (JVM-зеркала нет, задокументировать в шапке): edge-кейсы `effectiveEnd`/`nearestRaceId` (пустой список, все в прошлом, ties)
+- [x] прогнать тесты — must pass before task 2
 
 ### Task 2: Чистая логика — Legend + Marks derived + refreshErrorMessage
 
