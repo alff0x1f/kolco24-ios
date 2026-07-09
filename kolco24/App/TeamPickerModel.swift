@@ -149,6 +149,10 @@ final class TeamPickerModel {
         // Префетч легенды — best-effort, результат игнорируется (порт двух корутин `onRaceSelected`).
         Task { [weak self] in _ = try? await self?.env.legendRepository.refreshLegend(raceId) }
         let result = try? await env.teamRepository.refreshTeams(raceId)
+        // Stale-guard: пока refresh был в полёте, пользователь мог выбрать другую гонку. В Android
+        // `load` пересоздаётся через `remember(raceId)` + `LaunchedEffect(raceId)` (старый effect
+        // отменяется) — здесь `load` одно на модель, поэтому исход прежней гонки не применяем.
+        guard pickerRaceId == raceId else { return }
         load = pickerLoad(from: result)
     }
 
@@ -156,6 +160,8 @@ final class TeamPickerModel {
     func refreshTeams() async {
         guard let raceId = pickerRaceId else { return }
         let result = try? await env.teamRepository.refreshTeams(raceId)
+        // Stale-guard (см. `raceSelected`): гонка могла смениться, пока refresh был в полёте.
+        guard pickerRaceId == raceId else { return }
         load = pickerLoad(from: result)
     }
 

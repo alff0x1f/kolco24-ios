@@ -189,6 +189,36 @@ struct TeamPickerModelTests {
         #expect(model.load == .httpError(500))
     }
 
+    // MARK: - Stale-write guard (смена гонки во время refresh)
+
+    /// Гонка A выбрана, её `refreshTeams` завис; пользователь выбрал гонку B (загрузилась). Поздний
+    /// исход A (offline) НЕ должен затереть `load`/`pickerRaceId` гонки B. Без guard'а `load` стал бы
+    /// `.offline`.
+    @Test func raceSelected_lateResultDoesNotOverwriteNewerRace() async throws {
+        let now = Date(timeIntervalSince1970: 1_718_000_000)
+        // Запрос команд гонки A висит до `release`; всё остальное (легенда A, команды/легенда B) — 304.
+        let transport = GatedTransport(gateSuffix: "/app/race/100/teams/")
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        let model = makeModel(env, now: now)
+
+        // Гонка A: стартуем, ждём, пока её teams-запрос реально повиснет в транспорте.
+        let taskA = Task { await model.raceSelected(100) }
+        await waitUntil { transport.requested(suffix: "/app/race/100/teams/") }
+        #expect(model.pickerRaceId == 100)
+
+        // Гонка B: полностью отрабатывает (teams → 304 → .loaded), перекрывает выбор.
+        await model.raceSelected(200)
+        #expect(model.pickerRaceId == 200)
+        #expect(model.load == .loaded)
+
+        // Поздний исход A — offline; guard обязан его отбросить.
+        transport.release(error: URLError(.notConnectedToInternet))
+        await taskA.value
+
+        #expect(model.pickerRaceId == 200)
+        #expect(model.load == .loaded)
+    }
+
     // MARK: - confirm
 
     @Test func confirm_persistsSelectedTeam() async throws {

@@ -165,7 +165,12 @@ final class AppModel {
         async let teams = try? env.teamRepository.refreshTeams(raceId)
         async let legend = try? env.legendRepository.refreshLegend(raceId)
         async let tags = try? env.memberTagsRepository.refreshMemberTags(raceId)
-        publishError(from: [await teams, await legend, await tags])
+        let results = [await teams, await legend, await tags]
+        // Stale-guard: гонка могла смениться, пока fan-out был в полёте. В Android этот блок живёт
+        // под `collectLatest` — смена команды отменяет in-flight refresh, поэтому его ошибка тоста
+        // не показывает; здесь Task не отменяется, гасим stale-тост явной проверкой.
+        guard selectedRaceId == raceId else { return }
+        publishError(from: results)
     }
 
     /// Pull-to-refresh «Легенды»: точечный refresh легенды гонки [raceId], ошибка → `toastMessage`.
@@ -185,7 +190,10 @@ final class AppModel {
         async let teams = try? env.teamRepository.refreshTeams(raceId)
         async let legend = try? env.legendRepository.refreshLegend(raceId)
         async let tags = try? env.memberTagsRepository.refreshMemberTags(raceId)
-        publishError(from: [await races, await teams, await legend, await tags])
+        let results = [await races, await teams, await legend, await tags]
+        // Stale-guard (см. `reactiveRefresh`): пользователь мог сменить гонку за время fan-out.
+        guard selectedRaceId == raceId else { return }
+        publishError(from: results)
     }
 
     // MARK: - Хелперы

@@ -243,6 +243,34 @@ struct AppModelTests {
         #expect(racesEtag == "\"v1\"")
     }
 
+    /// Реактивный refresh гонки A завис; пользователь сменил команду на гонку B (обновилась без
+    /// ошибок). Поздний offline гонки A НЕ должен показать stale-тост (в Android его гасит
+    /// `collectLatest`-отмена). Без guard'а `toastMessage` стал бы «Нет сети…».
+    @Test func reactiveRefresh_lateOfflineAfterRaceSwitch_noStaleToast() async throws {
+        // teams-запрос гонки 11 висит до `release`; всё остальное отвечает 304.
+        let transport = GatedTransport(gateSuffix: "/app/race/11/teams/")
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        let model = AppModel(env: env)
+
+        await model.start() // races → 304, гонок нет → префетча нет
+
+        // Гонка 11: реактивный refresh запускается, его teams-запрос повисает.
+        await model.selectTeam(raceId: 11, teamId: 1)
+        await waitUntil { transport.requested(suffix: "/app/race/11/teams/") }
+        #expect(model.selectedRaceId == 11)
+
+        // Гонка 22: реактивный refresh отрабатывает целиком (всё 304 → тост молчит).
+        await model.selectTeam(raceId: 22, teamId: 2)
+        await waitUntil { model.selectedRaceId == 22 && transport.requested(suffix: "/app/race/22/teams/") }
+        #expect(model.toastMessage == nil)
+
+        // Поздний offline гонки 11: guard обязан подавить stale-тост.
+        transport.release(error: URLError(.notConnectedToInternet))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(model.toastMessage == nil)
+    }
+
     // MARK: - Pull-to-refresh (refreshAll / refreshLegend / clearTeam)
 
     @Test func refreshAll_withSelection_routesErrorToToast() async throws {
