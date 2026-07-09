@@ -212,10 +212,10 @@ enum RefreshResult: Equatable { case updated, notModified, offline, forbidden, h
 - Create: `kolco24/Data/Repositories/LegendRepository.swift`
 - Create: `kolco24Tests/Data/Repositories/LegendRepositoryTests.swift`
 
-- [ ] refresh с pin-guard: `checkpointStore.replaceAllForRace` (preserve-reveal) + `tagStore.replaceAllForRace` + `legendMetaStore.upsert`; маппинг `CheckpointDto` (`enc != nil` → locked, `color ?? ""`, optional cost/description)
-- [ ] `unlock(raceId:code:) async -> UnlockOutcome`: bid → `tagStore.getByBid` → `encById` из строк checkpoints → `LegendCrypto.unlock` → `checkpointStore.reveal` на `revealed`
-- [ ] `LegendRepositoryTests` ← `LegendRepositoryTest.kt` (29): refresh-набор + маппинг locked/color/tags, `total_cost`/`scoring_count` персист и дефолты, reveal переживает resync (поверх preserve-reveal); unlock-матрица — reveal+persist, неизвестный bid → unknown, открытый КП → identityOnly, частичный конверт, испорченный шифротекст → failed (KAT-векторы `LegendCryptoTests` этапа 1 переиспользуются)
-- [ ] прогнать тесты — must pass before task 8
+- [x] refresh с pin-guard: `checkpointStore.replaceAllForRace` (preserve-reveal) + `tagStore.replaceAllForRace` + `legendMetaStore.upsert`; маппинг `CheckpointDto` (`enc != nil` → locked, `color ?? ""`, optional cost/description)
+- [x] `unlock(raceId:code:) async -> UnlockOutcome`: bid → `tagStore.getByBid` → `encById` из строк checkpoints → `LegendCrypto.unlock` → `checkpointStore.reveal` на `revealed`
+- [x] `LegendRepositoryTests` ← `LegendRepositoryTest.kt` (29): refresh-набор + маппинг locked/color/tags, `total_cost`/`scoring_count` персист и дефолты, reveal переживает resync (поверх preserve-reveal); unlock-матрица — reveal+persist, неизвестный bid → unknown, открытый КП → identityOnly, частичный конверт, испорченный шифротекст → failed (KAT-векторы `LegendCryptoTests` этапа 1 переиспользуются)
+- [x] прогнать тесты — must pass before task 8
 
 ### Task 8: URLSessionTransport + фабрика клиентов + live smoke
 
