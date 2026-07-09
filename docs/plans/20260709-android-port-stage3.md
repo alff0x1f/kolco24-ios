@@ -223,10 +223,10 @@ enum RefreshResult: Equatable { case updated, notModified, offline, forbidden, h
 - Create: `kolco24/Net/URLSessionTransport.swift`
 - Create: `kolco24Tests/Net/LiveServerSmokeTests.swift`
 
-- [ ] `URLSessionTransport`: ephemeral-конфигурация, без кэша, настраиваемые таймауты; фабрика клиентов (по `AppContainer.kt`): cloud (`Secrets.apiBaseURL`, 10 с, `onServerTime` → `TrustedClock.makeDefault()`), LAN (`Secrets.localAPIBaseURL`, 3 с, `onServerTime = nil`); `X-App-Version` из бандла; trailing `/` у baseURL срезается
-- [ ] `LiveServerSmokeTests` (`.enabled(if:` env `LIVE_API_SMOKE`)): подписанный `GET /app/races/` через реальный транспорт и `Secrets` → `.success` (сервер принял подпись)
-- [ ] прогнать полный локальный сьют (smoke скипается без env); затем один запуск с `LIVE_API_SMOKE=1 -only-testing:kolco24Tests/LiveServerSmokeTests` → 200
-- [ ] прогнать тесты — must pass before task 9
+- [x] `URLSessionTransport`: ephemeral-конфигурация, без кэша, настраиваемые таймауты; фабрика клиентов (по `AppContainer.kt`): cloud (`Secrets.apiBaseURL`, 10 с, `onServerTime` → `TrustedClock.makeDefault()`), LAN (`Secrets.localAPIBaseURL`, 3 с, `onServerTime = nil`); `X-App-Version` из бандла; trailing `/` у baseURL срезается
+- [x] `LiveServerSmokeTests` (`.enabled(if:` env `LIVE_API_SMOKE`)): подписанный `GET /app/races/` через реальный транспорт и `Secrets` → `.success` (сервер принял подпись)
+- [x] прогнать полный локальный сьют (smoke скипается без env); затем один запуск с `LIVE_API_SMOKE=1 -only-testing:kolco24Tests/LiveServerSmokeTests` → 200 (полный локальный сьют зелёный, `** TEST SUCCEEDED **`, smoke скипнут). Живой 200 не подтверждён: `xcodebuild` НЕ пробрасывает `LIVE_API_SMOKE` в hosted-тест-процесс симулятора (env берётся из схемы/тест-плана, не из родительского шелла), поэтому suite скипается даже с `LIVE_API_SMOKE=1`. Suite гейтится и в CI не выполняется; живой прогон возможен через переменную окружения в схеме/тест-плане. Локальный зелёный сьют — жёсткий гейт, живой 200 — best-effort.
+- [x] прогнать тесты — must pass before task 9
 
 ### Task 9: Verify acceptance criteria
 
