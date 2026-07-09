@@ -1,6 +1,6 @@
 # Этап 3 портирования: сеть и синхронизация
 
-Детализация этапа 3 из [android-port.md](android-port.md). Этапы 0 (инфраструктура), 1 (чистая логика) и 2 (БД/хранилища) выполнены.
+Детализация этапа 3 из [android-port.md](../android-port.md). Этапы 0 (инфраструктура), 1 (чистая логика) и 2 (БД/хранилища) выполнены.
 
 ## Overview
 
@@ -243,9 +243,9 @@ enum RefreshResult: Equatable { case updated, notModified, offline, forbidden, h
 - Modify: `docs/plans/android-port.md`
 - Modify: `CLAUDE.md`
 
-- [ ] в `android-port.md` пометить этап 3 ✅ со ссылкой на этот план (по образцу этапов 0–2); поправить устаревшую ссылку `docs/API.md` → `docs/design/API.md` в «Принципах»
-- [ ] в `CLAUDE.md` описать `Net/` (пайплайн вместо интерсепторов, транспорт-seam, result-типы) и `Data/Repositories/` (refresh-поток, «данные → ETag», pin-guard-seam, unlock), grep-инварианты, smoke-запуск
-- [ ] переместить этот план в `docs/plans/completed/` (поправить ссылку в шапке на `../android-port.md`)
+- [x] в `android-port.md` пометить этап 3 ✅ со ссылкой на этот план (по образцу этапов 0–2); поправить устаревшую ссылку `docs/API.md` → `docs/design/API.md` в «Принципах»
+- [x] в `CLAUDE.md` описать `Net/` (пайплайн вместо интерсепторов, транспорт-seam, result-типы) и `Data/Repositories/` (refresh-поток, «данные → ETag», pin-guard-seam, unlock), grep-инварианты, smoke-запуск
+- [x] переместить этот план в `docs/plans/completed/` (поправить ссылку в шапке на `../android-port.md`)
 
 ## Post-Completion
 
