@@ -143,10 +143,10 @@ enum RefreshResult: Equatable { case updated, notModified, offline, forbidden, h
 - Create: `kolco24/Core/Time/ServerTimeSampler.swift`
 - Create: `kolco24Tests/Core/ServerTimeSamplerTests.swift`
 
-- [ ] `enum SyncSource { case cloud, local }` (порт `data/SyncSource.kt`; чистый тип — нужен репозиториям сейчас и координатору этапа 9)
-- [ ] `ServerTimeSampler` ← `ServerTimeInterceptor.kt`: чистая функция разбора RFC 1123 `Date`-заголовка + RTT-правила (midpoint `requestElapsedMs + rtt/2`; лимит RTT — значение из Kotlin; отрицательный/сверхлимитный → nil); `ServerTimeSample(serverEpochMs, anchorElapsedMs)` — `wallNow`/`bootNow` захватывает вайринг-замыкание фабрики (задача 8), не сэмплер
-- [ ] `ServerTimeSamplerTests` ← `ServerTimeInterceptorTest.kt` (~6–7 из 9 кейсов принадлежат чистому сэмплеру): Date+RTT midpoint, отсутствующий/битый Date → nil, RTT at-max принят / over-max и отрицательный отброшены. Остальные кейсы Kotlin перенацеливаются: cache-gate — беспредметен при ephemeral-транспорте без кэша (зафиксировано конфигом в задаче 8), out-of-order — покрыт регрессией в существующих `TrustedClock`-тестах, «null bootCount forwarded» — вайринг фабрики (задача 8)
-- [ ] прогнать тесты — must pass before task 2
+- [x] `enum SyncSource { case cloud, local }` (порт `data/SyncSource.kt`; чистый тип — нужен репозиториям сейчас и координатору этапа 9)
+- [x] `ServerTimeSampler` ← `ServerTimeInterceptor.kt`: чистая функция разбора RFC 1123 `Date`-заголовка + RTT-правила (midpoint `requestElapsedMs + rtt/2`; лимит RTT — значение из Kotlin; отрицательный/сверхлимитный → nil); `ServerTimeSample(serverEpochMs, anchorElapsedMs)` — `wallNow`/`bootNow` захватывает вайринг-замыкание фабрики (задача 8), не сэмплер
+- [x] `ServerTimeSamplerTests` ← `ServerTimeInterceptorTest.kt` (~6–7 из 9 кейсов принадлежат чистому сэмплеру): Date+RTT midpoint, отсутствующий/битый Date → nil, RTT at-max принят / over-max и отрицательный отброшены. Остальные кейсы Kotlin перенацеливаются: cache-gate — беспредметен при ephemeral-транспорте без кэша (зафиксировано конфигом в задаче 8), out-of-order — покрыт регрессией в существующих `TrustedClock`-тестах, «null bootCount forwarded» — вайринг фабрики (задача 8)
+- [x] прогнать тесты — must pass before task 2
 
 ### Task 2: Result-типы + DTO
 
