@@ -160,6 +160,33 @@ struct DtoDecodingTests {
         #expect(resp.teams[0].startNumber == "17")
     }
 
+    @Test func team_missingCategory2_throws() throws {
+        // Порт-верность: category2 в Kotlin — nullable БЕЗ дефолта → kotlinx.serialization требует
+        // наличие ключа (отсутствие → MissingFieldException). Ручной init(from:) с decode(Int?.self)
+        // бросает keyNotFound на отсутствующий ключ (иначе битый payload молча стал бы .success).
+        let json = """
+        {"race": 8, "categories": [], "teams": [
+          {"id": 1, "teamname": "T", "ucount": 2, "paid_people": 2.0,
+           "start_time": 0, "finish_time": 0, "members": []}
+        ]}
+        """
+        #expect(throws: DecodingError.self) {
+            try decode(TeamsResponse.self, json)
+        }
+    }
+
+    @Test func team_explicitNullCategory2_ok() throws {
+        // Явный null допустим (ключ присутствует) — команда не в выдаче.
+        let json = """
+        {"race": 8, "categories": [], "teams": [
+          {"id": 1, "teamname": "T", "category2": null, "ucount": 2, "paid_people": 2.0,
+           "start_time": 0, "finish_time": 0, "members": []}
+        ]}
+        """
+        let resp = try decode(TeamsResponse.self, json)
+        #expect(resp.teams[0].category2 == nil)
+    }
+
     @Test func team_startFinishTime_areMillis() throws {
         // Ловушка: start_time/finish_time — миллисекунды (Int64), большие значения не переполняют.
         let json = """
