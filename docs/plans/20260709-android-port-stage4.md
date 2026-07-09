@@ -147,12 +147,14 @@
 - Modify: `kolco24/kolco24App.swift`
 - Create: `kolco24Tests/App/AppModelTests.swift`
 
-- [ ] `AppEnvironment`: прод-инициализатор (`AppDatabase.makeShared()`, `ApiClients.makeDefaultPair()`, сторы, 4 репозитория) + `AppEnvironment.inMemory(transport:)` для тестов/превью
-- [ ] `AppModel` (`@Observable @MainActor`): подписка на `selectedTeamStore.observe()`, разрешение `SelectedTeamState` (`none/loading/missing/present`) с перезапуском вложенного `observeTeamById`, свойства `selectedRaceId`/`selectedTeamId`
-- [ ] refresh-оркестрация: `start()` (Launch A: `refreshRaces` + префетч ближайшей гонки через `nearestRaceId`), реактивный refresh при смене `raceId` (Launch B), `refreshAll()`, `selectTeam(raceId:teamId:)`/`clearTeam()`; ошибки → `toastMessage` через `refreshErrorMessage`
-- [ ] вайринг в `kolco24App.swift`: создать `AppEnvironment`/`AppModel`, `.environment(...)`, `start()` из `.task` корневой вьюхи (мок-данные вкладок пока не трогаются — вкладки переключаются в задачах 5–7)
-- [ ] `AppModelTests` (in-memory БД + `FakeTransport`): none→loading→present; missing при удалении команды; `selectTeam` персистит и переключает состояние; `start()` дёргает `/app/races/` и префетчит ближайшую гонку (проверка по журналу транспорта); смена команды дёргает teams/legend/member_tags; ошибка refresh → `toastMessage`, успех → nil
-- [ ] прогнать тесты — must pass before task 4
+- [x] `AppEnvironment`: прод-инициализатор (`AppDatabase.makeShared()`, `ApiClients.makeDefaultPair()`, сторы, 4 репозитория) + `AppEnvironment.inMemory(transport:)` для тестов/превью
+- [x] `AppModel` (`@Observable @MainActor`): подписка на `selectedTeamStore.observe()`, разрешение `SelectedTeamState` (`none/loading/missing/present`) с перезапуском вложенного `observeTeamById`, свойства `selectedRaceId`/`selectedTeamId`
+- [x] refresh-оркестрация: `start()` (Launch A: `refreshRaces` + префетч ближайшей гонки через `nearestRaceId`), реактивный refresh при смене `raceId` (Launch B), `refreshAll()`, `selectTeam(raceId:teamId:)`/`clearTeam()`; ошибки → `toastMessage` через `refreshErrorMessage`
+- [x] вайринг в `kolco24App.swift`: создать `AppEnvironment`/`AppModel`, `.environment(...)`, `start()` из `.task` корневой вьюхи (мок-данные вкладок пока не трогаются — вкладки переключаются в задачах 5–7)
+- [x] `AppModelTests` (in-memory БД + `FakeTransport`): none→loading→present; missing при удалении команды; `selectTeam` персистит и переключает состояние; `start()` дёргает `/app/races/` и префетчит ближайшую гонку (проверка по журналу транспорта); смена команды дёргает teams/legend/member_tags; ошибка refresh → `toastMessage`, успех → nil
+- [x] прогнать тесты — must pass before task 4 (всё зелёное: 591 тест, 0 падений; `AppModelTests` 10/10)
+
+  ⚠️ Побочный фикс: `FakeTransport` (этап 3) стал потокобезопасным (`@unchecked Sendable` + `NSLock`) — параллельные `async let` fan-out'ы этапа 4 бьют `handle` из нескольких задач разом, без замка одновременная мутация `queue`/`recorded` = UB. Проверка путей в тестах — по `url.absoluteString` (а не `url.path`, который срезает завершающий слэш подписанного пути).
 
 ### Task 4: Флоу выбора гонки/команды (TeamPickerModel + вьюхи)
 
