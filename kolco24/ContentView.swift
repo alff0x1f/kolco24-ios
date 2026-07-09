@@ -10,8 +10,8 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppModel.self) private var appModel
     @State private var selectedTab = 0
-    /// Флоу выбора гонки/команды (`.fullScreenCover`). Постоянные точки входа (CTA empty-состояний,
-    /// «Сменить команду») появляются в задаче 5 — пока триггерится временной кнопкой в тулбаре.
+    /// Флоу выбора гонки/команды (`.fullScreenCover`). Точки входа: CTA empty-состояний вкладок и
+    /// строка «Сменить команду» в `TeamView`.
     @State private var showPicker = false
 
     var body: some View {
@@ -24,15 +24,7 @@ struct ContentView: View {
                     .tabItem { Label("Легенда", systemImage: "map.fill") }
                     .tag(1)
                 NavigationStack {
-                    TeamView()
-                        .toolbar {
-                            // ВРЕМЕННЫЙ триггер флоу (удаляется в задаче 5, когда появятся постоянные CTA).
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button { showPicker = true } label: {
-                                    Image(systemName: "person.crop.circle.badge.plus")
-                                }
-                            }
-                        }
+                    TeamView(onChooseTeam: { showPicker = true })
                 }
                 .tabItem { Label("Команда", systemImage: "person.3.fill") }
                 .tag(2)

@@ -127,6 +127,12 @@ final class AppModel {
         TeamPickerModel(env: env, appModel: self, now: now)
     }
 
+    /// Фабрика модели вкладки «Команда» (наблюдение привязок чипов + отвязка). Держит `env`
+    /// инкапсулированным — вьюха не видит граф зависимостей.
+    func makeTeamModel() -> TeamModel {
+        TeamModel(env: env)
+    }
+
     // MARK: - Refresh-оркестрация (всё .cloud)
 
     /// Launch A (порт `Kolco24App.kt`): одноразовый refresh гонок + прогрев ближайшей текущей гонки

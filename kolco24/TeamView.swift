@@ -1,48 +1,109 @@
+//
+//  TeamView.swift
+//  kolco24
+//
+//  Вкладка «Команда» на реальных данных. Порт ПОВЕДЕНИЯ `ui/team/TeamScreen.kt`: без выбранной
+//  команды — `TeamEmptyState` (онбординг или «команда исчезла» при `missing`), иначе герой-карточка
+//  и ростер выбранной команды. Сама команда приходит из `AppModel.selectedTeamState`; привязки
+//  чипов — из `TeamModel` (наблюдение `member_chip_bindings` по `numberInTeam`).
+//
+//  «Привязать» — видимая заглушка до этапа 5 (алерт). Отвязка входит в скоуп: long-press на
+//  привязанном участнике → confirm-диалог → `TeamModel.unbind` (`deleteSlot`). «Сменить команду»
+//  открывает флоу выбора (`onChooseTeam`).
+//
+
 import SwiftUI
 
-// MARK: - Model
-struct TeamMember: Identifiable {
-    let id = UUID()
-    let name: String
-    let chipID: String?
-    var isBound: Bool { chipID != nil }
-
-    var initials: String {
-        name.split(separator: " ").prefix(2)
-            .compactMap { $0.first.map(String.init) }
-            .joined()
-    }
-}
-
-// MARK: - Mock data
-private let mockMembers: [TeamMember] = [
-    .init(name: "Маленков А.", chipID: "597"),
-    .init(name: "Иванов И.",   chipID: "601"),
-    .init(name: "Сидоров П.",  chipID: "604"),
-    .init(name: "Петрова О.",  chipID: "611"),
-    .init(name: "Кузьмин Д.",  chipID: nil),
-    .init(name: "Смирнов Я.",  chipID: nil),
-]
-
-// MARK: - TeamView
 struct TeamView: View {
-    private let members = mockMembers
-    private var boundCount: Int { members.filter(\.isBound).count }
+    @Environment(AppModel.self) private var appModel
+    /// Модель привязок создаётся один раз в `.task` (env инкапсулирован в `AppModel`).
+    @State private var model: TeamModel?
+    /// Точка входа во флоу выбора (пробрасывается хостом; в превью — no-op).
+    var onChooseTeam: () -> Void = {}
+
+    /// Слот, для которого открыт confirm-диалог отвязки.
+    @State private var unbindTarget: TeamMemberItem?
+    /// Заглушка «Привязать» (этап 5).
+    @State private var showBindStub = false
 
     var body: some View {
-        ScrollView {
+        content
+            .background(Color.paper)
+            .navigationTitle("Команда")
+            .navigationBarTitleDisplayMode(.inline)
+            .task(id: appModel.selectedTeamId) {
+                if model == nil { model = appModel.makeTeamModel() }
+                model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
+            }
+            .alert("Привязка чипов", isPresented: $showBindStub) {
+                Button("Понятно", role: .cancel) {}
+            } message: {
+                Text("Привязка NFC-чипов появится в следующей версии.")
+            }
+            .confirmationDialog(
+                "Отвязать чип?",
+                isPresented: Binding(
+                    get: { unbindTarget != nil },
+                    set: { if !$0 { unbindTarget = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: unbindTarget
+            ) { member in
+                Button("Отвязать", role: .destructive) {
+                    if let teamId = appModel.selectedTeamId {
+                        Task { await model?.unbind(teamId: teamId, numberInTeam: member.numberInTeam) }
+                    }
+                    unbindTarget = nil
+                }
+                Button("Отмена", role: .cancel) { unbindTarget = nil }
+            } message: { member in
+                Text("Чип участника «\(member.name)» станет непривязанным.")
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch appModel.selectedTeamState {
+        case .loading:
+            // Подавляем мигание empty-состояния до первой эмиссии observation.
+            Color.paper
+        case .none:
+            TeamEmptyState(onChooseTeam: onChooseTeam)
+        case .missing:
+            TeamEmptyState(missing: true, onChooseTeam: onChooseTeam)
+        case .present(let team):
+            teamContent(team)
+        }
+    }
+
+    private func teamContent(_ team: Team) -> some View {
+        let members = team.members.sorted { $0.numberInTeam < $1.numberInTeam }
+        let bound = model?.boundCount(members: members) ?? 0
+        let category = model?.category(for: team)
+
+        return ScrollView {
             VStack(spacing: 0) {
-                TeamHeroView(bound: boundCount, total: members.count)
-                    .padding(.top, 8)
+                TeamHeroView(
+                    team: team,
+                    category: category,
+                    bound: bound,
+                    total: team.ucount
+                )
+                .padding(.top, 8)
 
                 SectionHeader("Состав · \(members.count)")
                     .padding(.top, 20)
 
                 VStack(spacing: 0) {
-                    ForEach(Array(members.enumerated()), id: \.element.id) { idx, m in
-                        MemberRowView(member: m)
-                            .padding(.horizontal, DS.hPad)
-                            .padding(.vertical, 8)
+                    ForEach(Array(members.enumerated()), id: \.element.numberInTeam) { idx, m in
+                        MemberRowView(
+                            member: m,
+                            binding: model?.binding(for: m.numberInTeam),
+                            onBind: { showBindStub = true },
+                            onUnbind: { unbindTarget = m }
+                        )
+                        .padding(.horizontal, DS.hPad)
+                        .padding(.vertical, 8)
                         if idx < members.count - 1 {
                             Rectangle()
                                 .fill(Color.hairline)
@@ -66,9 +127,12 @@ struct TeamView: View {
                     .padding(.top, 20)
 
                 VStack(spacing: 0) {
-                    MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: "Настройки", sub: "Соревнование, сервер, NFC")
-                        .padding(.horizontal, DS.hPad)
-                        .padding(.vertical, 8)
+                    Button { onChooseTeam() } label: {
+                        MiscRowView(systemImage: "arrow.left.arrow.right", iconBg: Color.charcoal, label: "Сменить команду", sub: "Выбрать другое соревнование или команду")
+                            .padding(.horizontal, DS.hPad)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
                     Rectangle()
                         .fill(Color.hairline)
                         .frame(height: 0.5)
@@ -83,16 +147,19 @@ struct TeamView: View {
                 .padding(.bottom, 32)
             }
         }
-        .background(Color.paper)
-        .navigationTitle("Команда")
-        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await appModel.refreshAll() }
     }
 }
 
 // MARK: - Team Hero
+
 private struct TeamHeroView: View {
+    let team: Team
+    let category: Category?
     let bound: Int
     let total: Int
+
+    private var allBound: Bool { total > 0 && bound >= total }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -108,16 +175,19 @@ private struct TeamHeroView: View {
             }
 
             HStack(alignment: .lastTextBaseline, spacing: 10) {
-                Text("342")
-                    .font(.mono(38, weight: .bold))
-                    .foregroundStyle(.white)
-                Text("Бронь")
+                if let number = team.startNumber, !number.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Text(number)
+                        .font(.mono(38, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                Text(displayTeamName(team))
                     .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(2)
             }
             .padding(.top, 6)
 
-            Text("Категория 12 ч · \(total) человек")
+            Text(peopleLine(category: category, ucount: total))
                 .font(.system(size: 13))
                 .foregroundStyle(.white.opacity(0.6))
                 .padding(.top, 4)
@@ -125,9 +195,9 @@ private struct TeamHeroView: View {
             HStack(spacing: 8) {
                 HStack(spacing: 7) {
                     Circle()
-                        .fill(bound == total ? Color.good : Color.amber)
+                        .fill(allBound ? Color.good : Color.amber)
                         .frame(width: 6, height: 6)
-                        .shadow(color: (bound == total ? Color.good : Color.amber).opacity(0.3), radius: 4)
+                        .shadow(color: (allBound ? Color.good : Color.amber).opacity(0.3), radius: 4)
                     Text("\(bound) / \(total) с чипом")
                         .font(.mono(11, weight: .bold))
                         .foregroundStyle(.white)
@@ -139,8 +209,8 @@ private struct TeamHeroView: View {
                 .overlay(Capsule().stroke(.white.opacity(0.16), lineWidth: 0.5))
                 .clipShape(Capsule())
 
-                if bound < total {
-                    Text("\(total - bound) чипа не привязаны")
+                if !allBound && total > 0 {
+                    Text(chipNotBoundText(total - bound))
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -159,21 +229,27 @@ private struct TeamHeroView: View {
 }
 
 // MARK: - Member Row
+
 private struct MemberRowView: View {
-    let member: TeamMember
+    let member: TeamMemberItem
+    let binding: MemberChipBinding?
+    let onBind: () -> Void
+    let onUnbind: () -> Void
+
+    private var isBound: Bool { binding != nil }
 
     var body: some View {
         HStack(spacing: 12) {
             // Avatar
             ZStack {
-                if member.isBound {
+                if isBound {
                     LinearGradient(
                         colors: [Color(light: "E2E6EB", dark: "2A3240"),
                                  Color(light: "C5CCD5", dark: "374352")],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                     .clipShape(Circle())
-                    Text(member.initials)
+                    Text(initials(member.name))
                         .font(.mono(13, weight: .bold))
                         .foregroundStyle(Color.ink)
                 } else {
@@ -194,12 +270,12 @@ private struct MemberRowView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.ink)
 
-                if member.isBound, let cid = member.chipID {
+                if let binding {
                     HStack(spacing: 5) {
                         Circle().fill(Color.good)
                             .frame(width: 5, height: 5)
                             .shadow(color: Color.good.opacity(0.3), radius: 3)
-                        Text("Чип \(cid)")
+                        Text("№\(binding.participantNumber)")
                             .font(.mono(12, weight: .semibold))
                             .foregroundStyle(Color.sub)
                     }
@@ -216,12 +292,12 @@ private struct MemberRowView: View {
 
             Spacer()
 
-            if member.isBound {
+            if isBound {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.sub.opacity(0.45))
             } else {
-                Button {} label: {
+                Button(action: onBind) {
                     HStack(spacing: 6) {
                         Image(systemName: "wave.3.right")
                             .font(.system(size: 12, weight: .semibold))
@@ -244,10 +320,17 @@ private struct MemberRowView: View {
             }
         }
         .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        // Long-press на привязанном участнике → запрос отвязки (тап ничего не делает — защита от
+        // случайного удаления, порт `combinedClickable` из `TeamScreen.kt`).
+        .onLongPressGesture {
+            if isBound { onUnbind() }
+        }
     }
 }
 
 // MARK: - Misc Row
+
 private struct MiscRowView: View {
     let systemImage: String
     let iconBg: Color
@@ -279,14 +362,16 @@ private struct MiscRowView: View {
                 .foregroundStyle(Color.sub.opacity(0.45))
         }
         .padding(.vertical, 3)
+        .contentShape(Rectangle())
     }
 }
 
-#Preview("Light") {
-    NavigationStack { TeamView() }
-}
-
-#Preview("Dark") {
-    NavigationStack { TeamView() }
-        .preferredColorScheme(.dark)
+/// Русское склонение «N чип(а/ов) не привязан(ы)» (порт `chipNotBoundText` из `TeamScreen.kt`).
+private func chipNotBoundText(_ n: Int) -> String {
+    let rem100 = n % 100
+    let rem10 = n % 10
+    if (11...19).contains(rem100) { return "\(n) чипов не привязаны" }
+    if rem10 == 1 { return "\(n) чип не привязан" }
+    if (2...4).contains(rem10) { return "\(n) чипа не привязаны" }
+    return "\(n) чипов не привязаны"
 }

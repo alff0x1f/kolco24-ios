@@ -183,11 +183,11 @@
 - Modify: `kolco24/TeamView.swift`
 - Create: `kolco24Tests/App/TeamModelTests.swift`
 
-- [ ] `TeamModel`: `rebind(teamId:)` перезапускает `observeForTeam` привязок; derived `boundCount`/`allBound`, статус чипа по `numberInTeam`
-- [ ] `EmptyStates.swift` ← `TeamEmptyContent.kt`: «выбери команду» (CTA → флоу) и «команда не найдена» (missing) — переиспользуются вкладками
-- [ ] `TeamView`: мок-массивы удалить; hero из реальной `Team` (порт полей: название, `teamToken`, категория, «N / total с чипом»), ростер из `team.members` + статус привязки; «Привязать» — заглушка до этапа 5; long-press → confirm → `deleteSlot` (отвязка); «Сменить команду» → флоу; pull-to-refresh → `refreshAll()`; empty/missing-состояния
-- [ ] `TeamModelTests`: boundCount/allBound от записей в сторе, реакция на upsert/deleteSlot (observation), rebind при смене команды; **stale-guard**: привязки команды A → rebind на команду B → строки A не отображаются до эмиссии B
-- [ ] прогнать тесты — must pass before task 6
+- [x] `TeamModel`: `rebind(teamId:)` перезапускает `observeForTeam` привязок; derived `boundCount`/`allBound`, статус чипа по `numberInTeam` (плюс observation категорий гонки — `category(for:)` для герой-строки; `rebind(teamId:raceId:)`)
+- [x] `EmptyStates.swift` ← `TeamEmptyContent.kt`: «выбери команду» (CTA → флоу) и «команда не найдена» (missing) — переиспользуются вкладками
+- [x] `TeamView`: мок-массивы удалить; hero из реальной `Team` (порт полей: название, `teamToken`, категория, «N / total с чипом»), ростер из `team.members` + статус привязки; «Привязать» — заглушка до этапа 5 (алерт); long-press → confirm → `deleteSlot` (отвязка); «Сменить команду» → флоу; pull-to-refresh → `refreshAll()`; empty/missing-состояния. Временный триггер флоу в `ContentView` удалён — точка входа теперь `onChooseTeam`.
+- [x] `TeamModelTests`: boundCount/allBound от записей в сторе, реакция на upsert/deleteSlot (observation), rebind при смене команды; **stale-guard**: привязки команды A → rebind на команду B → строки A не отображаются до эмиссии B (8/8)
+- [x] прогнать тесты — must pass before task 6 (весь suite зелёный: `TeamModelTests` 8/8)
 
 ### Task 6: Вкладка «Легенда» на реальных данных
 
