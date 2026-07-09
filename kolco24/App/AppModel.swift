@@ -120,6 +120,13 @@ final class AppModel {
         try? await env.selectedTeamStore.clear()
     }
 
+    /// Фабрика модели флоу выбора гонки/команды. Держит `env` инкапсулированным (вьюхи не видят
+    /// граф зависимостей): `TeamPickerModel` получает и `env`, и обратную ссылку на этот `AppModel`
+    /// (для `confirm` → `selectTeam`). `now` прокидывается для тестируемого `today`.
+    func makeTeamPickerModel(now: @escaping () -> Date = { Date() }) -> TeamPickerModel {
+        TeamPickerModel(env: env, appModel: self, now: now)
+    }
+
     // MARK: - Refresh-оркестрация (всё .cloud)
 
     /// Launch A (порт `Kolco24App.kt`): одноразовый refresh гонок + прогрев ближайшей текущей гонки

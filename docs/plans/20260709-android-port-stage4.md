@@ -167,13 +167,13 @@
 - Modify: `kolco24/ContentView.swift` (toast-overlay + `.fullScreenCover` флоу)
 - Create: `kolco24Tests/App/TeamPickerModelTests.swift`
 
-- [ ] `TeamPickerModel`: observation гонок/команд/категорий, `searchQuery`, `PickerLoad`, действия `openedCompPicker`/`raceSelected` (refresh + префетч легенды)/`confirm` (через `AppModel.selectTeam`)
-- [ ] `CompPickerView`: секции текущие/архив, пилюли статуса, автообновление, pull-to-refresh
-- [ ] `TeamPickerView`: `.searchable`, группировка по категориям, состояния `PickerLoad` (stale-кэш → toast, список остаётся)
-- [ ] `TeamConfirmSheet` (`presentationDetents([.medium])`): карточка команды + «Выбрать» → confirm → dismiss cover
-- [ ] toast-компонент в `SharedComponents` + overlay в `ContentView` по `appModel.toastMessage`; `.fullScreenCover` флоу поверх `NavigationStack` (постоянные точки входа — CTA empty-состояний и «Сменить команду» — появляются в задаче 5; для ручной проверки здесь допустим временный триггер)
-- [ ] `TeamPickerModelTests` (in-memory + `FakeTransport`): фильтрация/группировка через модель, `raceSelected` дёргает teams+legend, `PickerLoad`-маппинг из `RefreshResult` (offline/forbidden/httpError), `confirm` записывает `selected_team`
-- [ ] прогнать тесты — must pass before task 5
+- [x] `TeamPickerModel`: observation гонок/команд/категорий, `searchQuery`, `PickerLoad`, действия `openedCompPicker`/`raceSelected` (refresh + префетч легенды)/`confirm` (через `AppModel.selectTeam`)
+- [x] `CompPickerView`: секции текущие/архив, пилюли статуса, автообновление, pull-to-refresh
+- [x] `TeamPickerView`: `.searchable`, группировка по категориям, состояния `PickerLoad` (stale-кэш → toast, список остаётся)
+- [x] `TeamConfirmSheet` (`presentationDetents([.medium])`): карточка команды + «Выбрать» → confirm → dismiss cover
+- [x] toast-компонент в `SharedComponents` + overlay в `ContentView` по `appModel.toastMessage`; `.fullScreenCover` флоу поверх `NavigationStack` (постоянные точки входа — CTA empty-состояний и «Сменить команду» — появляются в задаче 5; для ручной проверки здесь допустим временный триггер)
+- [x] `TeamPickerModelTests` (in-memory + `FakeTransport`): фильтрация/группировка через модель, `raceSelected` дёргает teams+legend, `PickerLoad`-маппинг из `RefreshResult` (offline/forbidden/httpError), `confirm` записывает `selected_team`
+- [x] прогнать тесты — must pass before task 5 (596 unit-тестов зелёные, `TeamPickerModelTests` 9/9)
 
 ### Task 5: Вкладка «Команда» на реальных данных
 
