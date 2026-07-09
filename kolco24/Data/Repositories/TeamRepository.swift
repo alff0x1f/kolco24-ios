@@ -66,6 +66,8 @@ struct TeamRepository {
     /// Тянет `/app/race/<raceId>/teams/` с сохранённым ETag и на `200` заменяет команды + категории
     /// этой гонки, затем сохраняет новый ETag. Запись данных и запись ETag — две РАЗДЕЛЬНЫЕ
     /// транзакции намеренно (см. шапку файла). Pin-guard — до сети И повторно перед персистом `200`.
+    /// Сериализацию параллельных refresh'ей одного ресурса репозиторий НЕ делает (как и `class`-репо в
+    /// Kotlin — Mutex'а внутри нет) — это ответственность `SyncCoordinator` этапа 9.
     func refreshTeams(_ raceId: Int, source: SyncSource = .cloud) async throws -> RefreshResult {
         if source == .cloud && isRacePinned(raceId) { return .skipped }
         if source == .local && !isRacePinned(raceId) { return .skipped }

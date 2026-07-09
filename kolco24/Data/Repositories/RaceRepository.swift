@@ -54,6 +54,9 @@ struct RaceRepository {
 
     /// Тянет `/app/races/` с сохранённым ETag и на `200` целиком заменяет таблицу, затем сохраняет
     /// новый ETag. Запись данных и запись ETag — две РАЗДЕЛЬНЫЕ транзакции намеренно (см. шапку файла).
+    /// Сериализацию параллельных refresh'ей одного ресурса репозиторий НЕ делает (как и `class`-репо в
+    /// Kotlin — Mutex'а внутри нет) — это ответственность `SyncCoordinator` этапа 9 (единственный
+    /// вызывающий); сам метод переносит только серверный контракт «данные → ETag».
     func refreshRaces(source: SyncSource = .cloud) async throws -> RefreshResult {
         let client: ApiClient
         let originKey: String

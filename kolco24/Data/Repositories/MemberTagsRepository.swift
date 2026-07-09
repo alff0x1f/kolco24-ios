@@ -82,6 +82,8 @@ struct MemberTagsRepository {
     /// Тянет `/app/race/<raceId>/member_tags/` с сохранённым ETag и на `200` заменяет строки этой
     /// гонки, затем сохраняет новый ETag (или synced-маркер, если ETag'а нет). Данные и ETag — две
     /// РАЗДЕЛЬНЫЕ транзакции. Pin-guard — до сети И повторно перед персистом `200`.
+    /// Сериализацию параллельных refresh'ей одного ресурса репозиторий НЕ делает (как и `class`-репо в
+    /// Kotlin — Mutex'а внутри нет) — это ответственность `SyncCoordinator` этапа 9.
     func refreshMemberTags(_ raceId: Int, source: SyncSource = .cloud) async throws -> RefreshResult {
         if source == .cloud && isRacePinned(raceId) { return .skipped }
         if source == .local && !isRacePinned(raceId) { return .skipped }

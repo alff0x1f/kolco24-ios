@@ -79,7 +79,8 @@ struct LegendRepository {
     /// гонки, upsert'ит агрегаты, затем сохраняет новый ETag. Запись данных и запись ETag —
     /// РАЗДЕЛЬНЫЕ транзакции намеренно (краш между ними оставляет свежие данные со старым ETag →
     /// следующий refresh получит лишний `200` и самоизлечится). Pin-guard — до сети И повторно
-    /// перед персистом `200`.
+    /// перед персистом `200`. Сериализацию параллельных refresh'ей одного ресурса репозиторий НЕ делает
+    /// (как и `class`-репо в Kotlin — Mutex'а внутри нет) — это ответственность `SyncCoordinator` этапа 9.
     func refreshLegend(_ raceId: Int, source: SyncSource = .cloud) async throws -> RefreshResult {
         if source == .cloud && isRacePinned(raceId) { return .skipped }
         if source == .local && !isRacePinned(raceId) { return .skipped }
