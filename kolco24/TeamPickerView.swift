@@ -146,29 +146,28 @@ struct TeamPickerView: View {
         return name.isEmpty ? "Без категории" : name
     }
 
+    @ViewBuilder
     private var emptyState: some View {
         switch model.load {
         case .forbidden:
-            return AnyView(PickerStatusCard(
+            PickerStatusCard(
                 title: "Обновите приложение",
                 message: "Текущая версия больше не поддерживается сервером."
-            ))
+            )
         case .offline, .httpError:
-            return AnyView(PickerStatusCard(
+            PickerStatusCard(
                 title: "Не удалось загрузить команды",
                 message: "Проверьте соединение и попробуйте ещё раз.",
                 retryLabel: "Повторить",
                 onRetry: { Task { await model.refreshTeams() } }
-            ))
-        default:
-            return AnyView(
-                Text("Пока никто не зарегистрирован")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.sub)
-                    .padding(.horizontal, DS.hPad)
-                    .padding(.vertical, 30)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             )
+        default:
+            Text("Пока никто не зарегистрирован")
+                .font(.system(size: 15))
+                .foregroundStyle(Color.sub)
+                .padding(.horizontal, DS.hPad)
+                .padding(.vertical, 30)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

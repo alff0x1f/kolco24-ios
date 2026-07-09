@@ -368,10 +368,5 @@ private struct MiscRowView: View {
 
 /// Русское склонение «N чип(а/ов) не привязан(ы)» (порт `chipNotBoundText` из `TeamScreen.kt`).
 private func chipNotBoundText(_ n: Int) -> String {
-    let rem100 = n % 100
-    let rem10 = n % 10
-    if (11...19).contains(rem100) { return "\(n) чипов не привязаны" }
-    if rem10 == 1 { return "\(n) чип не привязан" }
-    if (2...4).contains(rem10) { return "\(n) чипа не привязаны" }
-    return "\(n) чипов не привязаны"
+    "\(n) \(pluralRu(count: n, one: "чип не привязан", few: "чипа не привязаны", many: "чипов не привязаны"))"
 }
