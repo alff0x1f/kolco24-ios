@@ -8,8 +8,8 @@
 //  «в полёте» (`checks++ > 0` / `checks++ == 0` из Kotlin); `firstValue` берёт первое значение
 //  `AsyncValueObservation` (аналог `flow.first()`).
 //
-//  `RaceRepositoryTests` (задача 5) держит собственный `private` `TraceLog`/`callSequence` — они
-//  file-scoped и не конфликтуют с этими internal-версиями.
+//  `RaceRepositoryTests` использует этот общий `TraceLog`, а собственным держит только file-private
+//  helper `callSequence` — он не конфликтует с этими internal-версиями.
 //
 
 import Foundation
