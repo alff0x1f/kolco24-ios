@@ -167,11 +167,11 @@ enum RefreshResult: Equatable { case updated, notModified, offline, forbidden, h
 - Create: `kolco24Tests/Net/FakeTransport.swift` (очередь ответов + журнал `URLRequest` — общий для задач 3–8)
 - Create: `kolco24Tests/Net/ApiClientTests.swift` (часть 1: пайплайн)
 
-- [ ] `struct ApiClient` с полями-замыканиями по Solution Overview (**`nowSeconds`/`onServerTime` — `async`, await inline**: retry-решение читает `nowSeconds()` строго после завершения `onServerTime` — иначе самолечение 403 флаки); приватный пайплайн `get`/`post`: построение `URLRequest` → 6 заголовков подписи (`buildCanonical`/`sign` этапа 1, `X-App-Platform: ios`) → транспорт с замером RTT по `elapsedNowMs` → `ServerTimeSampler` → `await onServerTime?` → 403-retry-once для GET/HEAD при сменившемся `ts`
-- [ ] generic `post`: тело сериализуется один раз в `Data`, эти байты хэшируются и отправляются; маппинг статусов в `PostResult` (400/401/403/409/429, `URLError` → `.offline`, парс-ошибка → `.error(nil)`); POST никогда не ретраится
-- [ ] `Authorization: Bearer` при `tokenProvider() != nil`, не входит в канонику
-- [ ] тесты (зеркала `ApiClientTest.kt` + retry-матрица из `SigningTest.kt`): все 6 заголовков присутствуют, подпись сверяется пересчётом над перехваченным запросом, empty-body hash у GET, POST-тело хэшируется байт-в-байт, bearer добавлен/опущен; retry-матрица — GET ретраится один раз при сменившемся ts / не ретраится при том же ts / POST никогда / нет retry на 200; `onServerTime` вызван (в т.ч. на 403), у клиента с `onServerTime = nil` — нет
-- [ ] прогнать тесты — must pass before task 4
+- [x] `struct ApiClient` с полями-замыканиями по Solution Overview (**`nowSeconds`/`onServerTime` — `async`, await inline**: retry-решение читает `nowSeconds()` строго после завершения `onServerTime` — иначе самолечение 403 флаки); приватный пайплайн `get`/`post`: построение `URLRequest` → 6 заголовков подписи (`buildCanonical`/`sign` этапа 1, `X-App-Platform: ios`) → транспорт с замером RTT по `elapsedNowMs` → `ServerTimeSampler` → `await onServerTime?` → 403-retry-once для GET/HEAD при сменившемся `ts`
+- [x] generic `post`: тело сериализуется один раз в `Data`, эти байты хэшируются и отправляются; маппинг статусов в `PostResult` (400/401/403/409/429, `URLError` → `.offline`, парс-ошибка → `.error(nil)`); POST никогда не ретраится
+- [x] `Authorization: Bearer` при `tokenProvider() != nil`, не входит в канонику
+- [x] тесты (зеркала `ApiClientTest.kt` + retry-матрица из `SigningTest.kt`): все 6 заголовков присутствуют, подпись сверяется пересчётом над перехваченным запросом, empty-body hash у GET, POST-тело хэшируется байт-в-байт, bearer добавлен/опущен; retry-матрица — GET ретраится один раз при сменившемся ts / не ретраится при том же ts / POST никогда / нет retry на 200; `onServerTime` вызван (в т.ч. на 403), у клиента с `onServerTime = nil` — нет
+- [x] прогнать тесты — must pass before task 4
 
 ### Task 4: ApiClient — эндпоинты и условные GET
 
