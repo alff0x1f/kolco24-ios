@@ -13,7 +13,10 @@
 
 import Foundation
 
-final class FakeTransport {
+/// Потокобезопасен (`@unchecked Sendable` + `NSLock`): этап 4 гоняет параллельные fan-out'ы
+/// (`async let` refreshTeams/refreshLegend/refreshMemberTags), которые бьют `handle` из нескольких
+/// задач одновременно — без замка одновременная мутация `queue`/`recorded` (Swift Array) = UB/креш.
+final class FakeTransport: @unchecked Sendable {
 
     private struct Prepared {
         let statusCode: Int
@@ -21,10 +24,15 @@ final class FakeTransport {
         let body: Data
     }
 
-    private var queue: [Result<Prepared, Error>] = []
+    private let lock = NSLock()
+    private var _queue: [Result<Prepared, Error>] = []
+    private var _recorded: [URLRequest] = []
 
     /// Журнал перехваченных запросов в порядке отправки (проверка заголовков/пути/тела/подписи).
-    private(set) var recorded: [URLRequest] = []
+    var recorded: [URLRequest] {
+        lock.lock(); defer { lock.unlock() }
+        return _recorded
+    }
 
     /// Последний перехваченный запрос (частый случай — один вызов на тест).
     var last: URLRequest? { recorded.last }
@@ -33,7 +41,8 @@ final class FakeTransport {
     var callCount: Int { recorded.count }
 
     func enqueue(statusCode: Int, headers: [String: String] = [:], body: Data = Data()) {
-        queue.append(.success(Prepared(statusCode: statusCode, headers: headers, body: body)))
+        lock.lock(); defer { lock.unlock() }
+        _queue.append(.success(Prepared(statusCode: statusCode, headers: headers, body: body)))
     }
 
     func enqueue(statusCode: Int, headers: [String: String] = [:], bodyString: String) {
@@ -42,15 +51,20 @@ final class FakeTransport {
 
     /// Транспортный обрыв — `handle` бросит `error` (обычно `URLError`).
     func enqueueError(_ error: Error) {
-        queue.append(.failure(error))
+        lock.lock(); defer { lock.unlock() }
+        _queue.append(.failure(error))
     }
 
     /// Bound-метод для `ApiClient.transport`. Записывает запрос и отдаёт следующий заготовленный
     /// ответ (или бросает заготовленную ошибку).
     func handle(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        recorded.append(request)
-        precondition(!queue.isEmpty, "FakeTransport: очередь ответов пуста")
-        switch queue.removeFirst() {
+        let next: Result<Prepared, Error> = {
+            lock.lock(); defer { lock.unlock() }
+            _recorded.append(request)
+            precondition(!_queue.isEmpty, "FakeTransport: очередь ответов пуста")
+            return _queue.removeFirst()
+        }()
+        switch next {
         case .failure(let error):
             throw error
         case .success(let prepared):

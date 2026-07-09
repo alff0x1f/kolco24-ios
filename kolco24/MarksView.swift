@@ -1,84 +1,264 @@
+//
+//  MarksView.swift
+//  kolco24
+//
+//  Вкладка «Отметки» на реальных данных. Порт ПОВЕДЕНИЯ `ui/marks/MarksScreen.kt`: метрики + сетка
+//  тайлов взятий выбранной команды из БД, лестница пустых состояний (выбери команду / привяжи чипы /
+//  готов). Данные и derived — из `MarksModel` (наблюдение взятий/КП/агрегатов/привязок).
+//
+//  Тайл на complete-взятие (oldest-first), существующий дизайн (`NFCTileView`/`PhotoTileView`).
+//  `PhotoTile`/лайтбокс и `ScanSheet` остаются заглушками (этапы 5/7). «ДО КВ» в метриках —
+//  плейсхолдер «—» (источника нет, как в Android). Нудж «привяжи чипы» ведёт на вкладку «Команда»
+//  (`onBindChips`).
+//
+
 import SwiftUI
-
-// MARK: - Model
-struct CheckpointTile: Identifiable {
-    let id = UUID()
-    let kind: Kind
-    let number: String
-    let cost: Int
-    let time: String
-    var thumb: Thumb?
-
-    enum Kind { case nfc, photo }
-    enum Thumb { case birch, triangle, rock }
-}
-
-// MARK: - Mock data
-private let mockTiles: [CheckpointTile] = [
-    .init(kind: .nfc,   number: "00", cost: 0, time: "10:16"),
-    .init(kind: .photo, number: "02", cost: 2, time: "11:42", thumb: .birch),
-    .init(kind: .nfc,   number: "04", cost: 3, time: "12:08"),
-    .init(kind: .photo, number: "07", cost: 4, time: "13:22", thumb: .triangle),
-    .init(kind: .nfc,   number: "11", cost: 5, time: "13:34"),
-    .init(kind: .nfc,   number: "13", cost: 5, time: "13:58"),
-    .init(kind: .photo, number: "16", cost: 3, time: "14:21", thumb: .rock),
-    .init(kind: .nfc,   number: "21", cost: 4, time: "14:47"),
-]
 
 // MARK: - MarksView
 struct MarksView: View {
+    @Environment(AppModel.self) private var appModel
+    @State private var model: MarksModel?
     @State private var showScan = false
-
-    private let tiles = mockTiles
-    private var totalCost: Int { tiles.reduce(0) { $0 + $1.cost } }
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 4)
+    /// Точка входа во флоу выбора команды (пробрасывается хостом; в превью — no-op).
+    var onChooseTeam: () -> Void = {}
+    /// Переход на вкладку «Команда» для привязки чипов (нудж пустого состояния).
+    var onBindChips: () -> Void = {}
 
     var body: some View {
-        ScrollView {
+        content
+            .background(Color.paper)
+            .navigationTitle("Отметки")
+            .navigationBarTitleDisplayMode(.inline)
+            .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
+                if model == nil { model = appModel.makeMarksModel() }
+                model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                FloatingCTAView(onNFC: { showScan = true }, onPhoto: {})
+            }
+            .sheet(isPresented: $showScan) {
+                ScanSheet()
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch appModel.selectedTeamState {
+        case .loading:
+            // Подавляем мигание empty-состояния до первой эмиссии observation.
+            Color.paper
+        case .missing:
+            TeamEmptyState(missing: true, onChooseTeam: onChooseTeam)
+        case .none:
+            marksScreen(team: nil)
+        case .present(let team):
+            marksScreen(team: team)
+        }
+    }
+
+    private func marksScreen(team: Team?) -> some View {
+        let members = team?.members.sorted { $0.numberInTeam < $1.numberInTeam } ?? []
+        let tiles = model?.tiles ?? []
+        let hidden = model?.hiddenTakenTokens ?? []
+        let emptyState = model?.emptyState(hasTeam: team != nil, members: members) ?? .none
+
+        return ScrollView {
             VStack(spacing: 0) {
-                // Metrics card
-                HStack(spacing: 6) {
-                    MetricView(label: "Взято", value: "\(tiles.count)", unit: "КП")
-                    VDivider()
-                    MetricView(label: "Сумма", value: "\(totalCost)", unit: "бал.")
-                    VDivider()
-                    MetricView(label: "До КВ", value: "10:19", isWarning: true)
-                }
-                .padding(.horizontal, 18)
-                .background(Color.card)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+                MetricsCard(
+                    takenKp: model?.takenKp ?? 0,
+                    totalKp: model?.totalKp ?? 0,
+                    takenScore: model?.takenScore ?? 0,
+                    totalCost: model?.totalCost ?? 0
+                )
                 .padding(.horizontal, DS.hPad)
                 .padding(.bottom, 14)
 
-                SectionHeader("Сегодня · 10 окт")
+                if !hidden.isEmpty {
+                    HiddenKpNotice(tokens: hidden)
+                        .padding(.horizontal, DS.hPad)
+                        .padding(.bottom, 14)
+                }
 
-                LazyVGrid(columns: columns, spacing: 2) {
-                    ForEach(tiles) { tile in
-                        if tile.kind == .nfc {
-                            NFCTileView(tile: tile)
-                        } else {
-                            PhotoTileView(tile: tile)
+                if tiles.isEmpty {
+                    MarksEmptyLadder(
+                        state: emptyState,
+                        boundCount: model?.boundCount(members: members) ?? 0,
+                        memberCount: members.count,
+                        onChooseTeam: onChooseTeam,
+                        onBindChips: onBindChips
+                    )
+                    .padding(.top, 24)
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 4), spacing: 2) {
+                        ForEach(Array(tiles.enumerated()), id: \.offset) { _, tile in
+                            if tile.kind == .nfc {
+                                NFCTileView(tile: tile)
+                            } else {
+                                PhotoTileView(tile: tile)
+                            }
                         }
                     }
-                }
-                .padding(.bottom, 14)
-
-                NFCStripView()
-                    .padding(.horizontal, DS.hPad)
                     .padding(.bottom, 14)
+
+                    NFCStripView()
+                        .padding(.horizontal, DS.hPad)
+                        .padding(.bottom, 14)
+                }
             }
             .padding(.top, 8)
         }
         .background(Color.paper)
-        .navigationTitle("Отметки")
-        .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            FloatingCTAView(onNFC: { showScan = true }, onPhoto: {})
+        .refreshable { await appModel.refreshAll() }
+    }
+}
+
+// MARK: - Metrics Card
+private struct MetricsCard: View {
+    let takenKp: Int
+    let totalKp: Int
+    let takenScore: Int
+    let totalCost: Int
+
+    // Скрываем «/0», пока сервер не прислал агрегаты легенды (порт гейта `totalKp > 0`).
+    private var takenValue: String { totalKp > 0 ? "\(takenKp)/\(totalKp)" : "\(takenKp)" }
+    private var scoreValue: String { totalCost > 0 ? "\(takenScore)/\(totalCost)" : "\(takenScore)" }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            MetricView(label: "Взято", value: takenValue, unit: "КП")
+            VDivider()
+            MetricView(label: "Сумма", value: scoreValue, unit: "бал.")
+            VDivider()
+            // «ДО КВ» — плейсхолдер: источника контрольного времени пока нет (как в Android).
+            MetricView(label: "До КВ", value: "—")
         }
-        .sheet(isPresented: $showScan) {
-            ScanSheet()
+        .padding(.horizontal, 18)
+        .background(Color.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+    }
+}
+
+// MARK: - Hidden-КП Notice («взято, баллы скрыты»)
+private struct HiddenKpNotice: View {
+    let tokens: [String]
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(Color.ink.opacity(0.06))
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.sub)
+            }
+            .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Взято, баллы пока скрыты")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.ink)
+                Text(tokensLabel(tokens))
+                    .font(.mono(12, weight: .semibold))
+                    .foregroundStyle(Color.sub)
+            }
+            Spacer(minLength: 0)
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.card)
+        .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+        .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+    }
+}
+
+// MARK: - Empty Ladder (порт MarksEmpty, NFC-ветки — этап 5)
+private struct MarksEmptyLadder: View {
+    let state: MarksEmptyState
+    let boundCount: Int
+    let memberCount: Int
+    let onChooseTeam: () -> Void
+    let onBindChips: () -> Void
+
+    var body: some View {
+        switch state {
+        case .none:
+            EmptyView()
+        case .chooseTeam:
+            emptyContent(
+                glyph: "person.3.fill",
+                headline: "Отметок пока нет",
+                body: "Выберите соревнование и команду — отметки появятся здесь.",
+                ctaLabel: "Выбрать команду",
+                onCta: onChooseTeam
+            )
+        case .bindChips:
+            emptyContent(
+                glyph: "link",
+                headline: "Привяжите чипы участникам",
+                body: "Отметка засчитывается, только когда отмечены все участники команды. Сейчас с чипом \(boundCount) из \(memberCount).",
+                ctaLabel: "Привязать чипы",
+                onCta: onBindChips
+            )
+        case .ready:
+            emptyContent(
+                glyph: "wave.3.right",
+                headline: "Здесь появятся отметки",
+                body: "Приложите телефон к метке КП — отметка добавится сюда.",
+                ctaLabel: nil,
+                onCta: nil
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func emptyContent(
+        glyph: String,
+        headline: String,
+        body: String,
+        ctaLabel: String?,
+        onCta: (() -> Void)?
+    ) -> some View {
+        VStack(spacing: 0) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(
+                        Color.kolcoOrange.opacity(0.4),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [5, 5])
+                    )
+                    .frame(width: 88, height: 88)
+                Image(systemName: glyph)
+                    .font(.system(size: 34))
+                    .foregroundStyle(Color.kolcoOrange.opacity(0.8))
+            }
+
+            Text(headline)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.ink)
+                .multilineTextAlignment(.center)
+                .padding(.top, 22)
+
+            Text(body)
+                .font(.system(size: 14))
+                .foregroundStyle(Color.sub)
+                .multilineTextAlignment(.center)
+                .padding(.top, 8)
+
+            if let ctaLabel, let onCta {
+                Button(action: onCta) {
+                    Text(ctaLabel)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(height: 48)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.kolcoOrange)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.ctaRadius))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 22)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
     }
 }
 
@@ -86,7 +266,7 @@ struct MarksView: View {
 // Dark "chip card": fixed-dark in both themes (like DarkHeroBackground),
 // not adaptive tokens. Contactless arcs glyph + big mono number.
 private struct NFCTileView: View {
-    let tile: CheckpointTile
+    let tile: MarkTile
 
     var body: some View {
         GeometryReader { geo in
@@ -155,17 +335,14 @@ private struct ContactlessGlyph: View {
 }
 
 // MARK: - Photo Tile
+// Заглушка до этапа 7 (реального фото нет): гладкий градиент с CP-бейджем.
 private struct PhotoTileView: View {
-    let tile: CheckpointTile
+    let tile: MarkTile
 
-    private var gradient: LinearGradient {
-        switch tile.thumb {
-        case .birch:    return LinearGradient(colors: [Color(hex: "DCD3B0"), Color(hex: "8FA178"), Color(hex: "5B6A4A")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case .triangle: return LinearGradient(colors: [Color(hex: "B7C4D3"), Color(hex: "6E7E94"), Color(hex: "2C3845")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case .rock:     return LinearGradient(colors: [Color(hex: "C8BFA6"), Color(hex: "897E62"), Color(hex: "4A4233")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        default:        return LinearGradient(colors: [Color(hex: "C7C0A6"), Color(hex: "A8A085")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-    }
+    private let gradient = LinearGradient(
+        colors: [Color(hex: "C7C0A6"), Color(hex: "A8A085")],
+        startPoint: .topLeading, endPoint: .bottomTrailing
+    )
 
     var body: some View {
         ZStack {
@@ -272,13 +449,4 @@ private struct FloatingCTAView: View {
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
     }
-}
-
-#Preview("Light") {
-    NavigationStack { MarksView() }
-}
-
-#Preview("Dark") {
-    NavigationStack { MarksView() }
-        .preferredColorScheme(.dark)
 }

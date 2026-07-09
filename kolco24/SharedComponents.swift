@@ -103,6 +103,24 @@ struct GreenCheckCircle: View {
     }
 }
 
+// MARK: - ToastBanner
+// Небольшая капсула-тост над таб-баром (ошибки refresh). Charcoal-фон + белый текст читаются в обеих
+// темах; авто-скрытие (~3 с) — на стороне хоста (`ContentView` через `.task(id:)`).
+struct ToastBanner: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(Capsule().fill(Color.charcoal))
+            .shadow(color: Color.cardShadow, radius: 8, y: 3)
+            .padding(.horizontal, 24)
+    }
+}
+
 // MARK: - DarkHeroBackground
 // Shared between TeamHero and TimerHero
 struct DarkHeroBackground: View {
