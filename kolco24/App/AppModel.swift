@@ -133,6 +133,12 @@ final class AppModel {
         TeamModel(env: env)
     }
 
+    /// Фабрика модели вкладки «Легенда» (наблюдение КП/агрегатов/взятий). Держит `env`
+    /// инкапсулированным.
+    func makeLegendModel() -> LegendModel {
+        LegendModel(env: env)
+    }
+
     // MARK: - Refresh-оркестрация (всё .cloud)
 
     /// Launch A (порт `Kolco24App.kt`): одноразовый refresh гонок + прогрев ближайшей текущей гонки
@@ -154,6 +160,12 @@ final class AppModel {
         async let legend = try? env.legendRepository.refreshLegend(raceId)
         async let tags = try? env.memberTagsRepository.refreshMemberTags(raceId)
         publishError(from: [await teams, await legend, await tags])
+    }
+
+    /// Pull-to-refresh «Легенды»: точечный refresh легенды гонки [raceId], ошибка → `toastMessage`.
+    func refreshLegend(raceId: Int) async {
+        let result = try? await env.legendRepository.refreshLegend(raceId)
+        publishError(from: [result])
     }
 
     /// Pull-to-refresh «Команды»: fan-out всех 4 refresh для текущей гонки, тост — первая ошибка.

@@ -196,10 +196,10 @@
 - Modify: `kolco24/LegendView.swift`
 - Create: `kolco24Tests/App/LegendModelTests.swift`
 
-- [ ] `LegendModel`: observation checkpoints/legendMeta/marks; derived через `LegendDisplay`/`MarkMetrics` (`takenIds`, `takenScore`, `takenScoring`, `lockedCount`, группы по цвету, прогресс `takenScore/totalCost`)
-- [ ] `LegendView`: мок-массив удалить; `LegendCP` из `Checkpoint` (locked → скелетон-строка, карточка «Скрыто N КП»); ScoreCard от `legend_meta`; фильтр «Все/Не взятые»; pull-to-refresh → `refreshLegend`; empty-состояние без команды
-- [ ] `LegendModelTests` (in-memory): derived-значения от засеянных строк (locked/open/taken), реакция на reveal (стор `checkpointStore.reveal`) и на смену команды; **stale-guard**: КП/marks гонки A → rebind на гонку B → строки A не участвуют в derived до эмиссии B
-- [ ] прогнать тесты — must pass before task 7
+- [x] `LegendModel`: observation checkpoints/legendMeta/marks; derived через `LegendDisplay`/`MarkMetrics` (`takenIds`, `takenScore`, `takenScoring`, `lockedCount`, прогресс `takenScore/totalCost`). ⚠️ Отступление: цвет-группы (`groupCheckpointsByColor`) в модель НЕ выведены — существующий iOS-дизайн вкладки плоский список (не цвет-карточки Android), функция остаётся Core-уровня (покрыта `LegendDisplayTests`); модель отдаёт `visibleCheckpoints(showOnlyOpen:)` (плоский фильтр). `isScoring` из `LegendDisplay` используется в `takenScoring`.
+- [x] `LegendView`: мок-массив удалён; строки из `Checkpoint` (locked → скелетон-строка с `lockedSkeletonBars`, карточка «Скрыто N КП» через `DarkHeroBackground`); ScoreCard от `legend_meta` (`total_cost`/`scoring_count`, «/0» скрыт); фильтр «Все/Не взятые»; pull-to-refresh → `AppModel.refreshLegend`; empty/`missing` без команды через `TeamEmptyState` (онбординг), `.loading` подавляет мигание
+- [x] `LegendModelTests` (in-memory): derived-значения от засеянных строк (locked/open/taken/технический cost 0), реакция на reveal (`checkpointStore.reveal`), на новое взятие и на смену команды/гонки; **stale-guard**: КП/marks гонки A → rebind на гонку B → строки A не участвуют в derived до эмиссии B (8/8)
+- [x] прогнать тесты — must pass before task 7 (полный suite зелёный: 616 «passed on», 0 падений; `LegendModelTests` 8/8)
 
 ### Task 7: Вкладка «Отметки» на реальных данных
 

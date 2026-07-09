@@ -20,7 +20,7 @@ struct ContentView: View {
                 NavigationStack { MarksView() }
                     .tabItem { Label("Отметки", systemImage: "flag.fill") }
                     .tag(0)
-                NavigationStack { LegendView() }
+                NavigationStack { LegendView(onChooseTeam: { showPicker = true }) }
                     .tabItem { Label("Легенда", systemImage: "map.fill") }
                     .tag(1)
                 NavigationStack {
