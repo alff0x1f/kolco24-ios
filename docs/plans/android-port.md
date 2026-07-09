@@ -36,6 +36,9 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 - UserDefaults-хранилища: `InstallId`, `ClockAnchorStore` + `TrustedClock.makeDefault()`. `ThemePreference`/`TrackProfilePreference` и Keychain-`AdminTokenStore` отложены (этапы 8–10).
 
 ### Этап 3. Сеть и синхронизация
+
+✅ выполнен — см. [детальный план](completed/20260709-android-port-stage3.md).
+
 - `ApiClient` на URLSession: подпись 6 заголовками (`X-App-Platform: ios`), `ServerTimeInterceptor` (якорь TrustedClock по заголовку Date), retry-once на 403 для GET.
 - Условные GET с ETag/304 и типы `FetchResult`/`PostResult` (ошибки не бросаются).
 - 4 sync-репозитория: Race/Team/Legend/MemberTags (паттерн «persist → потом ETag»), `LegendRepository.unlock` поверх крипто из этапа 1.
@@ -75,7 +78,7 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 ## Принципы
 - После этапов 3–5 приложение уже полезно участнику на гонке (легенда + отметки локально); загрузка (этап 6) делает его боевым — это MVP-граница.
 - Каждый чистый модуль этапа 1 переносится вместе со своими тестами — это спецификация поведения.
-- Источник правды по контракту API: `kolco24_app_v2/docs/API.md`, `docs/design/API.md`, `docs/design/UPLOAD.md`.
+- Источник правды по контракту API: `kolco24_app_v2/docs/design/API.md`, `docs/design/UPLOAD.md`.
 - Эндпоинт judge_scans на сервере ещё не реализован — на iOS ряды просто останутся pending, как и на Android.
 
 ## Верификация
