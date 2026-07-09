@@ -288,23 +288,4 @@ private func callSequence(_ lines: [String]) -> [String] {
     return out
 }
 
-/// Потокобезопасный журнал трассируемого SQL (`Database.trace` дёргается на очереди соединения).
-private final class TraceLog: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [String] = []
-
-    var lines: [String] {
-        lock.lock(); defer { lock.unlock() }
-        return storage
-    }
-
-    func append(_ line: String) {
-        lock.lock(); defer { lock.unlock() }
-        storage.append(line)
-    }
-
-    func reset() {
-        lock.lock(); defer { lock.unlock() }
-        storage.removeAll()
-    }
-}
+// `TraceLog` теперь общий — в `RepositoryTestSupport.swift` (задача 6).

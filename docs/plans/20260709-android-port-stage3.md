@@ -200,11 +200,11 @@ enum RefreshResult: Equatable { case updated, notModified, offline, forbidden, h
 - Create: `kolco24/Data/Repositories/TeamRepository.swift`, `MemberTagsRepository.swift`
 - Create: `kolco24Tests/Data/Repositories/TeamRepositoryTests.swift`, `MemberTagsRepositoryTests.swift`
 
-- [ ] общий refresh-поток с pin-guard (до вызова **и** повторно после 200) через `isRacePinned`-seam; маппинги DTO → `Team`/`TeamMemberItem`/`Category` (`order`→`sortOrder`, ms-время) и `MemberTag`
-- [ ] `MemberTagsRepository`: synced-маркер на любой 200, чистка маркера+ETag другого origin перед заменой, `hasBeenSynced()`/`observeHasBeenSynced()`
-- [ ] `TeamRepositoryTests` ← `TeamRepositoryTest.kt` (18): всё из задачи 5 + полная pin-guard-матрица (pinned-cloud → skipped, unpinned-local → skipped, pin появился в полёте → после 200 не персистит, pin исчез в полёте, unpinned-cloud работает), изоляция по raceId
-- [ ] `MemberTagsRepositoryTests` ← `MemberTagsRepositoryTest.kt` (32): + synced-маркер во всех вариантах (200 без ETag, 304, forbidden, кросс-origin), `hasBeenSynced`/`observeHasBeenSynced`
-- [ ] прогнать тесты — must pass before task 7
+- [x] общий refresh-поток с pin-guard (до вызова **и** повторно после 200) через `isRacePinned`-seam; маппинги DTO → `Team`/`TeamMemberItem`/`Category` (`order`→`sortOrder`, ms-время) и `MemberTag`
+- [x] `MemberTagsRepository`: synced-маркер на любой 200, чистка маркера+ETag другого origin перед заменой, `hasBeenSynced()`/`observeHasBeenSynced()`
+- [x] `TeamRepositoryTests` ← `TeamRepositoryTest.kt` (18): всё из задачи 5 + полная pin-guard-матрица (pinned-cloud → skipped, unpinned-local → skipped, pin появился в полёте → после 200 не персистит, pin исчез в полёте, unpinned-cloud работает), изоляция по raceId
+- [x] `MemberTagsRepositoryTests` ← `MemberTagsRepositoryTest.kt` (32): + synced-маркер во всех вариантах (200 без ETag, 304, forbidden, кросс-origin), `hasBeenSynced`/`observeHasBeenSynced`
+- [x] прогнать тесты — must pass before task 7
 
 ### Task 7: LegendRepository (3 store + unlock)
 
