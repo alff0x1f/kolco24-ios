@@ -155,10 +155,10 @@ enum RefreshResult: Equatable { case updated, notModified, offline, forbidden, h
 - Create: `kolco24/Net/Dto/RacesResponse.swift`, `TeamsResponse.swift`, `LegendResponse.swift`, `MemberTagsResponse.swift`, `SyncManifest.swift`
 - Create: `kolco24Tests/Net/DtoDecodingTests.swift`
 
-- [ ] `FetchResult<T>`/`PostResult<T>` по Technical Details (enum'ы, ошибки не бросаются)
-- [ ] 5 DTO-файлов ← `data/api/dto/*.kt`: Codable, CodingKeys точечно, forward-compat-дефолты через `decodeIfPresent ?? default`, все ловушки из Technical Details закомментированы у полей (ms-время, `paid_people: Double`, `checkpoint_id`, base64 `iv`/`ct`)
-- [ ] `DtoDecodingTests`: JSON-образцы **вшиваются в тест-файл** (источник — `kolco24_app_v2/docs/design/API.md`, в iOS-репо этого файла нет; тест самодостаточен): полный + минимальный ответ, locked-КП без `cost`/`description`, отсутствующие `total_cost`/`scoring_count`/`tags` → дефолты, незнакомые ключи (в т.ч. `sync.versions`) игнорируются, `start_number: null`
-- [ ] прогнать тесты — must pass before task 3
+- [x] `FetchResult<T>`/`PostResult<T>` по Technical Details (enum'ы, ошибки не бросаются)
+- [x] 5 DTO-файлов ← `data/api/dto/*.kt`: Codable, CodingKeys точечно, forward-compat-дефолты через `decodeIfPresent ?? default`, все ловушки из Technical Details закомментированы у полей (ms-время, `paid_people: Double`, `checkpoint_id`, base64 `iv`/`ct`)
+- [x] `DtoDecodingTests`: JSON-образцы **вшиваются в тест-файл** (источник — `kolco24_app_v2/docs/design/API.md`, в iOS-репо этого файла нет; тест самодостаточен): полный + минимальный ответ, locked-КП без `cost`/`description`, отсутствующие `total_cost`/`scoring_count`/`tags` → дефолты, незнакомые ключи (в т.ч. `sync.versions`) игнорируются, `start_number: null`
+- [x] прогнать тесты — must pass before task 3
 
 ### Task 3: ApiClient — пайплайн (подпись, серверное время, 403-retry, post)
 
