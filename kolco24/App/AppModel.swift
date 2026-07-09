@@ -139,6 +139,12 @@ final class AppModel {
         LegendModel(env: env)
     }
 
+    /// Фабрика модели вкладки «Отметки» (наблюдение взятий/КП/агрегатов/привязок). Держит `env`
+    /// инкапсулированным.
+    func makeMarksModel() -> MarksModel {
+        MarksModel(env: env)
+    }
+
     // MARK: - Refresh-оркестрация (всё .cloud)
 
     /// Launch A (порт `Kolco24App.kt`): одноразовый refresh гонок + прогрев ближайшей текущей гонки

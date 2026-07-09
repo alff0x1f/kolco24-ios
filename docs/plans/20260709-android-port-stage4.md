@@ -208,10 +208,10 @@
 - Modify: `kolco24/MarksView.swift`
 - Create: `kolco24Tests/App/MarksModelTests.swift`
 
-- [ ] `MarksModel`: observation marks/checkpoints/legendMeta/bindings; derived через `MarkMetrics`/`MarksDisplay` (`tiles`, `takenKp`, `takenScore`, `hiddenTakenTokens`, метрики, empty-лестница с подавлением до первой эмиссии — порт `marksLoading`)
-- [ ] `MarksView`: мок-массив удалить; грид из `tiles`, `MetricsCard` (ВЗЯТО/СУММА реальные, ДО КВ «—»), нотис hidden-taken; empty-лестница (выбрать команду / привязать чипы с переходом на вкладку Команда / готов); `PhotoTile`/CTA и `ScanSheet` остаются заглушками (этапы 5/7)
-- [ ] `MarksModelTests` (in-memory): tiles/метрики от засеянных marks+checkpoints (живая цена и фолбэк на снапшот, полные/неполные взятия), hidden-taken при locked, лестница empty-состояний (нет команды / не привязаны / готов), подавление до первой эмиссии; **stale-guard**: marks команды A → rebind на команду B → тайлы/метрики A не засчитаны B (порт `safeMarks`)
-- [ ] прогнать тесты — must pass before task 8
+- [x] `MarksModel`: observation marks/checkpoints/legendMeta/bindings; derived через `MarkMetrics`/`MarksDisplay` (`tiles`, `takenKp`, `takenScore`, `hiddenTakenTokens`, метрики, empty-лестница с подавлением до первой эмиссии — порт `marksLoading`)
+- [x] `MarksView`: мок-массив удалить; грид из `tiles`, `MetricsCard` (ВЗЯТО/СУММА реальные, ДО КВ «—»), нотис hidden-taken; empty-лестница (выбрать команду / привязать чипы с переходом на вкладку Команда / готов); `PhotoTile`/CTA и `ScanSheet` остаются заглушками (этапы 5/7). Точки входа: `onChooseTeam` (флоу выбора) и `onBindChips` (переход на вкладку «Команда») из `ContentView`; `.missing` рендерит `TeamEmptyState(missing:)`, pull-to-refresh → `refreshAll`
+- [x] `MarksModelTests` (in-memory): tiles/метрики от засеянных marks+checkpoints (живая цена и фолбэк на снапшот, полные/неполные взятия), hidden-taken при locked, лестница empty-состояний (нет команды / не привязаны / готов), подавление до первой эмиссии; **stale-guard**: marks команды A → rebind на команду B → тайлы/метрики A не засчитаны B (порт `safeMarks`)
+- [x] прогнать тесты — must pass before task 8 (полный suite зелёный, `MarksModelTests` 9/9)
 
 ### Task 8: Verify acceptance criteria
 

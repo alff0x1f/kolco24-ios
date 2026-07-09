@@ -17,9 +17,14 @@ struct ContentView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             TabView(selection: $selectedTab) {
-                NavigationStack { MarksView() }
-                    .tabItem { Label("Отметки", systemImage: "flag.fill") }
-                    .tag(0)
+                NavigationStack {
+                    MarksView(
+                        onChooseTeam: { showPicker = true },
+                        onBindChips: { selectedTab = 2 }
+                    )
+                }
+                .tabItem { Label("Отметки", systemImage: "flag.fill") }
+                .tag(0)
                 NavigationStack { LegendView(onChooseTeam: { showPicker = true }) }
                     .tabItem { Label("Легенда", systemImage: "map.fill") }
                     .tag(1)
