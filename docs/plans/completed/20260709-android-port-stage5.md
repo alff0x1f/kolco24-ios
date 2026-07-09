@@ -115,9 +115,9 @@
 - Create: `kolco24/Core/Marks/KpTake.swift`
 - Create: `kolco24Tests/Core/KpTakeTests.swift`
 
-- [ ] `makeKpTakeMark(id:raceId:teamId:checkpointId:number:cost:cpUid:cpCode:buffered:expectedCount:sample:) -> Mark` ← `MarkRepository.startKpTake` (127–167): UUID передаётся параметром (чистота), дедуп `buffered` по `numberInTeam`, `present` из дедупнутых слотов, `complete = expectedCount>0 && present.count>=expectedCount`, `method="nfc"`, `takenAt/updatedAt = sample.wallMs`, `trustedTakenAt/elapsedRealtimeAt/bootCount` из семпла
-- [ ] `KpTakeTests` — зеркало startKpTake-части `MarkRepositoryTest.kt` (метаданные, дедуп двойного слота не флипает `complete` раньше времени, времена, пустой буфер, complete при полном буфере)
-- [ ] прогнать тесты — must pass before task 2
+- [x] `makeKpTakeMark(id:raceId:teamId:checkpointId:number:cost:cpUid:cpCode:buffered:expectedCount:sample:) -> Mark` ← `MarkRepository.startKpTake` (127–167): UUID передаётся параметром (чистота), дедуп `buffered` по `numberInTeam`, `present` из дедупнутых слотов, `complete = expectedCount>0 && present.count>=expectedCount`, `method="nfc"`, `takenAt/updatedAt = sample.wallMs`, `trustedTakenAt/elapsedRealtimeAt/bootCount` из семпла
+- [x] `KpTakeTests` — зеркало startKpTake-части `MarkRepositoryTest.kt` (метаданные, дедуп двойного слота не флипает `complete` раньше времени, времена, пустой буфер, complete при полном буфере)
+- [x] прогнать тесты — must pass before task 2
 
 ### Task 2: Швы — ChipScanning + CurrentLocation
 
@@ -126,19 +126,19 @@
 - Create: `kolco24/Core/Track/CurrentLocation.swift`
 - Create: `kolco24Tests/Core/CurrentLocationTests.swift`
 
-- [ ] `TagReading { code: Data?; uid: String; sample: TimeSample }`; `protocol ChipScanning` (`readings() -> AsyncStream<TagReading>`, `start()`/`stop()`, сигнал отмены пользователем/недоступности NFC); `protocol ScanFeedbackPlaying` (`play(_ kind: ScanFeedbackKind)`, `fanfare()`)
-- [ ] `RawFix` (зеркало `TrackModels.kt`) + `protocol CurrentLocationProvider { current(timeoutMs:) async -> RawFix? }` + чистые хелперы: санитизация фикса (дроп невалидной accuracy, `gpsTimeMs<=0` — зеркало веток `MarkRepository.attachLocation`), проверка свежести (`MAX_FIX_AGE_MS=10_000`)
-- [ ] `CurrentLocationTests` — чистые хелперы (валидный/несвежий/грязный фикс, граничные значения)
-- [ ] прогнать тесты — must pass before task 3
+- [x] `TagReading { code: Data?; uid: String; sample: TimeSample }`; `protocol ChipScanning` (`readings() -> AsyncStream<TagReading>`, `start()`/`stop()`, сигнал отмены пользователем/недоступности NFC); `protocol ScanFeedbackPlaying` (`play(_ kind: ScanFeedbackKind)`, `fanfare()`)
+- [x] `RawFix` (зеркало `TrackModels.kt`) + `protocol CurrentLocationProvider { current(timeoutMs:) async -> RawFix? }` + чистые хелперы: санитизация фикса (дроп невалидной accuracy, `gpsTimeMs<=0` — зеркало веток `MarkRepository.attachLocation`), проверка свежести (`MAX_FIX_AGE_MS=10_000`)
+- [x] `CurrentLocationTests` — чистые хелперы (валидный/несвежий/грязный фикс, граничные значения)
+- [x] прогнать тесты — must pass before task 3
 
 ### Task 3: AppEnvironment — trustedClock + зависимости этапа 5
 
 **Files:**
 - Modify: `kolco24/App/AppEnvironment.swift`
 
-- [ ] `let trustedClock: TrustedClock`: прод из `pair.clock` (`makeShared` сейчас его теряет), `inMemory` — инжектируемый параметр с дефолтом на фейковых провайдерах
-- [ ] `let locationProvider: any CurrentLocationProvider`, `let feedback: any ScanFeedbackPlaying` — с no-op заглушками в обеих фабриках (прод-реализации подставятся в задачах 6–7); inMemory — инжектируемые для тестов
-- [ ] прогнать существующий сьют — must pass before task 4
+- [x] `let trustedClock: TrustedClock`: прод из `pair.clock` (`makeShared` сейчас его теряет), `inMemory` — инжектируемый параметр с дефолтом на фейковых провайдерах
+- [x] `let locationProvider: any CurrentLocationProvider`, `let feedback: any ScanFeedbackPlaying` — с no-op заглушками в обеих фабриках (прод-реализации подставятся в задачах 6–7); inMemory — инжектируемые для тестов
+- [x] прогнать существующий сьют — must pass before task 4
 
 ### Task 4: App/ScanModel — хост-редьюсер скан-флоу
 
@@ -147,13 +147,13 @@
 - Modify: `kolco24/App/AppModel.swift` (фабрика `makeScanModel()`)
 - Create: `kolco24Tests/App/ScanModelTests.swift`
 
-- [ ] состояние: `session: ScanSession?`, take-state (`markId`/`buffer`/`present`/`snapshots`/`lastScanAt`), `remainingSeconds`, `diagnostic: String?`, `completed`, `closeRequested` — по спецификации Technical Details §1–10
-- [ ] сканер — через шов `any ChipScanning` (инициализатор/`start(scanner:)`): тесты передают `FakeChipScanner`, прод-тип появится только в task 5 и подключится в task 8
-- [ ] обработка стрима `ChipScanning` (один `for await`): unlock → classifyTag → окно → персист (`makeKpTakeMark`→`upsert`; `addMember`) в неструктурированных `Task`; GPS-attach fire-and-forget один раз на новое взятие (`markStore.attachLocation`, nil-фикс = no-op — гвард в модели, стор принимает не-опционалы)
-- [ ] фидбек (`feedbackFor` + фанфары 275 мс на incomplete→complete), таймер окна (тик 250 мс, инжектированный `elapsedNowMs`), автозакрытия (истечение окна; complete → hold 3300 мс), `shouldRestart`-замыкание для сканера
-- [ ] `AppModel.makeScanModel()` — сборка из `env` (сторы, `legendRepository`, `trustedClock.sample`, `locationProvider`, `feedback`) + ростер/привязки выбранной команды
-- [ ] `ScanModelTests` (in-memory БД, `FakeChipScanner`, `FakeLocationProvider`, фидбек-рекордер, управляемое время): КП→участники→complete (+фанфары); участники до КП (буфер→слив в present); истечение окна→новое взятие (буфер/снапшоты чищены); участник после истечения окна → полный сброс take-state, свежий буфер (не кредитуется мёртвому взятию); смена КП сбрасывает present; unbound/badKp не двигают окно + failure-фидбек; повторный участник идемпотентен и не перештамповывает окно; «закрытие шита» не обрывает персист; GPS-attach один раз, не трогает present; отказ GPS → mark без координат; гвард «команда не выбрана»
-- [ ] прогнать тесты — must pass before task 5
+- [x] состояние: `session: ScanSession?`, take-state (`markId`/`buffer`/`present`/`snapshots`/`lastScanAt`), `remainingSeconds`, `diagnostic: String?`, `completed`, `closeRequested` — по спецификации Technical Details §1–10
+- [x] сканер — через шов `any ChipScanning` (инициализатор/`start(scanner:)`): тесты передают `FakeChipScanner`, прод-тип появится только в task 5 и подключится в task 8
+- [x] обработка стрима `ChipScanning` (один `for await`): unlock → classifyTag → окно → персист (`makeKpTakeMark`→`upsert`; `addMember`) в неструктурированных `Task`; GPS-attach fire-and-forget один раз на новое взятие (`markStore.attachLocation`, nil-фикс = no-op — гвард в модели, стор принимает не-опционалы)
+- [x] фидбек (`feedbackFor` + фанфары 275 мс на incomplete→complete), таймер окна (тик 250 мс, инжектированный `elapsedNowMs`), автозакрытия (истечение окна; complete → hold 3300 мс), `shouldRestart`-замыкание для сканера
+- [x] `AppModel.makeScanModel()` — сборка из `env` (сторы, `legendRepository`, `trustedClock.sample`, `locationProvider`, `feedback`) + ростер/привязки выбранной команды
+- [x] `ScanModelTests` (in-memory БД, `FakeChipScanner`, `FakeLocationProvider`, фидбек-рекордер, управляемое время): КП→участники→complete (+фанфары); участники до КП (буфер→слив в present); истечение окна→новое взятие (буфер/снапшоты чищены); участник после истечения окна → полный сброс take-state, свежий буфер (не кредитуется мёртвому взятию); смена КП сбрасывает present; unbound/badKp не двигают окно + failure-фидбек; повторный участник идемпотентен и не перештамповывает окно; «закрытие шита» не обрывает персист; GPS-attach один раз, не трогает present; отказ GPS → mark без координат; гвард «команда не выбрана»
+- [x] прогнать тесты — must pass before task 5
 
 ### Task 5: Nfc/ — MiFareTransport + NfcChipScanner (замена спайка)
 
@@ -163,11 +163,11 @@
 - Delete: `kolco24/NFCReader.swift`
 - Modify: `kolco24/ScanSheet.swift` (только убрать вызовы спайка — `NFCChipReader`/`NFCTestResultCard`; полная переделка — task 8)
 
-- [ ] `MiFareTransport`: `NfcTransport.transceive` поверх `sendMiFareCommand`. ⚠️ Дедлок-ловушка: `readRecord` синхронно циклит `transceive` — семафорное ожидание обязано выполняться **не** на очереди колбэков CoreNFC, иначе wait заблокирует доставку колбэка
-- [ ] чтение чипа = `normalizeNfcUid(identifier)` + чистый `readRecord`
-- [ ] `NfcChipScanner` (`ChipScanning`): длинная сессия по Technical Details (restartPolling, дебаунс ~1.5 с, `shouldRestart`-рестарт по таймауту, `alertMessage`-прогресс, отмена наверх) + одноразовый режим для bind
-- [ ] удалить спайк и **все шесть** его следов в `ScanSheet.swift`: `@State reader` (:24), `@State readResult` (:25 — тип `ChipReadResult` тоже исчезает), `NFCTestResultCard` (определение :192 + использование :74), оба вызова `reader.beginScan` (:131, :158); шит остаётся статичным моком до task 8
-- [ ] прогнать сьют (сборка + все тесты зелёные); grep-инвариант: `import CoreNFC` только под `Nfc/`
+- [x] `MiFareTransport`: `NfcTransport.transceive` поверх `sendMiFareCommand`. ⚠️ Дедлок-ловушка: `readRecord` синхронно циклит `transceive` — семафорное ожидание обязано выполняться **не** на очереди колбэков CoreNFC, иначе wait заблокирует доставку колбэка
+- [x] чтение чипа = `normalizeNfcUid(identifier)` + чистый `readRecord`
+- [x] `NfcChipScanner` (`ChipScanning`): длинная сессия по Technical Details (restartPolling, дебаунс ~1.5 с, `shouldRestart`-рестарт по таймауту, `alertMessage`-прогресс, отмена наверх) + одноразовый режим для bind
+- [x] удалить спайк и **все шесть** его следов в `ScanSheet.swift`: `@State reader` (:24), `@State readResult` (:25 — тип `ChipReadResult` тоже исчезает), `NFCTestResultCard` (определение :192 + использование :74), оба вызова `reader.beginScan` (:131, :158); шит остаётся статичным моком до task 8
+- [x] прогнать сьют (сборка + все тесты зелёные); grep-инвариант: `import CoreNFC` только под `Nfc/`
 
 ### Task 6: Location/CoreLocationProvider + разрешение геолокации
 
@@ -176,11 +176,11 @@
 - Modify: `kolco24.xcodeproj/project.pbxproj` (`INFOPLIST_KEY_NSLocationWhenInUseUsageDescription`, обе конфигурации)
 - Modify: `kolco24/App/AppEnvironment.swift` (прод-вайринг вместо заглушки)
 
-- [ ] `CoreLocationProvider` (`CurrentLocationProvider`): `requestLocation()`, accuracy best, таймаут 8 с, свежесть/санитизация через хелперы task 2, отказ/ошибка → `nil`
-- [ ] `INFOPLIST_KEY_NSLocationWhenInUseUsageDescription` («Координата в момент отметки на КП») в обе build-конфигурации
-- [ ] запрос `requestWhenInUseAuthorization` при первом открытии скан-оверлея (хук — вызовется из `ScanSheet` в task 8)
-- [ ] прод-вайринг `AppEnvironment.makeShared`
-- [ ] прогнать сьют — must pass before task 7
+- [x] `CoreLocationProvider` (`CurrentLocationProvider`): `requestLocation()`, accuracy best, таймаут 8 с, свежесть/санитизация через хелперы task 2, отказ/ошибка → `nil`
+- [x] `INFOPLIST_KEY_NSLocationWhenInUseUsageDescription` («Координата в момент отметки на КП») в обе build-конфигурации
+- [x] запрос `requestWhenInUseAuthorization` при первом открытии скан-оверлея (хук — вызовется из `ScanSheet` в task 8)
+- [x] прод-вайринг `AppEnvironment.makeShared`
+- [x] прогнать сьют — must pass before task 7
 
 ### Task 7: Audio/ScanFeedbackPlayer + WAV-ассеты
 
@@ -189,10 +189,10 @@
 - Create: `kolco24/Audio/beep_ok3.wav`, `beep_err.wav`, `checkpoint_mark_completed.wav`, `mark_added_mario.wav` (копии из `kolco24_app_v2/app/src/main/res/raw/`)
 - Modify: `kolco24/App/AppEnvironment.swift` (прод-вайринг)
 
-- [ ] скопировать 4 WAV (beep_scan/shutter не нужны до этапов 6–7); проверить, что попали в бандл (synchronized group)
-- [ ] `ScanFeedbackPlayer` (`ScanFeedbackPlaying`): `AVAudioPlayer` по плееру на клип, `.playback` + `.mixWithOthers`/`.duckOthers`; success/failure/neutral + fanfare; хаптики best-effort
-- [ ] прод-вайринг `AppEnvironment.makeShared`
-- [ ] прогнать сьют — must pass before task 8 (проверка звука на слух — Post-Completion)
+- [x] скопировать 4 WAV (beep_scan/shutter не нужны до этапов 6–7); проверить, что попали в бандл (synchronized group)
+- [x] `ScanFeedbackPlayer` (`ScanFeedbackPlaying`): `AVAudioPlayer` по плееру на клип, `.playback` + `.mixWithOthers`/`.duckOthers`; success/failure/neutral + fanfare; хаптики best-effort
+- [x] прод-вайринг `AppEnvironment.makeShared`
+- [x] прогнать сьют — must pass before task 8 (проверка звука на слух — Post-Completion)
 
 ### Task 8: Переделка ScanSheet на реальные данные
 
@@ -200,12 +200,12 @@
 - Modify: `kolco24/ScanSheet.swift`
 - Modify: `kolco24/MarksView.swift`
 
-- [ ] удалить мок-массив `mockChips`; `ScanSheet` получает `ScanModel` (через `AppModel.makeScanModel()` из `MarksView`), `.task` — старт сканера + запрос гео-разрешения при первом открытии
-- [ ] таймер-хиро от реального окна (`remainingSeconds`, «КП и ещё N чипов»), карточка КП «?» → номер + цена после `.kp`, грид слотов из реального ростера + `session.present`/привязок, строка диагностики (`badKp`/`unboundChip`)
-- [ ] кнопки: «Сканировать чип» удалить; «Готово» (активна после КП) и «Отменить»; любое закрытие → `scanner.stop()` + no-op hook «flush uploads» (этап 6); автозакрытия из модели (`closeRequested`)
-- [ ] превью с `FakeChipScanner` (прогон флоу в симуляторе без NFC)
-- [ ] прогнать сьют — must pass before task 9 (device-смоук чтения — Post-Completion, пользователь проверяет сам)
-- [ ] ➕ при необходимости — правки дизайна по факту системной шторки (весь ключевой статус в верхней трети экрана)
+- [x] удалить мок-массив `mockChips`; `ScanSheet` получает `ScanModel` (через `AppModel.makeScanModel()` из `MarksView`), `.task` — старт сканера + запрос гео-разрешения при первом открытии
+- [x] таймер-хиро от реального окна (`remainingSeconds`, «КП и ещё N чипов»), карточка КП «?» → номер + цена после `.kp`, грид слотов из реального ростера + `session.present`/привязок, строка диагностики (`badKp`/`unboundChip`)
+- [x] кнопки: «Сканировать чип» удалить; «Готово» (активна после КП) и «Отменить»; любое закрытие → `scanner.stop()` + no-op hook «flush uploads» (этап 6); автозакрытия из модели (`closeRequested`)
+- [x] превью с `FakeChipScanner` (прогон флоу в симуляторе без NFC)
+- [x] прогнать сьют — must pass before task 9 (device-смоук чтения — Post-Completion, пользователь проверяет сам)
+- [x] ➕ при необходимости — правки дизайна по факту системной шторки (весь ключевой статус в верхней трети экрана) — таймер-хиро + карточка КП + строка остатка чипов держатся в верхней трети скролла (над гридом), под ними встаёт системная NFC-шторка; «Готово»/«Отменить» вынесены в единый нижний ряд, кнопка «Сканировать чип» убрана
 
 ### Task 9: BindChipSheet + TeamView/TeamModel
 
@@ -215,23 +215,23 @@
 - Modify: `kolco24/App/TeamModel.swift` (bind-флоу)
 - Modify: `kolco24Tests/App/TeamModelTests.swift`
 
-- [ ] bind-логика в `TeamModel` (порт хост-вайринга ~1792–1922): по `TagReading` одноразовой сессии → пул/`hasBeenSynced`/инлайн-refresh → `findByUid` → `decideBind` → состояние листа (waiting/poolNotReady/notInPool/alreadyBound/success) + `reassign`; фидбек success/failure
-- [ ] `BindChipSheet` (SwiftUI): состояния из модели, «Перепривязать?» с подтверждением, success-автозакрытие ~900 мс; вход — тап по участнику без чипа в `TeamView` (заглушка-алерт удаляется)
-- [ ] дополнение `TeamModelTests` (in-memory БД, `FakeChipScanner`): notInPool; readyToBind → `reassign` записал слот; alreadyBound → после подтверждения слот переехал (старый слот пуст); alreadyOnThisSlot; пул пуст + не синхронизирован → poolNotReady и дёрнут `refreshMemberTags` (по журналу `FakeTransport`)
-- [ ] прогнать тесты — must pass before task 10
+- [x] bind-логика в `TeamModel` (порт хост-вайринга ~1792–1922): по `TagReading` одноразовой сессии → пул/`hasBeenSynced`/инлайн-refresh → `findByUid` → `decideBind` → состояние листа (waiting/poolNotReady/notInPool/alreadyBound/success) + `reassign`; фидбек success/failure
+- [x] `BindChipSheet` (SwiftUI): состояния из модели, «Перепривязать?» с подтверждением, success-автозакрытие ~900 мс; вход — тап по участнику без чипа в `TeamView` (заглушка-алерт удаляется)
+- [x] дополнение `TeamModelTests` (in-memory БД, `FakeChipScanner`): notInPool; readyToBind → `reassign` записал слот; alreadyBound → после подтверждения слот переехал (старый слот пуст); alreadyOnThisSlot; пул пуст + не синхронизирован → poolNotReady и дёрнут `refreshMemberTags` (по журналу `FakeTransport`)
+- [x] прогнать тесты — must pass before task 10
 
 ### Task 10: Верификация приёмки
 
-- [ ] verify: все требования Overview реализованы (скан-флоу, GPS-фикс, звук/вибро, привязка), edge-кейсы спецификации §1–10 покрыты тестами
-- [ ] полный сьют: `xcodebuild test ...` — зелёный
-- [ ] grep-инварианты: CoreNFC/CoreLocation/AVFoundation только в своих папках; `Core`/`Model`/`App`-модели без UIKit/SwiftUI/GRDB
-- [ ] сборка под device-destination (`generic/platform=iOS`) проходит — ручные проверки на устройстве делает пользователь (Post-Completion)
+- [x] verify: все требования Overview реализованы (скан-флоу, GPS-фикс, звук/вибро, привязка), edge-кейсы спецификации §1–10 покрыты тестами — `ScanModelTests` (13 кейсов: kp→участники→complete+фанфары, буфер до КП, истечение окна чистит буфер, участник после истечения не кредитуется мёртвому взятию, смена КП сбрасывает present, unbound/badKp не двигают окно + failure, идемпотентный повтор без перештампа, закрытие шита не рвёт персист, GPS один раз, отказ GPS без координат, гвард пустого ростера, автозакрытие по истечению/по completion) + `TeamModelTests` bind-часть (5 кейсов: notInPool, readyToBind пишет слот, alreadyBound→подтверждение переносит слот, alreadyOnThisSlot, poolEmptyNotSynced дёргает refresh). Дефектов не найдено.
+- [x] полный сьют: `xcodebuild test ...` — зелёный (`** TEST SUCCEEDED **`, iPhone 16 sim id=9D9F760F-C57F-4601-9619-7F249C87A655 — имя-дестинейшн неоднозначен, две iPhone 16)
+- [x] grep-инварианты: CoreNFC/CoreLocation/AVFoundation только в своих папках; `Core`/`Model`/`App`-модели без UIKit/SwiftUI/GRDB — подтверждено (CoreNFC→`Nfc/`, CoreLocation→`Location/`, AVFoundation→`Audio/`; UIKit только в `DesignTokens.swift` (пред-этап) и `Audio/ScanFeedbackPlayer.swift` (хаптики, разрешено); совпадения в App-моделях — комментарии, не импорты)
+- [x] сборка под device-destination (`generic/platform=iOS`) проходит — `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild build -project kolco24.xcodeproj -scheme kolco24 -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO` → `** BUILD SUCCEEDED **` (CODE_SIGNING_ALLOWED=NO — проверка компиляции под device-арку без провижининга); ручные проверки на устройстве делает пользователь (Post-Completion)
 
 ### Task 11: [Final] Документация
 
-- [ ] обновить `CLAUDE.md`: слои `Nfc/`/`Location/`/`Audio/`, `ScanModel`, снятие заглушек `ScanSheet`/«Привязать», расширенные grep-инварианты
-- [ ] отметить этап 5 выполненным в `docs/plans/android-port.md` (✅ + ссылка)
-- [ ] перенести этот план в `docs/plans/completed/`
+- [x] обновить `CLAUDE.md`: слои `Nfc/`/`Location/`/`Audio/`, `ScanModel`, снятие заглушек `ScanSheet`/«Привязать», расширенные grep-инварианты
+- [x] отметить этап 5 выполненным в `docs/plans/android-port.md` (✅ + ссылка)
+- [x] перенести этот план в `docs/plans/completed/`
 
 ## Post-Completion
 
