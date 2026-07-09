@@ -1,6 +1,6 @@
 # Этап 4 портирования: подключение существующего UI к реальным данным
 
-Детализация этапа 4 из [android-port.md](../plans/android-port.md). Этапы 0–3 выполнены: чистая логика (`Core/`, `Model/`), GRDB-слой (`Data/`), сеть и 4 sync-репозитория (`Net/`, `Data/Repositories/`) готовы и покрыты тестами.
+Детализация этапа 4 из [android-port.md](../android-port.md). Этапы 0–3 выполнены: чистая логика (`Core/`, `Model/`), GRDB-слой (`Data/`), сеть и 4 sync-репозитория (`Net/`, `Data/Repositories/`) готовы и покрыты тестами.
 
 ## Overview
 
@@ -228,9 +228,9 @@
 - Modify: `docs/plans/android-port.md`
 - Modify: `CLAUDE.md`
 
-- [ ] в `android-port.md` пометить этап 4 ✅ со ссылкой на этот план (по образцу этапов 0–3)
-- [ ] в `CLAUDE.md`: раздел про `App/` (AppEnvironment/AppModel/per-tab модели, SelectedTeamState, refresh-оркестрация, toast), обновить «Data model pattern» (мок-массивы больше не существуют), флоу выбора команды, новые `Core/`-модули, обновлённые grep-инварианты
-- [ ] переместить этот план в `docs/plans/completed/` (поправить ссылку в шапке на `../android-port.md`)
+- [x] в `android-port.md` пометить этап 4 ✅ со ссылкой на этот план (по образцу этапов 0–3)
+- [x] в `CLAUDE.md`: раздел про `App/` (AppEnvironment/AppModel/per-tab модели, SelectedTeamState, refresh-оркестрация, toast), обновить «Data model pattern» (мок-массивы больше не существуют), флоу выбора команды, новые `Core/`-модули, обновлённые grep-инварианты
+- [x] переместить этот план в `docs/plans/completed/` (поправить ссылку в шапке на `../android-port.md`)
 
 ## Post-Completion
 
