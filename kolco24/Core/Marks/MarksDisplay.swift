@@ -80,15 +80,18 @@ func marksToTiles(
 /// oldest-first как сетка. Токен — «?-NN» (`?` там, где стояла бы цифра цены).
 /// Пустой список = нет нотиса. Порт `hiddenTakenTokens`.
 func hiddenTakenTokens(_ marks: [Mark], lockedIds: Set<Int>) -> [String] {
+    // Kotlin: filter → distinctBy(checkpointId) → asReversed. [marks] newest-first, поэтому
+    // dedupe оставляет НОВЕЙШЕЕ взятие каждого КП, а reverse даёт порядок по возрастанию
+    // времени новейшего взятия (важно лишь при чередующихся повторных взятиях одного КП).
     var seen = Set<Int>()
     var result: [String] = []
-    for mark in marks.reversed()
+    for mark in marks
     where mark.complete && lockedIds.contains(mark.checkpointId) {
         if seen.insert(mark.checkpointId).inserted {
             result.append("?-\(paddedNumber(mark.checkpointNumber))")
         }
     }
-    return result
+    return result.reversed()
 }
 
 /// Список токенов нотиса в скобках, обрезанный до [max] — длинная фото-серия не

@@ -138,13 +138,9 @@ final class LegendModel {
     }
 
     /// Знаменатель прогресса — `total_cost` из `legend_meta` (сумма ВСЕХ КП, включая locked). Не
-    /// суммируется клиентом по строкам (locked скрывает цену).
+    /// суммируется клиентом по строкам (locked скрывает цену). Сам прогресс-бар считает вьюха
+    /// (`ScoreStripView`) из `takenScore/totalScore` — модель отдаёт лишь числитель/знаменатель.
     var totalScore: Int { legendMeta?.totalCost ?? 0 }
-
-    /// Прогресс ScoreCard `takenScore/totalScore` в `0...1`; `0` при пустом знаменателе.
-    var progress: Double {
-        totalScore > 0 ? Double(takenScore) / Double(totalScore) : 0
-    }
 
     /// Число ещё закрытых (locked) КП — для карточки «Скрыто N КП».
     var lockedCount: Int { checkpoints.reduce(0) { $0 + ($1.locked ? 1 : 0) } }

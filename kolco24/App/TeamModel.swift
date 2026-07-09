@@ -94,9 +94,9 @@ final class TeamModel {
     // MARK: - Derived (над актуальным ростером)
 
     /// Число участников ростера с привязанным чипом (только текущие слоты — устаревшие записи
-    /// удалённых участников игнорируются).
+    /// удалённых участников игнорируются). Делегирует общий Core-хелпер `boundCount(members:bindings:)`.
     func boundCount(members: [TeamMemberItem]) -> Int {
-        members.reduce(0) { $0 + (bindings[$1.numberInTeam] != nil ? 1 : 0) }
+        kolco24.boundCount(members: members, bindings: bindings)
     }
 
     /// Все ли участники команды привязаны (герой-счётчик «N / total с чипом»). `total` — `team.ucount`.

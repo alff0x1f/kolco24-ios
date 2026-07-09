@@ -77,7 +77,7 @@ struct LegendModelTests {
         #expect(model.takenScore == 5)                 // сумма известных цен взятых (КП1=0 + КП2=5)
         #expect(model.totalScore == 20)                // из legend_meta, не сумма строк
         #expect(model.lockedCount == 1)
-        #expect(abs(model.progress - 0.25) < 0.0001)   // 5/20
+        // Прогресс-бар (takenScore/totalScore = 5/20 = 0.25) считает вьюха из числителя/знаменателя выше.
     }
 
     // MARK: - Фильтр «только не взятые»
@@ -169,7 +169,7 @@ struct LegendModelTests {
         #expect(model.legendMeta == nil)
         #expect(model.takenIds.isEmpty)
         #expect(model.takenScore == 0)
-        #expect(model.progress == 0)
+        #expect(model.totalScore == 0)
     }
 
     // MARK: - nil-выбор снимает наблюдение

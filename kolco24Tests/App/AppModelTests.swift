@@ -237,5 +237,88 @@ struct AppModelTests {
         // Дать реактивному fan-out дойти до конца.
         try? await Task.sleep(for: .milliseconds(50))
         #expect(model.toastMessage == nil)
+        // Позитивный сайд-эффект: `200` Launch A действительно записал ETag гонок (иначе `nil`-тост не
+        // отличить от «refresh не запускался»). Origin — дефолтный cloud из `inMemory`.
+        let racesEtag = try await env.syncMetaStore.getEtag(origin: "https://cloud.test", resource: "races")
+        #expect(racesEtag == "\"v1\"")
+    }
+
+    // MARK: - Pull-to-refresh (refreshAll / refreshLegend / clearTeam)
+
+    @Test func refreshAll_withSelection_routesErrorToToast() async throws {
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, headers: ["ETag": "\"v1\""], bodyString: #"{"races":[]}"#) // Launch A
+        enqueue304s(transport, 3) // реактивный teams/legend/member_tags
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.teamStore.insertTeams([team(id: 4, raceId: 11)])
+        let model = AppModel(env: env)
+
+        await model.start()
+        await model.selectTeam(raceId: 11, teamId: 4)
+        await waitUntil { didRequest(transport, suffix: "/app/race/11/member_tags/") }
+        try? await Task.sleep(for: .milliseconds(50)) // реактивный fan-out дренится
+        #expect(model.toastMessage == nil)
+
+        // refreshAll: 4 запроса (races/teams/legend/tags); ровно один обрывается → offline-тост.
+        transport.enqueue(statusCode: 304)
+        transport.enqueue(statusCode: 304)
+        transport.enqueue(statusCode: 304)
+        transport.enqueueError(URLError(.notConnectedToInternet))
+        await model.refreshAll()
+
+        #expect(model.toastMessage == "Нет сети — не удалось обновить")
+        #expect(didRequest(transport, suffix: "/app/races/"))
+        #expect(didRequest(transport, suffix: "/app/race/11/teams/"))
+    }
+
+    @Test func refreshAll_withNoSelection_requestsOnlyRaces() async throws {
+        let transport = FakeTransport()
+        // Launch A: гонок нет → nearestRaceId == nil → префетча нет, только /app/races/.
+        transport.enqueue(statusCode: 200, headers: ["ETag": "\"v1\""], bodyString: #"{"races":[]}"#)
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        let model = AppModel(env: env)
+
+        await model.start()
+        #expect(transport.recorded.count == 1)
+
+        transport.enqueue(statusCode: 304)
+        await model.refreshAll() // без выбора — только refreshRaces
+
+        #expect(transport.recorded.count == 2)
+        #expect(transport.recorded.allSatisfy { $0.url?.absoluteString.hasSuffix("/app/races/") ?? false })
+    }
+
+    @Test func refreshLegend_routesErrorToToast() async throws {
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, headers: ["ETag": "\"v1\""], bodyString: #"{"races":[]}"#) // Launch A
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        let model = AppModel(env: env)
+
+        await model.start()
+
+        transport.enqueueError(URLError(.notConnectedToInternet))
+        await model.refreshLegend(raceId: 42)
+
+        #expect(model.toastMessage == "Нет сети — не удалось обновить")
+        #expect(didRequest(transport, suffix: "/app/race/42/legend/"))
+    }
+
+    @Test func clearTeam_resetsSelectionToNone() async throws {
+        let transport = FakeTransport()
+        enqueue304s(transport, 12)
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.teamStore.insertTeams([team(id: 5, raceId: 7)])
+        try await env.selectedTeamStore.upsert(SelectedTeam(raceId: 7, teamId: 5))
+        let model = AppModel(env: env)
+
+        await model.start()
+        await waitUntil { model.selectedTeamState == .present(self.team(id: 5, raceId: 7)) }
+
+        await model.clearTeam()
+        await waitUntil { model.selectedTeamState == .none }
+
+        #expect(model.selectedTeamState == .none)
+        #expect(model.selectedTeamId == nil)
+        #expect(model.selectedRaceId == nil)
     }
 }

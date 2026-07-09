@@ -29,7 +29,7 @@ struct MarksView: View {
             .background(Color.paper)
             .navigationTitle("Отметки")
             .navigationBarTitleDisplayMode(.inline)
-            .task(id: appModel.selectedTeamId) {
+            .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeMarksModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
             }

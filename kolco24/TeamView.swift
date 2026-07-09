@@ -31,7 +31,7 @@ struct TeamView: View {
             .background(Color.paper)
             .navigationTitle("Команда")
             .navigationBarTitleDisplayMode(.inline)
-            .task(id: appModel.selectedTeamId) {
+            .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeTeamModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
             }

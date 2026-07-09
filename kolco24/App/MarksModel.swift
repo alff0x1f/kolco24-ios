@@ -180,9 +180,9 @@ final class MarksModel {
     // MARK: - Лестница empty-состояний
 
     /// Число участников ростера с привязанным чипом (только текущие слоты — устаревшие записи
-    /// удалённых участников игнорируются). Совпадает с логикой `TeamModel.boundCount`.
+    /// удалённых участников игнорируются). Делегирует общий Core-хелпер `boundCount(members:bindings:)`.
     func boundCount(members: [TeamMemberItem]) -> Int {
-        members.reduce(0) { $0 + (bindings[$1.numberInTeam] != nil ? 1 : 0) }
+        kolco24.boundCount(members: members, bindings: bindings)
     }
 
     /// Состояние пустого экрана: `loading` подавляет мигание; нет команды → `chooseTeam`; не все чипы

@@ -255,6 +255,19 @@ struct MarksDisplayTests {
         #expect(hiddenTakenTokens(marks, lockedIds: Set([1, 3])) == ["?-04", "?-07"])
     }
 
+    // Порядок токенов — по возрастанию времени НОВЕЙШЕГО взятия каждого КП (Kotlin
+    // distinctBy→asReversed), не по первому. КП1 взят @1000 и @4000, КП3 — @2000 и @3000:
+    // по новейшему взятию КП3(3000) идёт раньше КП1(4000), а по первому было бы наоборот.
+    @Test func hiddenTakenTokens_ordersByNewestTakeWhenInterleaved() {
+        let marks = [
+            mark(id: "a", point: 1, number: 4, cost: 0, method: "photo", takenAt: 4_000), // newest
+            mark(id: "b", point: 3, number: 7, cost: 0, method: "photo", takenAt: 3_000),
+            mark(id: "c", point: 3, number: 7, cost: 0, method: "photo", takenAt: 2_000),
+            mark(id: "d", point: 1, number: 4, cost: 0, method: "photo", takenAt: 1_000), // oldest
+        ]
+        #expect(hiddenTakenTokens(marks, lockedIds: Set([1, 3])) == ["?-07", "?-04"])
+    }
+
     @Test func hiddenTakenTokens_skipsIncompleteAndEmptyWhenNothingLockedTaken() {
         let marks = [
             mark(id: "a", point: 1, number: 4, cost: 0, method: "photo", complete: false),

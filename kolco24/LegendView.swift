@@ -33,7 +33,7 @@ struct LegendView: View {
             .background(Color.paper)
             .navigationTitle("Легенда")
             .navigationBarTitleDisplayMode(.inline)
-            .task(id: appModel.selectedTeamId) {
+            .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeLegendModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
             }
