@@ -190,9 +190,9 @@ enum RefreshResult: Equatable { case updated, notModified, offline, forbidden, h
 - Create: `kolco24/Data/Repositories/RaceRepository.swift` (+ `RefreshResult` здесь или соседним файлом)
 - Create: `kolco24Tests/Data/Repositories/RaceRepositoryTests.swift`
 
-- [ ] `RefreshResult` enum; `RaceRepository` (без pin-guard): ETag из `SyncMetaStore` → `fetchRaces` → deleteEtag другого origin → `raceStore.replaceAll` → upsert ETag; маппинг `RaceDto` → `Model/Race`; `source: SyncSource = .cloud` выбирает клиента и origin
-- [ ] `RaceRepositoryTests` ← `RaceRepositoryTest.kt` (12 кейсов) над in-memory GRDB: success заменяет и сохраняет ETag, 304 не трогает данные, второй refresh шлёт сохранённый ETag, offline/forbidden/httpError, ответ без ETag — данные записаны и ETag не создан, **данные записаны раньше ETag** (проверка порядком операций фейк-store'а или крашем между шагами), local-source пишет в свой origin, кросс-origin-инвалидация
-- [ ] прогнать тесты — must pass before task 6
+- [x] `RefreshResult` enum; `RaceRepository` (без pin-guard): ETag из `SyncMetaStore` → `fetchRaces` → deleteEtag другого origin → `raceStore.replaceAll` → upsert ETag; маппинг `RaceDto` → `Model/Race`; `source: SyncSource = .cloud` выбирает клиента и origin
+- [x] `RaceRepositoryTests` ← `RaceRepositoryTest.kt` (12 кейсов) над in-memory GRDB: success заменяет и сохраняет ETag, 304 не трогает данные, второй refresh шлёт сохранённый ETag, offline/forbidden/httpError, ответ без ETag — данные записаны и ETag не создан, **данные записаны раньше ETag** (проверка порядком операций фейк-store'а или крашем между шагами), local-source пишет в свой origin, кросс-origin-инвалидация
+- [x] прогнать тесты — must pass before task 6
 
 ### Task 6: TeamRepository + MemberTagsRepository (pin-guard + synced-маркер)
 
