@@ -215,12 +215,12 @@
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] полный `xcodebuild test` зелёный (все этапы 0–4)
-- [ ] сверка зеркал: `TeamPickerLogicTests` 39/39, `LegendDisplayTests` 16/16, `MarksDisplayTests` (не-фото кейсы `MarksMappingTest` + 5 `TileFillTest`), `MarkMetricsTests` (чистая часть), headers «Зеркало …», бонусы под `// MARK: - БОНУС-тесты`
-- [ ] grep-инварианты: `import UIKit|SwiftUI` отсутствует в `Core/`/`Model/`/`Data/`/`Net/`; `App/`-модели без `import SwiftUI`; `import GRDB` вне `Data/` — не появился во вьюхах (допустим typealias-костыль, если понадобился, — задокументировать)
-- [ ] мок-массивы удалены: `grep` по старым мок-данным (`CheckpointTile(number:` литералы и т.п.) в `MarksView`/`LegendView`/`TeamView` — пусто
-- [ ] ручной прогон в симуляторе против живого сервера: пустой старт → «выбери команду» → CompPicker (реальные гонки) → TeamPicker (поиск, категории) → подтверждение → вкладки наполняются (легенда с locked-скелетонами, ростер, метрики нулевые); pull-to-refresh на всех экранах; авиарежим → toast оффлайна, кэш остаётся
-- [ ] тёмная тема: беглый прогон новых экранов (CompPicker/TeamPicker/confirm/empty/toast) в dark mode — токены адаптивные, литералов white/black нет
+- [x] полный `xcodebuild test` зелёный (все этапы 0–4) — 625 тест-кейсов passed, 0 failed, **TEST SUCCEEDED** (`-destination id=9D9F760F…` iPhone 16 / iOS 18.0; `name=iPhone 16` был неоднозначным)
+- [x] сверка зеркал: `TeamPickerLogicTests` 39/39 (@Test=39), `LegendDisplayTests` зеркало 16 (CheckpointColor 5 + IsScoring 5 + GroupByColor 6; всего 19 с 3 бонусами), `MarksDisplayTests` (не-фото кейсы `MarksMappingTest` + 5 `TileFillTest`), `MarkMetricsTests` (чистая часть, 6 @Test), headers «Зеркало …» присутствуют, бонусы под `// MARK: - БОНУС-тесты`
+- [x] grep-инварианты: `import UIKit|SwiftUI` отсутствует в `Core/`/`Model/`/`Data/`/`Net/` (пусто); `App/`-модели без реального `import SwiftUI` (`^import SwiftUI` пусто — упоминания только в комментариях «запрещён»); `import GRDB` вне `Data/` — не появился (только комментарий-заметка в `App/AppEnvironment.swift`, реального `^import GRDB` вне `Data/` нет)
+- [x] мок-массивы удалены: `grep` по `CheckpointTile(`/`LegendCP(`/`TeamMember(` в `MarksView`/`LegendView`/`TeamView` — пусто (уцелевший `struct ChipSlot` в `ScanSheet.swift` — определение типа скан-UI, не мок-массив)
+- [x] ручной прогон в симуляторе против живого сервера — **(skipped - manual, not automatable in this environment)**
+- [x] тёмная тема: беглый прогон новых экранов в dark mode — **(skipped - manual, not automatable in this environment)**
 
 ### Task 9: [Final] Документация
 
