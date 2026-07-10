@@ -195,14 +195,14 @@
 - Create: `kolco24/SettingsView.swift`
 - Modify: `kolco24/TeamView.swift`
 
-- [ ] ряд «Настройки» (`gearshape.fill`, `MiscRowView`) в misc-секции `TeamView` → `.sheet` с `SettingsView(model: appModel.makeSettingsModel())` (паттерн «Загрузка данных»)
-- [ ] `List` в стиле `UploadView` (design-токены): секция «Внешний вид» — `Picker` (`.menu`) Системная/Светлая/Тёмная
-- [ ] секция «Запись трека» — «Очистить трек» (сабтайтл `pointsLabel(N)` из `PluralRu`, disabled при `!clearTrackEnabled`) → `confirmationDialog` («Все записанные точки этой команды будут удалены без возможности восстановления.», destructive «Очистить»)
-- [ ] секция «Данные» — «Локальный сервер (Wi-Fi гонки)»: `Toggle`; при `localModeBusy` — `ProgressView` вместо тумблера, ряд заблокирован; сабтайтл из модели
-- [ ] секция «О приложении» — «Версия»; 10 тапов → `debugUnlocked = true` (state вью, сбрасывается при закрытии шита) + тост «Меню отладки включено»; в `#if DEBUG` секция видна сразу
-- [ ] скрытая секция «Отладка» — «Сбросить команду» и «Очистить базу данных», оба через `confirmationDialog`
-- [ ] прогон полного сьюта + сборка (UI-задача без своих юнитов — hard gate не ослабляется)
-- [ ] run tests - must pass before next task
+- [x] ряд «Настройки» (`gearshape.fill`, `MiscRowView`) в misc-секции `TeamView` → `.sheet` с `SettingsView(model: appModel.makeSettingsModel())` (паттерн «Загрузка данных»)
+- [x] `List` в стиле `UploadView` (design-токены): секция «Внешний вид» — `Picker` (`.menu`) Системная/Светлая/Тёмная
+- [x] секция «Запись трека» — «Очистить трек» (сабтайтл `pointsLabel(N)` из `PluralRu`, disabled при `!clearTrackEnabled`) → `confirmationDialog` («Все записанные точки этой команды будут удалены без возможности восстановления.», destructive «Очистить»)
+- [x] секция «Данные» — «Локальный сервер (Wi-Fi гонки)»: `Toggle`; при `localModeBusy` — `ProgressView` вместо тумблера, ряд заблокирован; сабтайтл из модели
+- [x] секция «О приложении» — «Версия»; 10 тапов → `debugUnlocked = true` (state вью, сбрасывается при закрытии шита) + тост «Меню отладки включено»; в `#if DEBUG` секция видна сразу
+- [x] скрытая секция «Отладка» — «Сбросить команду» и «Очистить базу данных», оба через `confirmationDialog`
+- [x] прогон полного сьюта + сборка (UI-задача без своих юнитов — hard gate не ослабляется)
+- [x] run tests - must pass before next task
 
 ### Task 9: Верификация приёмки
 
