@@ -215,10 +215,10 @@
 - Modify: `kolco24/UploadView.swift`
 - Modify: `kolco24Tests/App/UploadModelTests.swift`
 
-- [ ] `UploadModel`: секция «Отметки» переводится на `uploadCountsMetadata` (метаданные отдельно); новая подписка `photoFrameRows` → `foldPhotoFrameCounts` → счётчики «Фото»; receipt-лайны «Фото» по тем же правилам («Интернет» всегда, «Финиш» по `outcome != nil || uploaded > 0`), исход — общий по-таргетный (combined); `pendingLabel` ряда TeamView — по photo-aware `uploadCounts` (кадры учитываются)
-- [ ] `UploadView`: секция «Фото» (скрыта при нуле кадров — как Android), счётчики `uploaded/total` в `Font.mono`, глифы done/error по токенам
-- [ ] тесты: photo-марка с кадрами — «Отметки» показывает метаданные, «Фото» — кадры; mid-drain марка в total, не в числителе; `pendingLabel` учитывает неотправленные кадры; секция скрыта без фото
-- [ ] прогнать тесты — зелёные до Task 10
+- [x] `UploadModel`: секция «Отметки» переводится на `uploadCountsMetadata` (метаданные отдельно); новая подписка `photoFrameRows` → `foldPhotoFrameCounts` → счётчики «Фото»; receipt-лайны «Фото» по тем же правилам («Интернет» всегда, «Финиш» по `outcome != nil || uploaded > 0`), исход — общий по-таргетный (combined); `pendingLabel` ряда TeamView — по photo-aware `uploadCounts` (кадры учитываются)
+- [x] `UploadView`: секция «Фото» (скрыта при нуле кадров — как Android), счётчики `uploaded/total` в `Font.mono`, глифы done/error по токенам
+- [x] тесты: photo-марка с кадрами — «Отметки» показывает метаданные, «Фото» — кадры; mid-drain марка в total, не в числителе; `pendingLabel` учитывает неотправленные кадры; секция скрыта без фото
+- [x] прогнать тесты — зелёные до Task 10
 
 ### Task 10: Верификация приёмки
 
