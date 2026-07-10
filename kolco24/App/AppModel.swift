@@ -205,6 +205,17 @@ final class AppModel {
         MarksModel(env: env)
     }
 
+    /// Фабрика модели экрана «Загрузка данных» (этап 6). Привязывается к ТЕКУЩЕМУ скоупу выбора
+    /// (`selectedRaceId`/`selectedTeamId`) — шит открывается для выбранной команды. Держит `env`
+    /// инкапсулированным; `nowMs` прокидывается для тестируемого относительного времени.
+    func makeUploadModel(
+        nowMs: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
+    ) -> UploadModel {
+        let model = UploadModel(env: env, nowMs: nowMs)
+        model.rebind(teamId: selectedTeamId, raceId: selectedRaceId)
+        return model
+    }
+
     /// Фабрика хост-редьюсера скан-оверлея (этап 5). Собирается из графа (`legendRepository`, сторы,
     /// `trustedClock.sample` для монотонного окна, `locationProvider`, `feedback`) + ростер выбранной
     /// команды. Возвращает `nil`, когда команда не выбрана (нет ростера — сканировать некуда). Сканер

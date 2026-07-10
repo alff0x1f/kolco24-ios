@@ -160,13 +160,13 @@
 - Modify: `kolco24/App/AppModel.swift` (фабрика `makeUploadModel()`)
 - Create: `kolco24Tests/App/UploadModelTests.swift`
 
-- [ ] `@Observable @MainActor UploadModel` (импорты только `Observation`/`Foundation`): наблюдает `markStore.uploadCounts(teamId:raceId:)` → `counts: UploadCounts?` и `outcomeUpdates` актора → исходы текущего скоупа (`[UploadTarget: TargetUploadOutcome]`)
-- [ ] derived: `pendingLabel` для ряда TeamView («N не отправлено» / «Всё отправлено» / «Пока нечего загружать», `total - cloud`), receipt-данные по целям (`uploaded/total`, done-флаг, вторая строка `relativeTimeRu(atWallMs:nowMs:) · label`), правило видимости «Финиш» (`outcome != nil || uploaded > 0`)
-- [ ] `refresh() async` — force flush: `await uploadAllPending()` (pull-to-refresh держится до конца дрейна); `nowMs` — инжектированное замыкание (тестируемое относительное время)
-- [ ] rebind-стейл-гард при смене команды (конвенция пер-таб моделей этапа 4: отмена задач наблюдения + сброс состояния)
-- [ ] `AppModel.makeUploadModel()` — фабрика по текущему `raceId`/`teamId`
-- [ ] тесты: счётчики из реальной БД (вставка марок с разными флагами), эмиссия исходов из актора доходит до модели, `refresh()` флипает флаги через `FakeTransport`, `pendingLabel`-градации, rebind при смене команды чистит состояние
-- [ ] прогнать тесты — зелёные до Task 6
+- [x] `@Observable @MainActor UploadModel` (импорты только `Observation`/`Foundation`): наблюдает `markStore.uploadCounts(teamId:raceId:)` → `counts: UploadCounts?` и `outcomeUpdates` актора → исходы текущего скоупа (`[UploadTarget: TargetUploadOutcome]`)
+- [x] derived: `pendingLabel` для ряда TeamView («N не отправлено» / «Всё отправлено» / «Пока нечего загружать», `total - cloud`), receipt-данные по целям (`uploaded/total`, done-флаг, вторая строка `relativeTimeRu(atWallMs:nowMs:) · label`), правило видимости «Финиш» (`outcome != nil || uploaded > 0`)
+- [x] `refresh() async` — force flush: `await uploadAllPending()` (pull-to-refresh держится до конца дрейна); `nowMs` — инжектированное замыкание (тестируемое относительное время)
+- [x] rebind-стейл-гард при смене команды (конвенция пер-таб моделей этапа 4: отмена задач наблюдения + сброс состояния)
+- [x] `AppModel.makeUploadModel()` — фабрика по текущему `raceId`/`teamId`
+- [x] тесты: счётчики из реальной БД (вставка марок с разными флагами), эмиссия исходов из актора доходит до модели, `refresh()` флипает флаги через `FakeTransport`, `pendingLabel`-градации, rebind при смене команды чистит состояние
+- [x] прогнать тесты — зелёные до Task 6
 
 ### Task 6: UI — UploadView + ряд в TeamView
 
