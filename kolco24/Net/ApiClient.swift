@@ -201,6 +201,27 @@ struct ApiClient {
         }
     }
 
+    /// `POST /app/race/<raceId>/mark/<markId>/photo/<frameId>` — выгрузка одного даунскейленного
+    /// JPEG-кадра. `frameId` — стабильный `<uuid>`-стем имени файла (см. `frameIdOf`), он же
+    /// серверный ключ идемпотентности рядом с `(raceId, markId)`. Тело — **сырые JPEG-байты**
+    /// `bytes` (не multipart, не base64); `Content-Type: image/jpeg`; те же байты хэшируются в
+    /// подпись (пайплайн `post`). `200`/`201` → `.success(())` (тело не парсится); прочие статусы —
+    /// по `post` (`400` → `.badRequest`; `413` → `.error(413)`; `URLError` → `.offline`). Путь —
+    /// **без** завершающего слэша (1:1 с Kotlin `uploadMarkPhoto`). **Не ретраится** (гарантия
+    /// `post`). Один и тот же метод обслуживает обе цели (cloud / local LAN).
+    func uploadMarkPhoto(
+        raceId: Int,
+        markId: String,
+        frameId: String,
+        bytes: Data
+    ) async -> PostResult<Void> {
+        await post(
+            url: endpoint("/app/race/\(raceId)/mark/\(markId)/photo/\(frameId)"),
+            body: bytes,
+            contentType: "image/jpeg"
+        ) { _ in () }
+    }
+
     /// URL эндпоинта из `baseURL` (без хвостового `/`) + `path` (с завершающим слэшем — он входит в
     /// подписанную канонику).
     private func endpoint(_ path: String) -> URL {

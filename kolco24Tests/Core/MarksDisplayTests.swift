@@ -5,12 +5,10 @@
 //  Зеркало не-фото кейсов `ui/marks/MarksMappingTest.kt` + `ui/marks/TileFillTest.kt`
 //  (5). Имена сценариев сохранены.
 //
-//  Фото-кейсы `MarksMappingTest.kt` — **этап 7**, не портируются: `photoPaths and
-//  photoCount map…`, `a tile without photos…`, `an nfc take can carry photo
-//  evidence…`, `a corrupted photoPath column…`, все `lightboxPhotos*`, все
-//  `photoReviewSummary*` (нет `photoPaths`/`lightboxPhotos`/`photoReviewSummary`
-//  в iOS-порте до этапа 7). Лестница empty-состояний — бонус по урезанной логике
-//  (NFC-ветки — этап 5).
+//  Фото-кейсы `MarksMappingTest.kt` (`photoPaths`/`photoCount`, `lightboxPhotos*`,
+//  `photoReviewSummary*`) зеркалированы отдельно в `MarksDisplayPhotoTests.swift`
+//  (этап 7). Лестница empty-состояний — бонус по урезанной логике (NFC-ветки
+//  опущены осознанно: все поддерживаемые iPhone имеют NFC).
 //
 
 import Foundation

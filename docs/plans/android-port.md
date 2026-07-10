@@ -61,12 +61,18 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 - Привязка браслета (BindChipSheet, чтение UID + пул member_tags).
 
 ### Этап 6. Загрузка данных на сервер
+
+✅ выполнен — см. [детальный план](completed/20260710-android-port-stage6.md).
+
 - Dual-target (облако + LAN) идемпотентный upload: marks (батчи, UUID), track, judge_scans; мьютекс-защита, батч-дренаж.
 - Триггеры: foreground-таймеры (5 мин / 60 с), по закрытию скан-оверлея, при старте. Фоновые лимиты iOS: опционально BGTaskScheduler позже.
 - Экран «Загрузка данных» (счётчики по целям, принудительный flush).
 
 ### Этап 7. Фото-отметка
-- AVFoundation-камера (порт PhotoCaptureScreen: ориентация по акселерометру), `PhotoStorage` в Documents, PhotoNumberPicker / авто-привязка к недавнему взятию, лайтбокс, покадровая идемпотентная загрузка, sweep осиротевших папок.
+
+✅ выполнен — см. [детальный план](completed/20260710-android-port-stage7.md).
+
+- AVFoundation-камера (порт PhotoCaptureScreen, но ориентация — через `AVCaptureDevice.RotationCoordinator`, а не акселерометр; EXIF запекается ImageIO), `PhotoStorage` в Application Support (относительные пути в БД), PhotoNumberPicker / авто-привязка к недавнему взятию, лайтбокс, покадровая идемпотентная загрузка (poison-frame 400/413), sweep осиротевших папок.
 
 ### Этап 8. GPS-трек
 - `CLLocationManager` с background mode «location» (аналог foreground-service): профили Precise/Economy, сегменты, lossless-стоп, live-upload раз в ~10 мин, TrackCard в Команде, GPX-экспорт через share sheet.

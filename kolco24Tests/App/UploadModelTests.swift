@@ -36,6 +36,27 @@ struct UploadModelTests {
         )
     }
 
+    /// Фото-марка: `method="photo"`, `photoPath` = закодированные валидные относительные пути кадров,
+    /// раздельные флаги metadata (`uploadedX`) и кадров (`photosUploadedX`).
+    private func photoMark(
+        id: String, raceId: Int = 7, teamId: Int = 5,
+        frames: Int,
+        uploadedLocal: Bool = false, uploadedCloud: Bool = false,
+        photosUploadedLocal: Bool = false, photosUploadedCloud: Bool = false
+    ) -> Mark {
+        let paths = (0..<frames).map { "marks/\(id)/frame\($0).jpg" }
+        return Mark(
+            id: id, raceId: raceId, teamId: teamId, checkpointId: 264, checkpointNumber: 12,
+            cost: 5, method: "photo", cpUid: "", cpCode: "",
+            present: [], presentDetails: nil, expectedCount: 0, complete: true,
+            photoPath: PhotoPaths.encode(paths),
+            takenAt: 1000, updatedAt: 1000,
+            uploadedLocal: uploadedLocal, uploadedCloud: uploadedCloud,
+            photosUploadedLocal: photosUploadedLocal, photosUploadedCloud: photosUploadedCloud,
+            trustedTakenAt: nil, elapsedRealtimeAt: nil, bootCount: nil, locLat: nil, locLon: nil
+        )
+    }
+
     private func waitUntil(
         timeout: Duration = .seconds(3),
         _ condition: () async -> Bool
@@ -180,6 +201,99 @@ struct UploadModelTests {
         #expect(model.cloudLine.label == "Интернет")
     }
 
+    // MARK: - Секции «Отметки» (metadata) и «Фото» (кадры)
+
+    /// Фото-марка: секция «Отметки» считает метаданные строки, «Фото» — кадры; исходы общие per-target.
+    @Test func photoMark_metadataAndPhotoSectionsSplit() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        // metadata доехала до обеих целей; кадры приняты только LAN («Финиш»), cloud-кадры ещё pending.
+        try await env.markStore.upsert(photoMark(
+            id: "p1", frames: 2,
+            uploadedLocal: true, uploadedCloud: true,
+            photosUploadedLocal: true, photosUploadedCloud: false
+        ))
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        // «Отметки» — по строке: 1/1 на обеих целях.
+        await waitUntil { model.metadataCounts?.total == 1 }
+        #expect(model.metadataCounts?.cloud == 1)
+        #expect(model.metadataCounts?.local == 1)
+        #expect(model.cloudLine.uploaded == 1)
+        #expect(model.cloudLine.total == 1)
+        #expect(model.cloudLine.done)
+
+        // «Фото» — по кадрам: 2 всего, local 2 (флаг), cloud 0 (флаг не выставлен).
+        await waitUntil { model.photoCounts?.total == 2 }
+        #expect(model.hasPhotos)
+        #expect(model.photoCounts?.total == 2)
+        #expect(model.photoCounts?.local == 2)
+        #expect(model.photoCounts?.cloud == 0)
+        #expect(model.photoCloudLine.uploaded == 0)
+        #expect(model.photoCloudLine.total == 2)
+        #expect(model.photoCloudLine.done == false)
+        // «Финиш» (LAN) секции «Фото» показан (uploaded > 0) и done.
+        #expect(model.photoFinishLine?.uploaded == 2)
+        #expect(model.photoFinishLine?.done == true)
+    }
+
+    /// Mid-drain марка (кадры приняты сервером, но флаг ещё не флипнут) — в `total`, но не в числителе.
+    @Test func photoCounts_midDrainMarkInTotalNotNumerator() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        // p1: 2 кадра приняты cloud (флаг). p2: 3 кадра — mid-drain (флаг cloud ещё 0).
+        try await env.markStore.upsert(photoMark(id: "p1", frames: 2, photosUploadedCloud: true))
+        try await env.markStore.upsert(photoMark(id: "p2", frames: 3, photosUploadedCloud: false))
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.photoCounts?.total == 5 }
+        #expect(model.photoCounts?.total == 5)   // 2 + 3 всех кадров
+        #expect(model.photoCounts?.cloud == 2)   // только флипнутые кадры p1
+        #expect(model.photoCloudLine.uploaded == 2)
+        #expect(model.photoCloudLine.total == 5)
+        #expect(model.photoCloudLine.done == false)
+    }
+
+    /// `pendingLabel` (photo-aware) учитывает незалитые кадры: metadata доехала, кадры — нет → всё ещё pending.
+    @Test func pendingLabel_countsUnsentFrames() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        // Метаданные доехали до cloud, но кадры cloud ещё pending — строка не «отправлена» полностью.
+        try await env.markStore.upsert(photoMark(
+            id: "p1", frames: 2, uploadedCloud: true, photosUploadedCloud: false
+        ))
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.counts?.total == 1 }
+        // photo-aware cloud = 0 (кадры не приняты) → 1 не отправлено, хотя метаданные ушли.
+        #expect(model.counts?.cloud == 0)
+        #expect(model.pendingLabel == "1 не отправлено")
+    }
+
+    /// Секция «Фото» скрыта, когда кадров нет (только NFC-взятия).
+    @Test func photoSection_hiddenWhenNoFrames() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.markStore.upsert(mark(id: "a"))
+        try await env.markStore.upsert(mark(id: "b", uploadedCloud: true))
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.photoCounts != nil }
+        #expect(model.photoCounts?.total == 0)
+        #expect(model.hasPhotos == false)
+        // «Отметки» при этом наполнены.
+        await waitUntil { model.metadataCounts?.total == 2 }
+        #expect(model.metadataCounts?.cloud == 1)
+    }
+
     // MARK: - rebind при смене команды чистит состояние
 
     @Test func rebind_clearsStateOnTeamChange() async throws {
@@ -195,6 +309,8 @@ struct UploadModelTests {
         // Смена на пустую команду: состояние сбрасывается синхронно, затем счётчики нового скоупа (0).
         model.rebind(teamId: 9, raceId: 7)
         #expect(model.counts == nil) // синхронный сброс до первой эмиссии
+        #expect(model.metadataCounts == nil)
+        #expect(model.photoCounts == nil)
         #expect(model.outcomes.isEmpty)
 
         await waitUntil { model.counts?.total == 0 }

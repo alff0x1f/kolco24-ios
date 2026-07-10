@@ -177,6 +177,22 @@ final class MarksModel {
     /// `hiddenTakenTokens`.
     var hiddenTakenTokens: [String] { kolco24.hiddenTakenTokens(marks, lockedIds: lockedIds) }
 
+    /// Сводка КП, зачтённых только по фото (ждут проверки судьёй) — нотис «N КП по фото · P баллов».
+    /// `nil`, когда ни одного photo-only КП (нотис исчезает целиком). Порт `photoReviewSummary`.
+    var photoReview: PhotoReviewSummary? { photoReviewSummary(marks, costOf: costOf) }
+
+    /// Глобальная лента лайтбокса — кадры всех взятий в порядке сетки (тайл несёт КП-чип страницы).
+    /// Порт `lightboxPhotos(tiles)`.
+    var lightboxPhotos: [LightboxPhoto] { kolco24.lightboxPhotos(tiles) }
+
+    // MARK: - Резолвер путей кадров (шов чтения диска для вьюх)
+
+    /// Абсолютный файловый URL относительного пути кадра (`marks/<markId>/<uuid>.jpg`) — для превью
+    /// тайла и `ShareLink` в лайтбоксе. Делегирует инжектированному замыканию графа (прод — над
+    /// `PhotoStorage.rootURL`), так что вьюхе не нужен ни GRDB, ни `Photo/`. `nil`, если корня нет
+    /// (in-memory окружение).
+    func photoURL(_ relPath: String) -> URL? { env.photoURL(relPath) }
+
     // MARK: - Лестница empty-состояний
 
     /// Число участников ростера с привязанным чипом (только текущие слоты — устаревшие записи

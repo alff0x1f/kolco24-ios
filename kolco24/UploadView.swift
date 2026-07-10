@@ -50,6 +50,20 @@ struct UploadView: View {
             } header: {
                 Text("Отметки")
             }
+
+            // Секция «Фото» — только когда есть кадры (скрыта при нуле, как Android).
+            if model.hasPhotos {
+                Section {
+                    ReceiptRow(line: model.photoCloudLine)
+                        .listRowBackground(Color.card)
+                    if let finish = model.photoFinishLine {
+                        ReceiptRow(line: finish)
+                            .listRowBackground(Color.card)
+                    }
+                } header: {
+                    Text("Фото")
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)

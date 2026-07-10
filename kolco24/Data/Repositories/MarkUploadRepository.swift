@@ -18,6 +18,7 @@
 //  (`Row` в `drainUploadLoop` — generic-параметр, а не GRDB `Row`), поэтому `import GRDB` не нужен.
 //
 
+import Foundation
 import os
 
 /// Логгер дренажа выгрузки (ошибки БД внутри цикла сворачиваются в `.error` + лог, движок не роняет
@@ -36,6 +37,21 @@ func uploadResultKind<T>(_ result: PostResult<T>) -> UploadResultKind {
         return .offline
     default:
         return .error
+    }
+}
+
+/// POST кадра, который неприемлем и никогда не пройдёт на ретрае: `400` (битый) или `413` (payload
+/// слишком велик — маппится как `.error(413)`). Проводит границу между **per-frame** сбоем (оставить
+/// марку pending, идти дальше) и **transient/target-wide** (стоп всего таргета). Зеркало Kotlin
+/// `isHardFrameFailure`; используется frame-дренажем `MarkUploadRepository`.
+func isHardFrameFailure<T>(_ result: PostResult<T>) -> Bool {
+    switch result {
+    case .badRequest:
+        return true
+    case .error(let code):
+        return code == 413
+    default:
+        return false
     }
 }
 
@@ -112,6 +128,10 @@ actor MarkUploadRepository {
     private let installId: String
     /// Метка стенных часов исхода (для строки «N мин назад»); инжектится ради управляемого времени в тестах.
     private let wallNow: () -> Int64
+    /// Чтение сырых JPEG-байт кадра по относительному пути (`marks/<markId>/<uuid>.jpg`). Прод — чтение
+    /// файла из `PhotoStorage`; `nil` = отсутствующий/нечитаемый файл (кадр остаётся pending). Порт
+    /// `PhotoFrameReader` (незавайренный шов → `nil`).
+    private let frameReader: (String) -> Data?
 
     /// tryLock-аналог: пока один проход идёт, перекрывающийся триггер выходит no-op'ом.
     private var inFlight = false
@@ -131,13 +151,15 @@ actor MarkUploadRepository {
         cloud: ApiClient,
         local: ApiClient,
         installId: String,
-        wallNow: @escaping () -> Int64
+        wallNow: @escaping () -> Int64,
+        frameReader: @escaping (String) -> Data? = { _ in nil }
     ) {
         self.markStore = markStore
         self.cloud = cloud
         self.local = local
         self.installId = installId
         self.wallNow = wallNow
+        self.frameReader = frameReader
 
         var cont: AsyncStream<[TrackScope: [UploadTarget: TargetUploadOutcome]]>.Continuation!
         self.outcomeUpdates = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont = $0 }
@@ -176,8 +198,10 @@ actor MarkUploadRepository {
 
     // MARK: - Дренаж скоупа
 
-    /// Слить один скоуп в обе цели по очереди; цикл каждой цели независим от другой. Порт `flushScope`
-    /// (в этапе 6 — только metadata-цикл; frame-drain кадров — этап 7, `combineOutcome(meta, nil) == meta`).
+    /// Слить один скоуп в обе цели по очереди; цикл каждой цели независим от другой. Порт `flushScope`:
+    /// на каждой цели сначала прокачивается metadata-цикл (взятия), затем frame-дренаж кадров, и оба
+    /// исхода сводятся `combineOutcome(meta, frame)` в единственное per-target значение (frame `ok`
+    /// никогда не маскирует metadata `error`/`offline`).
     private func flushScope(raceId: Int, teamId: Int) async {
         let scope = TrackScope(raceId: raceId, teamId: teamId)
 
@@ -192,7 +216,14 @@ actor MarkUploadRepository {
             },
             mark: { batch, ids in try await self.markLocalGpsAware(batch: batch, ids: ids) }
         )
-        if let kind = combineOutcome(localMeta, nil) {
+        let localFrame = await frameDrainLoop(
+            fetch: { try await self.markStore.framePendingLocal(raceId: raceId, teamId: teamId, limit: Self.uploadBatch) },
+            upload: { markId, frameId, bytes in
+                await self.local.uploadMarkPhoto(raceId: raceId, markId: markId, frameId: frameId, bytes: bytes)
+            },
+            markDone: { id, updatedAt in try await self.markStore.setPhotosUploadedLocalIfUnchanged(id: id, updatedAt: updatedAt) }
+        )
+        if let kind = combineOutcome(localMeta, localFrame) {
             recordOutcome(scope: scope, target: .local, kind: kind)
         }
 
@@ -207,8 +238,95 @@ actor MarkUploadRepository {
             },
             mark: { batch, ids in try await self.markCloudGpsAware(batch: batch, ids: ids) }
         )
-        if let kind = combineOutcome(cloudMeta, nil) {
+        let cloudFrame = await frameDrainLoop(
+            fetch: { try await self.markStore.framePendingCloud(raceId: raceId, teamId: teamId, limit: Self.uploadBatch) },
+            upload: { markId, frameId, bytes in
+                await self.cloud.uploadMarkPhoto(raceId: raceId, markId: markId, frameId: frameId, bytes: bytes)
+            },
+            markDone: { id, updatedAt in try await self.markStore.setPhotosUploadedCloudIfUnchanged(id: id, updatedAt: updatedAt) }
+        )
+        if let kind = combineOutcome(cloudMeta, cloudFrame) {
             recordOutcome(scope: scope, target: .cloud, kind: kind)
+        }
+    }
+
+    // MARK: - Frame-дренаж (по кадрам)
+
+    /// Исход попытки выгрузить все кадры одной марки внутри `frameDrainLoop`.
+    private enum FrameMarkResult {
+        /// Все кадры приняты (или марка не несёт кадров) — флаг марки можно флипнуть.
+        case flipped
+        /// Hard per-frame сбой или отсутствующий файл — оставить марку pending, идти к следующей.
+        case pending
+        /// Transient/target-wide сбой — весь таргет останавливается на этот триггер.
+        case stop(UploadResultKind)
+    }
+
+    /// Выгрузить каждый кадр одной марки, читая байты через `frameReader`. Пустой `photoPath`
+    /// (`"[]"`) слать нечего → сразу `.flipped`. Порт `uploadOneMarksFrames`.
+    private func uploadOneMarksFrames(
+        _ mark: Mark,
+        upload: (String, String, Data) async -> PostResult<Void>
+    ) async -> FrameMarkResult {
+        for relPath in PhotoPaths.decode(mark.photoPath) {
+            guard let bytes = frameReader(relPath) else { return .pending }
+            let result = await upload(mark.id, PhotoPaths.frameIdOf(relPath), bytes)
+            if case .success = result { continue }
+            if isHardFrameFailure(result) { return .pending }
+            return .stop(uploadResultKind(result))
+        }
+        return .flipped
+    }
+
+    /// Прокачать кадры одной цели батчами до пустого fetch'а или застревания, вернув терминальный
+    /// `UploadResultKind` либо `nil`. Семантика 1:1 с Kotlin `frameDrainLoop` (L425–448):
+    ///
+    /// - пустой первый fetch (нечего слать) → `nil`;
+    /// - transient/target-wide сбой кадра (`.stop`) → немедленный стоп таргета с его kind;
+    /// - hard per-frame сбой (`400`/`413`) или отсутствующий файл (`.pending`) → марку пропустить,
+    ///   к следующей (одна ядовитая рамка не блокирует последующие хорошие марки);
+    /// - все кадры марки приняты (`.flipped`) → version-guard'нутый `markDone` (по `updatedAt`);
+    /// - нет прогресса за полный проход (ни одна марка не флипнулась) → `.error` (защита от
+    ///   зацикливания: ядовитый/missing-only батч остаётся видимо-pending, а не крутится вечно);
+    /// - ошибка БД (`fetch`/`markDone` бросили) → `.error` + лог (движок не роняет процесс).
+    private func frameDrainLoop(
+        fetch: () async throws -> [Mark],
+        upload: (String, String, Data) async -> PostResult<Void>,
+        markDone: (String, Int64) async throws -> Void
+    ) async -> UploadResultKind? {
+        var progressed = false
+        while true {
+            let batch: [Mark]
+            do {
+                batch = try await fetch()
+            } catch {
+                uploadLog.error("frameDrainLoop fetch failed: \(String(describing: error))")
+                return .error
+            }
+            if batch.isEmpty {
+                return progressed ? .ok : nil
+            }
+            var flippedThisPass = false
+            for mark in batch {
+                switch await uploadOneMarksFrames(mark, upload: upload) {
+                case .flipped:
+                    do {
+                        try await markDone(mark.id, mark.updatedAt)
+                    } catch {
+                        uploadLog.error("frameDrainLoop markDone failed: \(String(describing: error))")
+                        return .error
+                    }
+                    flippedThisPass = true
+                case .pending:
+                    continue
+                case .stop(let kind):
+                    return kind
+                }
+            }
+            if !flippedThisPass {
+                return .error // нет прогресса → стоп, догоним на следующем триггере
+            }
+            progressed = true
         }
     }
 

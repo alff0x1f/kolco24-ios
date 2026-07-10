@@ -61,6 +61,20 @@ final class AppEnvironment {
     /// no-op-заглушка (глотает всё).
     let feedback: any ScanFeedbackPlaying
 
+    // MARK: - Этап 7 (фото-отметка)
+    /// Дисковые операции фото-кадров, вынесенные в замыкания, чтобы `PhotoModel` оставался тестируемым
+    /// без AVFoundation/ImageIO. Прод — над `PhotoStorage` (Application Support); `inMemory` — no-op фейки.
+    /// `writeFrame(markId, jpeg) → относительный путь | nil` (битый кадр); `deleteFrame(rel)` — кадр+тумба;
+    /// `sweepOrphanPhotoDirs(liveIds)` — стартовый сбор осиротевших каталогов взятий.
+    let writeFrame: @Sendable (String, Data) -> String?
+    let deleteFrame: @Sendable (String) -> Void
+    let sweepOrphanPhotoDirs: @Sendable (Set<String>) -> Void
+    /// Резолвер относительного пути кадра (`marks/<markId>/<uuid>.jpg`) в абсолютный файловый URL —
+    /// шов чтения кадров во вьюхах (тайл-превью через `UIImage(contentsOfFile:)`, `ShareLink` в
+    /// лайтбоксе). Прод — над `PhotoStorage.rootURL`; `inMemory` — `{ _ in nil }` (диска нет).
+    /// Держит `import GRDB`/`Photo/` вне вьюх (grep-инвариант): вью получает только замыкание.
+    let photoURL: @Sendable (String) -> URL?
+
     /// - Parameters:
     ///   - cloudOrigin/localOrigin: base URL'ы — ключи-партиции ETag в `sync_meta`.
     private init(
@@ -73,12 +87,21 @@ final class AppEnvironment {
         trustedClock: TrustedClock,
         locationProvider: any CurrentLocationProvider,
         feedback: any ScanFeedbackPlaying,
+        frameReader: @escaping (String) -> Data? = { _ in nil },
+        writeFrame: @escaping @Sendable (String, Data) -> String? = { _, _ in nil },
+        deleteFrame: @escaping @Sendable (String) -> Void = { _ in },
+        sweepOrphanPhotoDirs: @escaping @Sendable (Set<String>) -> Void = { _ in },
+        photoURL: @escaping @Sendable (String) -> URL? = { _ in nil },
         wallNow: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.database = database
         self.trustedClock = trustedClock
         self.locationProvider = locationProvider
         self.feedback = feedback
+        self.writeFrame = writeFrame
+        self.deleteFrame = deleteFrame
+        self.sweepOrphanPhotoDirs = sweepOrphanPhotoDirs
+        self.photoURL = photoURL
         let writer = database.writer
 
         raceStore = RaceStore(writer)
@@ -140,7 +163,8 @@ final class AppEnvironment {
             cloud: cloud,
             local: local,
             installId: installId,
-            wallNow: wallNow
+            wallNow: wallNow,
+            frameReader: frameReader
         )
     }
 
@@ -151,6 +175,10 @@ final class AppEnvironment {
     static func makeShared() throws -> AppEnvironment {
         let database = try AppDatabase.makeShared()
         let pair = ApiClients.makeDefaultPair()
+        // Прод-чтение кадров с диска для frame-дренажа: `PhotoStorage` под `Application Support`
+        // (тот же корень, что `kolco24.db`). `PhotoPaths.decode` уже отфильтровал небезопасные пути
+        // до вызова reader'а, так что `absoluteURL` получает только `marks/<id>/<uuid>.jpg`.
+        let photoStorage = try PhotoStorage.makeShared()
         return AppEnvironment(
             database: database,
             cloud: pair.cloud,
@@ -164,7 +192,13 @@ final class AppEnvironment {
             trustedClock: pair.clock,
             // One-shot GPS-фикс на момент взятия (задача 6); прод аудио/тактильный фидбек (задача 7).
             locationProvider: CoreLocationProvider(),
-            feedback: ScanFeedbackPlayer()
+            feedback: ScanFeedbackPlayer(),
+            frameReader: { rel in try? Data(contentsOf: photoStorage.absoluteURL(relPath: rel)) },
+            // Этап 7: дисковые операции фото-кадров над тем же `PhotoStorage`.
+            writeFrame: { markId, data in photoStorage.writeDownscaledJpeg(markId: markId, jpegData: data) },
+            deleteFrame: { rel in photoStorage.deleteFrame(relPath: rel) },
+            sweepOrphanPhotoDirs: { ids in photoStorage.sweepOrphanDirs(liveMarkIds: ids) },
+            photoURL: { rel in photoStorage.absoluteURL(relPath: rel) }
         )
     }
 
@@ -177,7 +211,11 @@ final class AppEnvironment {
         transport: @escaping (URLRequest) async throws -> (Data, HTTPURLResponse),
         trustedClock: TrustedClock = AppEnvironment.makeTestClock(),
         locationProvider: any CurrentLocationProvider = NoLocationProvider(),
-        feedback: any ScanFeedbackPlaying = SilentFeedback()
+        feedback: any ScanFeedbackPlaying = SilentFeedback(),
+        writeFrame: @escaping @Sendable (String, Data) -> String? = { _, _ in nil },
+        deleteFrame: @escaping @Sendable (String) -> Void = { _ in },
+        sweepOrphanPhotoDirs: @escaping @Sendable (Set<String>) -> Void = { _ in },
+        photoURL: @escaping @Sendable (String) -> URL? = { _ in nil }
     ) throws -> AppEnvironment {
         let database = try AppDatabase.makeInMemory()
         return AppEnvironment(
@@ -189,7 +227,11 @@ final class AppEnvironment {
             localOrigin: localOrigin,
             trustedClock: trustedClock,
             locationProvider: locationProvider,
-            feedback: feedback
+            feedback: feedback,
+            writeFrame: writeFrame,
+            deleteFrame: deleteFrame,
+            sweepOrphanPhotoDirs: sweepOrphanPhotoDirs,
+            photoURL: photoURL
         )
     }
 

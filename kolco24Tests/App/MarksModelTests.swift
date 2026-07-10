@@ -217,6 +217,44 @@ struct MarksModelTests {
         #expect(model.totalCost == 0)
     }
 
+    // MARK: - Фото-взятие: тайл с кадрами, сводка «КП по фото», лента лайтбокса
+
+    @Test func photoMarkFeedsTileFramesAndReviewSummary() async throws {
+        let env = try makeEnv()
+        try await env.checkpointStore.insertCheckpoints([openCP(id: 1, race: 7, number: 5, cost: 4)])
+        try await env.legendMetaStore.upsert(LegendMeta(raceId: 7, totalCost: 4, scoringCount: 1))
+        // Фото-взятие: method="photo", два кадра в photoPath, chip-подтверждения нет → нотис показывается.
+        let photoPaths = PhotoPaths.encode([
+            "marks/p1/aaaaaaaa.jpg",
+            "marks/p1/bbbbbbbb.jpg",
+        ])
+        try await env.markStore.upsert(Mark(
+            id: "p1", raceId: 7, teamId: 42, checkpointId: 1, checkpointNumber: 5,
+            cost: 0, method: "photo", cpUid: "", cpCode: "", present: [],
+            expectedCount: 4, complete: true, photoPath: photoPaths, takenAt: 1_000, updatedAt: 1_000
+        ))
+
+        let model = MarksModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.checkpoints.count == 1 && model.marks.count == 1 }
+
+        // Тайл — фото-вида с двумя кадрами.
+        #expect(model.tiles.count == 1)
+        let tile = try #require(model.tiles.first)
+        #expect(tile.kind == .photo)
+        #expect(tile.photoCount == 2)
+        #expect(tile.photoPaths == ["marks/p1/aaaaaaaa.jpg", "marks/p1/bbbbbbbb.jpg"])
+
+        // Лента лайтбокса — оба кадра в порядке сетки.
+        #expect(model.lightboxPhotos.map(\.path) == ["marks/p1/aaaaaaaa.jpg", "marks/p1/bbbbbbbb.jpg"])
+
+        // Сводка «КП по фото» непуста: 1 КП, живая цена 4 балла.
+        let review = try #require(model.photoReview)
+        #expect(review.count == 1)
+        #expect(review.points == 4)          // живая цена КП5 (снимок взятия — 0)
+        #expect(review.tokens == ["4-05"])
+    }
+
     // MARK: - Реакция на новое взятие
 
     @Test func reactsToNewMark() async throws {
