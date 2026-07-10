@@ -127,10 +127,10 @@
 - Create: `kolco24/Core/Stores/ThemePreference.swift`
 - Create: `kolco24Tests/Core/ThemePreferenceTests.swift`
 
-- [ ] `enum ThemeMode: String, CaseIterable { case system = "SYSTEM", light = "LIGHT", dark = "DARK" }` (uppercase rawValues — персист-формат 1:1 с Kotlin `.name`, зеркальные ассерты строк остаются дословными) + `parseThemeMode(_ raw: String?) -> ThemeMode` (nil/мусор → `.system`)
-- [ ] стор в той же идиоме (ключ `theme_mode`, load/save + `fromUserDefaults`), sync-чтение при создании, `setMode` персистит `rawValue`
-- [ ] зеркало `ThemePreferenceTest.kt` → `ThemePreferenceTests` (дефолт system, pre-seeded, unknown → system, персист + reload новым инстансом)
-- [ ] run tests - must pass before next task
+- [x] `enum ThemeMode: String, CaseIterable { case system = "SYSTEM", light = "LIGHT", dark = "DARK" }` (uppercase rawValues — персист-формат 1:1 с Kotlin `.name`, зеркальные ассерты строк остаются дословными) + `parseThemeMode(_ raw: String?) -> ThemeMode` (nil/мусор → `.system`)
+- [x] стор в той же идиоме (ключ `theme_mode`, load/save + `fromUserDefaults`), sync-чтение при создании, `setMode` персистит `rawValue`
+- [x] зеркало `ThemePreferenceTest.kt` → `ThemePreferenceTests` (дефолт system, pre-seeded, unknown → system, персист + reload новым инстансом)
+- [x] run tests - must pass before next task
 
 ### Task 4: Data/Sync — SyncCoordinator (actor)
 
