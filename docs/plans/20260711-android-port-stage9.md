@@ -206,11 +206,11 @@
 
 ### Task 9: Верификация приёмки
 
-- [ ] пройтись по Overview: пин/handback/истечение, 3 триггера, тумблер derived, тема, очистка трека с guard, отладка за 10 тапами — всё реализовано
-- [ ] grep-инварианты: `Core/Lease`/`Core/Stores` — только Foundation; `import GRDB` не появился вне `Data/`; `SettingsModel` — только `Observation`/`Foundation`; `Data/Sync/SyncCoordinator` без UIKit/SwiftUI
-- [ ] edge cases: lease чужой гонки не пинит; просроченный на приёме серверный lease активно снимается; `keep` при недоступном LAN не трогает lease; busy-тумблер не даёт двойного входа (actor)
-- [ ] полный сьют: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
+- [x] пройтись по Overview: пин/handback/истечение, 3 триггера, тумблер derived, тема, очистка трека с guard, отладка за 10 тапами — всё реализовано
+- [x] grep-инварианты: `Core/Lease`/`Core/Stores` — только Foundation; `import GRDB` не появился вне `Data/`; `SettingsModel` — только `Observation`/`Foundation`; `Data/Sync/SyncCoordinator` без UIKit/SwiftUI
+- [x] edge cases: lease чужой гонки не пинит; просроченный на приёме серверный lease активно снимается; `keep` при недоступном LAN не трогает lease; busy-тумблер не даёт двойного входа (actor)
+- [x] полный сьют: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
+- [x] сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
 
 ### Task 10: [Final] Документация
 
