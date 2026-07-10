@@ -118,11 +118,11 @@
 - Create: `kolco24Tests/Core/PhotoStorageLogicTests.swift`
 - Create: `kolco24Tests/Core/MarksDisplayPhotoTests.swift`
 
-- [ ] `makePhotoMark(markId:cp:raceId:teamId:paths:expectedCount:sample:) -> Mark` — зеркало `createPhotoMark` (L211–243): `method="photo"`, `complete=true`, `present=[]`, `presentDetails=nil`, `cpUid=""/cpCode=""`, `cost = cp.cost ?? 0`, `photoPath = encodePhotoPaths(paths)`, времена из `TimeSample`
-- [ ] `scaledDimensions(width:height:maxEdge:) -> (Int, Int)` (aspect, longest ≤ maxEdge, `max(1, …)`, не-положительные → как есть) и `orphanPhotoDirs(dirNames:liveMarkIds:) -> [String]` — зеркало чистой части `PhotoStorage.kt`
-- [ ] `MarkTile` + `photoPaths: [String]`/`photoCount: Int` (из `decodePhotoPaths`), `marksToTiles` наполняет; `lightboxPhotos(tiles) -> [LightboxPhoto]` (кадры в порядке сетки); `photoReviewSummary(marks:checkpointsById:) -> PhotoReviewSummary?` (фото-only = complete photo, чей КП не подтверждён чипом; `distinctBy checkpointId`, счёт баллов) — снять пометки «этап 7, не портируется»
-- [ ] тесты: `PhotoMarkTests` (все поля, cost залоченного = 0, expectedCount не влияет на complete); `PhotoStorageLogicTests` (зеркало `PhotoStorageTest.kt`: unchanged-if-small, shrink L/P, never-zero, non-positive; orphanPhotoDirs 3 кейса); `MarksDisplayPhotoTests` (photoPaths/photoCount на тайле, lightboxPhotos порядок, photoReviewSummary — зеркало Kotlin-кейсов)
-- [ ] прогнать тесты — зелёные до Task 3
+- [x] `makePhotoMark(markId:cp:raceId:teamId:paths:expectedCount:sample:) -> Mark` — зеркало `createPhotoMark` (L211–243): `method="photo"`, `complete=true`, `present=[]`, `presentDetails=nil`, `cpUid=""/cpCode=""`, `cost = cp.cost ?? 0`, `photoPath = encodePhotoPaths(paths)`, времена из `TimeSample`
+- [x] `scaledDimensions(width:height:maxEdge:) -> (Int, Int)` (aspect, longest ≤ maxEdge, `max(1, …)`, не-положительные → как есть) и `orphanPhotoDirs(dirNames:liveMarkIds:) -> [String]` — зеркало чистой части `PhotoStorage.kt`
+- [x] `MarkTile` + `photoPaths: [String]`/`photoCount: Int` (из `decodePhotoPaths`), `marksToTiles` наполняет; `lightboxPhotos(tiles) -> [LightboxPhoto]` (кадры в порядке сетки); `photoReviewSummary(marks:costOf:) -> PhotoReviewSummary?` (фото-only = complete photo, чей КП не подтверждён чипом; `distinctBy checkpointId`, счёт баллов через живой `costOf` — 1:1 с Kotlin) — снять пометки «этап 7, не портируется»
+- [x] тесты: `PhotoMarkTests` (все поля, cost залоченного = 0, expectedCount не влияет на complete); `PhotoStorageLogicTests` (зеркало `PhotoStorageTest.kt`: unchanged-if-small, shrink L/P, never-zero, non-positive; orphanPhotoDirs 3 кейса); `MarksDisplayPhotoTests` (photoPaths/photoCount на тайле, lightboxPhotos порядок, photoReviewSummary — зеркало Kotlin-кейсов)
+- [x] прогнать тесты — зелёные до Task 3
 
 ### Task 3: Photo/ — PhotoStorage (диск + ImageIO) и sweep
 

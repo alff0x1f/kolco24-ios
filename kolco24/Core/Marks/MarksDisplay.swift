@@ -4,13 +4,13 @@
 //
 //  Чистая Android-free derived-логика вкладки «Отметки». Kotlin-источник:
 //  чистые функции `ui/marks/MarksScreen.kt` (`marksToTiles`, `tileFill`/`TileFill`,
-//  `hiddenTakenTokens`, `tokensLabel`, лестница empty-состояний `MarksEmpty`).
-//  Никакого UIKit/SwiftUI.
+//  `hiddenTakenTokens`, `tokensLabel`, лестница empty-состояний `MarksEmpty`,
+//  фото-часть: `photoPaths`/`photoCount` на тайле, `lightboxPhotos`,
+//  `PhotoReviewSummary`/`photoReviewSummary` — этап 7). Никакого UIKit/SwiftUI.
 //
-//  Фото-часть `MarksScreen.kt` (`photoPaths`/`photoCount` на тайле, `lightboxPhotos`,
-//  `PhotoReviewSummary`/`photoReviewSummary`) — **этап 7**, не портируется. Тайл
-//  здесь несёт только не-фото поля; ветки NFC-доступности лестницы empty-состояний
-//  (`nfcDisabled`/`nfcAvailable`) — **этап 5**, тоже опущены.
+//  Ветки NFC-доступности лестницы empty-состояний (`nfcDisabled`/`nfcAvailable`)
+//  опущены осознанно — все поддерживаемые iPhone имеют NFC, роутинг «нет NFC →
+//  фото» на iOS неприменим.
 //
 //  Цвета тайла представлены как ARGB `UInt32` (Kotlin `Color(0xFFRRGGBB)` — value
 //  class над Long); маппинг в пиксельный цвет — во вьюхе (этап 7).
@@ -25,7 +25,7 @@ enum MarkTileKind {
 }
 
 /// Один тайл сетки «Отметок» — одно complete-взятие. Порт display-класса
-/// Kotlin `Mark` (фото-поля `photoPaths`/`photoCount` — этап 7).
+/// Kotlin `Mark`.
 struct MarkTile: Equatable {
     /// Номер КП, двузначный с ведущим нулём.
     let number: String
@@ -34,10 +34,36 @@ struct MarkTile: Equatable {
     let kind: MarkTileKind
     /// Компактное время взятия `HH:mm` (тайл сетки).
     let time: String
-    /// Полное «дата · время» взятия (только для лайтбокса — этап 7; поле уже
-    /// портируется, оно не фото-специфично).
+    /// Полное «дата · время» взятия (только для лайтбокса; поле не
+    /// фото-специфично).
     let dateTime: String
     let color: CheckpointColor?
+    /// Относительные (`marks/<markId>/<uuid>.jpg`) пути кадров этого взятия;
+    /// корень каталога резолвится на месте рендера, никогда здесь. Несётся
+    /// **любым** взятием (NFC-взятие тоже может нести фото-доказательство),
+    /// так что бейдж «+N» гонится [photoCount] независимо от [kind].
+    let photoPaths: [String]
+
+    /// Число кадров взятия — выводится из списка, отдельного поля в БД нет.
+    var photoCount: Int { photoPaths.count }
+
+    init(
+        number: String,
+        cost: Int,
+        kind: MarkTileKind,
+        time: String,
+        dateTime: String = "",
+        color: CheckpointColor? = nil,
+        photoPaths: [String] = []
+    ) {
+        self.number = number
+        self.cost = cost
+        self.kind = kind
+        self.time = time
+        self.dateTime = dateTime
+        self.color = color
+        self.photoPaths = photoPaths
+    }
 }
 
 /// Чистое отображение локальных взятий в тайлы — **один тайл на complete-взятие**
@@ -69,9 +95,78 @@ func marksToTiles(
                 kind: m.method == "photo" ? .photo : .nfc,
                 time: timeFmt.string(from: date),
                 dateTime: dateTimeFmt.string(from: date),
-                color: colorOf(m)
+                color: colorOf(m),
+                photoPaths: PhotoPaths.decode(m.photoPath)
             )
         }
+}
+
+/// Один кадр глобальной ленты лайтбокса: его относительный путь [path] плюс
+/// взятие ([tile]), которому он принадлежит — тайл питает КП-чип этой страницы.
+/// Корень каталога резолвится на месте рендера. Порт `LightboxPhoto`.
+struct LightboxPhoto: Equatable {
+    let path: String
+    let tile: MarkTile
+}
+
+/// Расплющить кадры всех взятий в одну упорядоченную ленту, чтобы лайтбокс
+/// листался по **всем** фото, а не только по кадрам тапнутого взятия. Порядок
+/// сетки (oldest-first, как `marksToTiles`), так что свайп следует визуальному
+/// порядку тайлов; кадры дают только взятия, реально несущие фото.
+/// Порт `lightboxPhotos`.
+func lightboxPhotos(_ tiles: [MarkTile]) -> [LightboxPhoto] {
+    tiles.flatMap { tile in tile.photoPaths.map { LightboxPhoto(path: $0, tile: tile) } }
+}
+
+/// Фото-часть («без чипа») зачёта, ожидающая проверки судьёй: число КП, их
+/// баллы и display-токены каждого КП («стоимость-номер», словарь токенов тайла;
+/// КП с нулевой ценой — голый zero-padded номер) в порядке сетки (oldest-first).
+/// Порт `PhotoReviewSummary`.
+struct PhotoReviewSummary: Equatable {
+    let count: Int
+    let points: Int
+    let tokens: [String]
+}
+
+/// Чистая сводка **КП**, требующих проверки судьёй — зачтённых (`complete`)
+/// только фото-взятиями (`method == "photo"`: чип КП не читался, фото —
+/// единственное доказательство). По-КП, зеркаля `distinctBy { checkpointId }`
+/// метрик: повторное фото-взятие того же КП считается однажды, а КП, у которого
+/// *также* есть complete NFC-взятие, исключается целиком — чип уже доказывает
+/// посещение (его баллы идут от NFC-взятия), судьям гейтить нечего. Аналогично
+/// NFC-взятие, лишь *доклеившее* фото-доказательство, не считается. Баллы идут
+/// через тот же живой [costOf], что и метрики, так что правка цены организатором
+/// (или раскрытие легенды — фото-взятие ещё-залоченного КП снимает `cost = 0` и
+/// самокорректируется на reveal) отражается. `nil`, когда ни один КП не
+/// photo-only — нотис исчезает целиком, а не рендерит нулевое состояние.
+/// Порт `photoReviewSummary`.
+func photoReviewSummary(
+    _ marks: [Mark],
+    costOf: (Mark) -> Int = { $0.cost }
+) -> PhotoReviewSummary? {
+    let complete = marks.filter { $0.complete }
+    let chipVerified = Set(complete.filter { $0.method != "photo" }.map { $0.checkpointId })
+    // [marks] приходит newest-first; dedupe оставляет новейшее взятие каждого КП,
+    // reverse даёт oldest-first — токены следуют порядку тайловой сетки.
+    var seen = Set<Int>()
+    var photoOnly: [Mark] = []
+    for mark in complete
+    where mark.method == "photo" && !chipVerified.contains(mark.checkpointId) {
+        if seen.insert(mark.checkpointId).inserted {
+            photoOnly.append(mark)
+        }
+    }
+    photoOnly.reverse()
+    if photoOnly.isEmpty { return nil }
+    return PhotoReviewSummary(
+        count: photoOnly.count,
+        points: photoOnly.reduce(0) { $0 + costOf($1) },
+        tokens: photoOnly.map { m in
+            let cost = costOf(m)
+            let number = paddedNumber(m.checkpointNumber)
+            return cost > 0 ? "\(cost)-\(number)" : number
+        }
+    )
 }
 
 /// Чистые токены **взятых-но-всё-ещё-скрытых** КП — `complete`-взятия, чей КП
