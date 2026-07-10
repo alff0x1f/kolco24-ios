@@ -126,7 +126,7 @@ final class UploadModel {
     // MARK: - Derived
 
     /// Есть ли что показывать (иначе экран рисует empty-state «Пока нечего загружать»). Порт `total > 0`.
-    var hasContent: Bool { (counts?.total ?? 0) > 0 }
+    var hasContent: Bool { total > 0 }
 
     /// Подзаголовок ряда «Загрузка данных» в TeamView. Cloud — главная цель (LAN вне гонки всегда 0 и
     /// пугал бы), поэтому pending = `total - cloud`: «N не отправлено» / «Всё отправлено» / «Пока нечего

@@ -13,11 +13,11 @@
 //  track/judge со своими `*UploadResponse`, поэтому `upload` возвращает уже извлечённый `accepted`
 //  (`PostResult<[String]>`), а не конкретный response-DTO.
 //
-//  `import GRDB` — файл под `Data/`, потребляет `MarkStore` (GRDB-конформанс) и переиспользует
-//  `TrackScope` (Hashable — ключ словаря исходов). Сетевой слой (`ApiClient`/`PostResult`) — из `Net/`.
+//  Файл под `Data/`, потребляет `MarkStore` и переиспользует `TrackScope` (Hashable — ключ словаря
+//  исходов). Сетевой слой (`ApiClient`/`PostResult`) — из `Net/`. Никакой GRDB-тип не пересекает границу
+//  (`Row` в `drainUploadLoop` — generic-параметр, а не GRDB `Row`), поэтому `import GRDB` не нужен.
 //
 
-import GRDB
 import os
 
 /// Логгер дренажа выгрузки (ошибки БД внутри цикла сворачиваются в `.error` + лог, движок не роняет
