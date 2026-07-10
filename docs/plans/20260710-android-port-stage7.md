@@ -156,13 +156,13 @@
 - Modify: `kolco24Tests/Data/Repositories/MarkUploadRepositoryTests.swift`
 - Create: `kolco24Tests/Core/PhotoFrameCountsTests.swift`
 
-- [ ] `isHardFrameFailure` (400/413) + `frameDrainLoop` per target: fetch `framePending*(limit: 500)` → кадры марки по порядку → reader nil/hard → skip марки; transient → стоп таргета; все ок → `setPhotosUploaded*IfUnchanged`; нет прогресса → `.error`; пустой первый fetch → `nil`
-- [ ] `flushScope`: после метаданного цикла каждого таргета — кадровый; `combineOutcome(meta, frame)` вместо `(meta, nil)` (оба вызова); deps актора: `frameReader: (String) -> Data?`
-- [ ] `MarkStore.allIds() async throws -> [String]`; `AppEnvironment`: прод `frameReader` = чтение из `PhotoStorage`, `inMemory` → `{ _ in nil }`
-- [ ] `foldPhotoFrameCounts(_ rows: [PhotoFrameInput]) -> UploadCounts` в `Core/Upload/` над Core-структурой `PhotoFrameInput { photoPath: String?; local: Bool; cloud: Bool }`; `Data/`-адаптер `PhotoFrameRow → PhotoFrameInput` — зеркало L522–533
-- [ ] тесты дрейна (реальный `MarkStore` in-memory + `FakeTransport`, зеркала имён из `MarkRepositoryUploadTest.kt`): metadata-first (кадр не постится, пока метаданные pending); все кадры приняты → флип обоих таргетов независимо; transient стоп до следующих марок; hard (400) на одной марке — следующая всё равно флипается; 413 — то же; missing file → марка pending, следующие идут; LAN offline / cloud ok — независимость; `attachPhotos` реквьюит кадры (флаги сброшены); гонка `attachPhotos` с mid-drain флипом → version-guard не даёт застрять новому кадру; combined outcome: metadata error + frames ok ≠ ok; `IsHardFrameFailureTests` (400 hard, 413 hard, 500/429/offline transient)
-- [ ] `PhotoFrameCountsTests`: пусто → нули; пустой список кадров; оба флага → все кадры в обоих числителях; mid-drain → в total, не в числитель; смешанные строки асимметрично по таргетам
-- [ ] прогнать тесты — зелёные до Task 6
+- [x] `isHardFrameFailure` (400/413) + `frameDrainLoop` per target: fetch `framePending*(limit: 500)` → кадры марки по порядку → reader nil/hard → skip марки; transient → стоп таргета; все ок → `setPhotosUploaded*IfUnchanged`; нет прогресса → `.error`; пустой первый fetch → `nil`
+- [x] `flushScope`: после метаданного цикла каждого таргета — кадровый; `combineOutcome(meta, frame)` вместо `(meta, nil)` (оба вызова); deps актора: `frameReader: (String) -> Data?`
+- [x] `MarkStore.allIds() async throws -> [String]`; `AppEnvironment`: прод `frameReader` = чтение из `PhotoStorage`, `inMemory` → `{ _ in nil }`
+- [x] `foldPhotoFrameCounts(_ rows: [PhotoFrameInput]) -> UploadCounts` в `Core/Upload/` над Core-структурой `PhotoFrameInput { photoPath: String?; local: Bool; cloud: Bool }`; `Data/`-адаптер `PhotoFrameRow → PhotoFrameInput` — зеркало L522–533
+- [x] тесты дрейна (реальный `MarkStore` in-memory + `FakeTransport`, зеркала имён из `MarkRepositoryUploadTest.kt`): metadata-first (кадр не постится, пока метаданные pending); все кадры приняты → флип обоих таргетов независимо; transient стоп до следующих марок; hard (400) на одной марке — следующая всё равно флипается; 413 — то же; missing file → марка pending, следующие идут; LAN offline / cloud ok — независимость; `attachPhotos` реквьюит кадры (флаги сброшены); гонка `attachPhotos` с mid-drain флипом → version-guard не даёт застрять новому кадру; combined outcome: metadata error + frames ok ≠ ok; `IsHardFrameFailureTests` (400 hard, 413 hard, 500/429/offline transient)
+- [x] `PhotoFrameCountsTests`: пусто → нули; пустой список кадров; оба флага → все кадры в обоих числителях; mid-drain → в total, не в числитель; смешанные строки асимметрично по таргетам
+- [x] прогнать тесты — зелёные до Task 6
 
 ### Task 6: App — PhotoModel + фабрика + orphan sweep на старте
 

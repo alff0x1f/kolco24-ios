@@ -73,6 +73,7 @@ final class AppEnvironment {
         trustedClock: TrustedClock,
         locationProvider: any CurrentLocationProvider,
         feedback: any ScanFeedbackPlaying,
+        frameReader: @escaping (String) -> Data? = { _ in nil },
         wallNow: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.database = database
@@ -140,7 +141,8 @@ final class AppEnvironment {
             cloud: cloud,
             local: local,
             installId: installId,
-            wallNow: wallNow
+            wallNow: wallNow,
+            frameReader: frameReader
         )
     }
 
@@ -151,6 +153,10 @@ final class AppEnvironment {
     static func makeShared() throws -> AppEnvironment {
         let database = try AppDatabase.makeShared()
         let pair = ApiClients.makeDefaultPair()
+        // Прод-чтение кадров с диска для frame-дренажа: `PhotoStorage` под `Application Support`
+        // (тот же корень, что `kolco24.db`). `PhotoPaths.decode` уже отфильтровал небезопасные пути
+        // до вызова reader'а, так что `absoluteURL` получает только `marks/<id>/<uuid>.jpg`.
+        let photoStorage = try PhotoStorage.makeShared()
         return AppEnvironment(
             database: database,
             cloud: pair.cloud,
@@ -164,7 +170,8 @@ final class AppEnvironment {
             trustedClock: pair.clock,
             // One-shot GPS-фикс на момент взятия (задача 6); прод аудио/тактильный фидбек (задача 7).
             locationProvider: CoreLocationProvider(),
-            feedback: ScanFeedbackPlayer()
+            feedback: ScanFeedbackPlayer(),
+            frameReader: { rel in try? Data(contentsOf: photoStorage.absoluteURL(relPath: rel)) }
         )
     }
 

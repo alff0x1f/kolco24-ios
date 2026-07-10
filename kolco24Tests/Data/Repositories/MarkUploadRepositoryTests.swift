@@ -410,4 +410,390 @@ struct MarkUploadRepositoryTests {
         #expect(outcome?.kind == .ok)
         #expect(outcome?.atWallMs == 5000)
     }
+
+    // MARK: - Frame-дренаж (этап 7) — зеркала `MarkRepositoryUploadTest.kt`
+
+    /// Фото-марка с кадрами, метаданные уже доставлены (`uploaded* = 1`) → фокус дренажа на кадрах.
+    private func makePhotoMark(
+        id: String,
+        raceId: Int = 1,
+        teamId: Int = 7,
+        paths: [String],
+        uploadedLocal: Bool = true,
+        uploadedCloud: Bool = true,
+        takenAt: Int64 = 2000,
+        updatedAt: Int64 = 2000
+    ) -> Mark {
+        Mark(
+            id: id, raceId: raceId, teamId: teamId,
+            checkpointId: 20, checkpointNumber: 20, cost: 0,
+            method: "photo", cpUid: "", cpCode: "",
+            present: [], presentDetails: nil,
+            expectedCount: 3, complete: true,
+            photoPath: PhotoPaths.encode(paths),
+            takenAt: takenAt, updatedAt: updatedAt,
+            uploadedLocal: uploadedLocal, uploadedCloud: uploadedCloud,
+            photosUploadedLocal: false, photosUploadedCloud: false
+        )
+    }
+
+    /// Собрать граф с frame-роутинг-транспортом + fake file reader.
+    private func makeFrameRepo(
+        reader: FakeFrameReader,
+        transport: FrameRoutingTransport,
+        wallNow: @escaping () -> Int64 = { 5000 }
+    ) throws -> (repo: MarkUploadRepository, store: MarkStore) {
+        let db = try AppDatabase.makeInMemory()
+        let store = MarkStore(db.writer)
+        let cloud = makeClient(base: "https://cloud.test", transport: transport.handle)
+        let local = makeClient(base: "http://local.test", transport: transport.handle)
+        let repo = MarkUploadRepository(
+            markStore: store, cloud: cloud, local: local,
+            installId: "install-abc", wallNow: wallNow,
+            frameReader: reader.read
+        )
+        return (repo, store)
+    }
+
+    @Test func frameDrain_metadataFirstOrdering_noFramePostWhileMetadataPending() async throws {
+        // Метаданные ещё не выгружены (uploaded* = false) — их цикл падает Offline и не флипается;
+        // `framePending*` гейтит на uploadedX = 1, так что кадровый аплоадер не должен дёрнуться.
+        let reader = FakeFrameReader(); reader.put("marks/m/f1.jpg")
+        let transport = FrameRoutingTransport()
+        transport.onMetadata = { _, _ in .offline }
+        let (repo, store) = try makeFrameRepo(reader: reader, transport: transport)
+        try await store.upsert(makePhotoMark(id: "p1", paths: ["marks/m/f1.jpg"],
+                                             uploadedLocal: false, uploadedCloud: false))
+
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        #expect(transport.frameCalls.isEmpty)
+        let mark = try #require(try await store.getById("p1"))
+        #expect(mark.photosUploadedLocal == false)
+        #expect(mark.photosUploadedCloud == false)
+    }
+
+    @Test func frameDrain_allFramesAccepted_flipsPhotosUploadedBothTargets() async throws {
+        let paths = ["marks/m/f1.jpg", "marks/m/f2.jpg"]
+        let reader = FakeFrameReader(); paths.forEach { reader.put($0) }
+        let transport = FrameRoutingTransport() // default: every frame 200
+        let (repo, store) = try makeFrameRepo(reader: reader, transport: transport)
+        try await store.upsert(makePhotoMark(id: "p1", paths: paths))
+
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        let mark = try #require(try await store.getById("p1"))
+        #expect(mark.photosUploadedLocal == true)
+        #expect(mark.photosUploadedCloud == true)
+        let expected = Set(paths.map(PhotoPaths.frameIdOf))
+        #expect(Set(transport.cloudFrameCalls.map(\.frameId)) == expected)
+        #expect(Set(transport.localFrameCalls.map(\.frameId)) == expected)
+    }
+
+    @Test func frameDrain_transientFailure_stopsTargetBeforeLaterMarks_retriedNextTrigger() async throws {
+        let reader = FakeFrameReader(); reader.put("marks/a/f1.jpg"); reader.put("marks/b/f1.jpg")
+        let transport = FrameRoutingTransport()
+        let offline = OfflineToggle(on: true)
+        // Только облачные кадры под toggle; local держим полностью доставленным (нет кадрового дренажа).
+        transport.onFrame = { call in
+            guard call.isCloud else { return .status(200) }
+            return offline.isOn ? .offline : .status(200)
+        }
+        let (repo, store) = try makeFrameRepo(reader: reader, transport: transport)
+        // local уже доставлен → local frame-дренаж пуст; фокус на cloud.
+        try await store.upsert(makePhotoMark(id: "a", paths: ["marks/a/f1.jpg"], takenAt: 1, updatedAt: 1))
+        try await store.upsert(makePhotoMark(id: "b", paths: ["marks/b/f1.jpg"], takenAt: 2, updatedAt: 2))
+        // Отметки уже загружены local → чтобы local-frame был пуст, ставим photosUploadedLocal сразу.
+        try await store.setPhotosUploadedLocalIfUnchanged(id: "a", updatedAt: 1)
+        try await store.setPhotosUploadedLocalIfUnchanged(id: "b", updatedAt: 2)
+
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        // Первая (по порядку — «a») марка падает транзиентно → весь cloud-таргет стоп; «b» не пробуют.
+        #expect(transport.cloudFrameCalls.count == 1)
+        let a1 = try #require(try await store.getById("a"))
+        let b1 = try #require(try await store.getById("b"))
+        #expect(a1.photosUploadedCloud == false)
+        #expect(b1.photosUploadedCloud == false)
+
+        offline.isOn = false
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        let a2 = try #require(try await store.getById("a"))
+        let b2 = try #require(try await store.getById("b"))
+        #expect(a2.photosUploadedCloud == true)
+        #expect(b2.photosUploadedCloud == true)
+    }
+
+    @Test func frameDrain_hardFailureOnOneMark_leavesItPending_laterGoodMarkStillFlips() async throws {
+        let reader = FakeFrameReader(); reader.put("marks/bad/f1.jpg"); reader.put("marks/good/f1.jpg")
+        let transport = FrameRoutingTransport()
+        transport.onFrame = { call in
+            guard call.isCloud else { return .status(200) }
+            return call.markId == "bad" ? .status(400) : .status(200)
+        }
+        let (repo, store) = try makeFrameRepo(reader: reader, transport: transport)
+        try await store.upsert(makePhotoMark(id: "bad", paths: ["marks/bad/f1.jpg"], takenAt: 1, updatedAt: 1))
+        try await store.upsert(makePhotoMark(id: "good", paths: ["marks/good/f1.jpg"], takenAt: 2, updatedAt: 2))
+        try await store.setPhotosUploadedLocalIfUnchanged(id: "bad", updatedAt: 1)
+        try await store.setPhotosUploadedLocalIfUnchanged(id: "good", updatedAt: 2)
+
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        let bad = try #require(try await store.getById("bad"))
+        let good = try #require(try await store.getById("good"))
+        #expect(bad.photosUploadedCloud == false)
+        #expect(good.photosUploadedCloud == true)
+        // «good» флипается, но не маскирует застрявший ядовитый кадр «bad»: общий исход — Error.
+        let outcome = await repo.outcomes[TrackScope(raceId: 1, teamId: 7)]?[.cloud]
+        #expect(outcome?.kind == .error)
+    }
+
+    @Test func frameDrain_payloadTooLargeOnOneMark_leavesItPending_laterGoodMarkStillFlips() async throws {
+        let reader = FakeFrameReader(); reader.put("marks/bad/f1.jpg"); reader.put("marks/good/f1.jpg")
+        let transport = FrameRoutingTransport()
+        transport.onFrame = { call in
+            guard call.isCloud else { return .status(200) }
+            return call.markId == "bad" ? .status(413) : .status(200)
+        }
+        let (repo, store) = try makeFrameRepo(reader: reader, transport: transport)
+        try await store.upsert(makePhotoMark(id: "bad", paths: ["marks/bad/f1.jpg"], takenAt: 1, updatedAt: 1))
+        try await store.upsert(makePhotoMark(id: "good", paths: ["marks/good/f1.jpg"], takenAt: 2, updatedAt: 2))
+        try await store.setPhotosUploadedLocalIfUnchanged(id: "bad", updatedAt: 1)
+        try await store.setPhotosUploadedLocalIfUnchanged(id: "good", updatedAt: 2)
+
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        let bad = try #require(try await store.getById("bad"))
+        let good = try #require(try await store.getById("good"))
+        #expect(bad.photosUploadedCloud == false)
+        #expect(good.photosUploadedCloud == true)
+        let outcome = await repo.outcomes[TrackScope(raceId: 1, teamId: 7)]?[.cloud]
+        #expect(outcome?.kind == .error)
+    }
+
+    @Test func frameDrain_missingFile_keepsMarkPending_drainTerminatesWithoutSpinning() async throws {
+        let reader = FakeFrameReader() // файла нет → read == nil
+        let transport = FrameRoutingTransport()
+        let (repo, store) = try makeFrameRepo(reader: reader, transport: transport)
+        try await store.upsert(makePhotoMark(id: "p1", paths: ["marks/m/f1.jpg"], uploadedLocal: true, uploadedCloud: true))
+
+        await repo.uploadPending(raceId: 1, teamId: 7) // должен завершиться, не зациклиться
+
+        let mark = try #require(try await store.getById("p1"))
+        #expect(mark.photosUploadedCloud == false)
+        #expect(transport.frameCalls.isEmpty) // POST для нечитаемого кадра даже не пробуют
+    }
+
+    @Test func frameDrain_dualTargetIndependence_lanOfflineCloudStillFlips() async throws {
+        let reader = FakeFrameReader(); reader.put("marks/m/f1.jpg")
+        let transport = FrameRoutingTransport()
+        transport.onFrame = { call in call.isCloud ? .status(200) : .offline } // local Offline
+        let (repo, store) = try makeFrameRepo(reader: reader, transport: transport)
+        try await store.upsert(makePhotoMark(id: "p1", paths: ["marks/m/f1.jpg"]))
+
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        let mark = try #require(try await store.getById("p1"))
+        #expect(mark.photosUploadedCloud == true)
+        #expect(mark.photosUploadedLocal == false)
+    }
+
+    @Test func frameDrain_attachPhotos_requeuesFrames() async throws {
+        let reader = FakeFrameReader(); reader.put("marks/m/f1.jpg"); reader.put("marks/m/f2.jpg")
+        let transport = FrameRoutingTransport()
+        let (repo, store) = try makeFrameRepo(reader: reader, transport: transport)
+        try await store.upsert(makePhotoMark(id: "p1", paths: ["marks/m/f1.jpg"]))
+        await repo.uploadPending(raceId: 1, teamId: 7)
+        #expect(try await store.getById("p1")?.photosUploadedCloud == true)
+
+        let bumped = (try await store.getById("p1"))!.updatedAt + 1000
+        try await store.attachPhotos(id: "p1", newPaths: ["marks/m/f2.jpg"], now: bumped)
+
+        let after = try #require(try await store.getById("p1"))
+        #expect(after.photosUploadedCloud == false) // attachPhotos сбросил флаги
+        #expect(after.photosUploadedLocal == false)
+
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        let final = try #require(try await store.getById("p1"))
+        #expect(final.photosUploadedCloud == true)
+        #expect(final.photosUploadedLocal == true)
+        #expect(transport.cloudFrameCalls.contains { $0.frameId == PhotoPaths.frameIdOf("marks/m/f2.jpg") })
+    }
+
+    @Test func frameDrain_attachPhotosRacingMidDrainFlip_doesNotStrandNewFrame() async throws {
+        // Version-guard-гонка: дренаж захватил марку (устаревший updatedAt), затем — во время выгрузки
+        // её единственного кадра — attachPhotos дописывает новый кадр и бампит updatedAt. Guard-нутый
+        // setPhotosUploadedCloudIfUnchanged(id, staleUpdatedAt) должен НЕ флипнуть (mismatch), а
+        // re-fetch цикла подберёт всё ещё-pending марку и дошлёт f1 (идемпотентно) + новый f2.
+        let reader = FakeFrameReader(); reader.put("marks/m/f1.jpg"); reader.put("marks/m/f2.jpg")
+        let db = try AppDatabase.makeInMemory()
+        let store = MarkStore(db.writer)
+        let transport = FrameRoutingTransport()
+        let raced = OfflineToggle(on: false) // переиспользуем как «уже сгонял?»
+        transport.onFrame = { [store] call in
+            guard call.isCloud else { return .offline } // local не мешает
+            if !raced.isOn {
+                raced.isOn = true
+                let now = ((try? await store.getById("p1"))??.updatedAt ?? 2000) + 1000
+                try? await store.attachPhotos(id: "p1", newPaths: ["marks/m/f2.jpg"], now: now)
+            }
+            return .status(200)
+        }
+        let cloud = makeClient(base: "https://cloud.test", transport: transport.handle)
+        let local = makeClient(base: "http://local.test", transport: transport.handle)
+        let repo = MarkUploadRepository(
+            markStore: store, cloud: cloud, local: local,
+            installId: "install-abc", wallNow: { 5000 }, frameReader: reader.read
+        )
+        try await store.upsert(makePhotoMark(id: "p1", paths: ["marks/m/f1.jpg"]))
+
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        #expect(raced.isOn)
+        let mark = try #require(try await store.getById("p1"))
+        #expect(mark.photosUploadedCloud == true) // сошлось без застревания
+        #expect(transport.cloudFrameCalls.contains { $0.frameId == PhotoPaths.frameIdOf("marks/m/f1.jpg") })
+        #expect(transport.cloudFrameCalls.contains { $0.frameId == PhotoPaths.frameIdOf("marks/m/f2.jpg") })
+    }
+
+    @Test func frameDrain_combinedOutcome_metadataErrorFrameOk_finalOutcomeNotOk() async throws {
+        let reader = FakeFrameReader(); reader.put("marks/m/f1.jpg")
+        let transport = FrameRoutingTransport()
+        // Метаданные (nfc-марка) на cloud → 403 (Error); кадр фото-марки → 200.
+        transport.onMetadata = { isCloud, _ in isCloud ? .status(403) : .offline }
+        transport.onFrame = { _ in .status(200) }
+        let (repo, store) = try makeFrameRepo(reader: reader, transport: transport)
+        // nfc-марка, метаданные не выгружены (упадут); фото-марка с доставленными метаданными + 1 кадр.
+        try await store.upsert(makeMark(id: "nfc1", raceId: 1, teamId: 7, uploadedLocal: false, uploadedCloud: false, takenAt: 1))
+        try await store.upsert(makePhotoMark(id: "photo1", paths: ["marks/m/f1.jpg"], takenAt: 2, updatedAt: 2))
+
+        await repo.uploadPending(raceId: 1, teamId: 7)
+
+        // Кадр сам по себе прошёл...
+        #expect(try await store.getById("photo1")?.photosUploadedCloud == true)
+        // ...но комбинированный per-target исход не должен читаться Ok: metadata Error приоритетнее.
+        let outcome = await repo.outcomes[TrackScope(raceId: 1, teamId: 7)]?[.cloud]
+        #expect(outcome?.kind == .error)
+    }
+}
+
+// MARK: - Хелперы frame-дренажа
+
+/// Fake-читатель байт кадра: отдаёт то, что было `put`; никогда не `put` путь → `nil` (missing file).
+final class FakeFrameReader: @unchecked Sendable {
+    private let lock = NSLock()
+    private var files: [String: Data] = [:]
+
+    func put(_ path: String, bytes: Data = Data([1, 2, 3])) {
+        lock.lock(); defer { lock.unlock() }
+        files[path] = bytes
+    }
+
+    func read(_ relPath: String) -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        return files[relPath]
+    }
+}
+
+/// Мутабельный флаг под замком (переключение поведения транспорта между триггерами / гонка).
+final class OfflineToggle: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Bool
+    init(on: Bool) { value = on }
+    var isOn: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return value }
+        set { lock.lock(); defer { lock.unlock() }; value = newValue }
+    }
+}
+
+/// Роутинг-транспорт: различает metadata-POST (`…/marks/`) и frame-POST (`…/mark/<id>/photo/<fid>`)
+/// по пути и cloud/local по хосту; исходы задаются per-test замыканиями. Записывает frame-вызовы.
+final class FrameRoutingTransport: @unchecked Sendable {
+    struct FrameCall: Equatable, Sendable {
+        let isCloud: Bool
+        let markId: String
+        let frameId: String
+    }
+
+    enum Response { case status(Int); case ok(accepted: [String]); case offline }
+
+    private let lock = NSLock()
+    private var _frameCalls: [FrameCall] = []
+    var frameCalls: [FrameCall] { lock.lock(); defer { lock.unlock() }; return _frameCalls }
+    var cloudFrameCalls: [FrameCall] { frameCalls.filter { $0.isCloud } }
+    var localFrameCalls: [FrameCall] { frameCalls.filter { !$0.isCloud } }
+
+    /// Метаданный ответ по (isCloud, ids батча). Дефолт — принять всё.
+    var onMetadata: (_ isCloud: Bool, _ ids: [String]) async -> Response = { _, ids in .ok(accepted: ids) }
+    /// Кадровый ответ по вызову. Дефолт — 200.
+    var onFrame: (_ call: FrameCall) async -> Response = { _ in .status(200) }
+
+    func handle(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let url = request.url!
+        let isCloud = (url.host == "cloud.test")
+        let segs = url.path.split(separator: "/").map(String.init)
+        let response: Response
+        if let mi = segs.firstIndex(of: "mark"), let pi = segs.firstIndex(of: "photo"),
+           mi + 1 < segs.count, pi + 1 < segs.count {
+            let call = FrameCall(isCloud: isCloud, markId: segs[mi + 1], frameId: segs[pi + 1])
+            lock.lock(); _frameCalls.append(call); lock.unlock()
+            response = await onFrame(call)
+        } else {
+            response = await onMetadata(isCloud, Self.parseIds(request.httpBody))
+        }
+        guard let built = Self.build(response, url: url) else {
+            throw URLError(.notConnectedToInternet)
+        }
+        return built
+    }
+
+    private static func parseIds(_ body: Data?) -> [String] {
+        guard let body,
+              let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let marks = obj["marks"] as? [[String: Any]] else { return [] }
+        return marks.compactMap { $0["id"] as? String }
+    }
+
+    /// `nil` возвращается для `.offline` — вызывающий бросает `URLError`.
+    private static func build(_ response: Response, url: URL) -> (Data, HTTPURLResponse)? {
+        switch response {
+        case .offline:
+            return nil
+        case .status(let code):
+            let resp = HTTPURLResponse(url: url, statusCode: code, httpVersion: "HTTP/1.1", headerFields: [:])!
+            return (Data(), resp)
+        case .ok(let accepted):
+            let joined = accepted.map { "\"\($0)\"" }.joined(separator: ",")
+            let body = Data("{\"accepted\":[\(joined)]}".utf8)
+            let resp = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:])!
+            return (body, resp)
+        }
+    }
+}
+
+// MARK: - isHardFrameFailure — зеркало `IsHardFrameFailureTest.kt`
+
+struct IsHardFrameFailureTests {
+    @Test func badRequest_isHard() {
+        #expect(isHardFrameFailure(PostResult<Void>.badRequest) == true)
+    }
+
+    @Test func payloadTooLarge413_isHard() {
+        #expect(isHardFrameFailure(PostResult<Void>.error(code: 413)) == true)
+    }
+
+    @Test func otherErrorCodes_areTransient() {
+        #expect(isHardFrameFailure(PostResult<Void>.error(code: 500)) == false)
+        #expect(isHardFrameFailure(PostResult<Void>.error(code: nil)) == false)
+    }
+
+    @Test func targetWideFailures_areTransient() {
+        #expect(isHardFrameFailure(PostResult<Void>.offline) == false)
+        #expect(isHardFrameFailure(PostResult<Void>.unauthorized) == false)
+        #expect(isHardFrameFailure(PostResult<Void>.forbidden) == false)
+        #expect(isHardFrameFailure(PostResult<Void>.conflict) == false)
+        #expect(isHardFrameFailure(PostResult<Void>.rateLimited) == false)
+    }
 }

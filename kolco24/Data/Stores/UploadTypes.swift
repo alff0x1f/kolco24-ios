@@ -75,3 +75,11 @@ struct PhotoFrameRow: Equatable, FetchableRecord {
         )
     }
 }
+
+extension PhotoFrameRow {
+    /// Маппинг в лёгкий Core-вход `foldPhotoFrameCounts` (Core-инвариант — без GRDB-типа `PhotoFrameRow`):
+    /// `Data/`-адаптер вызывается на месте (потребитель — `UploadModel`, этап 7 задача 9).
+    var asFrameInput: PhotoFrameInput {
+        PhotoFrameInput(photoPath: photoPath, local: photosUploadedLocal, cloud: photosUploadedCloud)
+    }
+}
