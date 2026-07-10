@@ -115,13 +115,13 @@
 - Modify: `kolco24/Net/ApiClient.swift`
 - Create: `kolco24Tests/Net/MarkUploadDtoTests.swift`
 
-- [ ] `Encodable`-типы: `MarkUploadRequest{team_id, source_install_id, marks}`, `MarkDto`, `PresentMemberDto`, `TakeLocationDto` — snake_case `CodingKeys`, nullable-поля кодируются явным `null` (см. Technical Details); `Decodable` `MarkUploadResponse{accepted}`
-- [ ] `MarkDto(from: Mark)`: merge по `present` (истина состава) + `presentDetails.associateBy(numberInTeam)`; sentinel `{nil, nil, 0, num}` для отсутствующего снимка; `location` только при `locLat != nil && locLon != nil`; маппинг времён `trusted_ms ← trustedTakenAt`, `wall_ms ← takenAt`, `elapsed_at ← elapsedRealtimeAt`
-- [ ] `ApiClient.uploadMarks(raceId:teamId:sourceInstallId:marks:) async -> PostResult<MarkUploadResponse>` — `post` на `endpoint("/app/race/\(raceId)/marks/")`, тело сериализуется один раз
-- [ ] тесты merge (зеркало `MarkDtosTest`): обогащённый снимок, sentinel при частичном снимке, legacy `presentDetails == nil` → все sentinel, `location == nil`, полный `location`
-- [ ] тесты JSON-формы: точные имена ключей (снапшот-проверка по декоду в словарь, включая ловушки `cp_nfc_uid`/`cp_code`), `null`-ключи присутствуют у no-default скаляров, ключ `location` **отсутствует** при nil-фиксе, `team_id`/`source_install_id` на батче
-- [ ] тест эндпоинта через `FakeTransport`: метод POST, путь `/app/race/7/marks/` (со слэшем), `Content-Type: application/json`, парс `accepted`
-- [ ] прогнать тесты — зелёные до Task 3
+- [x] `Encodable`-типы: `MarkUploadRequest{team_id, source_install_id, marks}`, `MarkDto`, `PresentMemberDto`, `TakeLocationDto` — snake_case `CodingKeys`, nullable-поля кодируются явным `null` (см. Technical Details); `Decodable` `MarkUploadResponse{accepted}`
+- [x] `MarkDto(from: Mark)`: merge по `present` (истина состава) + `presentDetails.associateBy(numberInTeam)`; sentinel `{nil, nil, 0, num}` для отсутствующего снимка; `location` только при `locLat != nil && locLon != nil`; маппинг времён `trusted_ms ← trustedTakenAt`, `wall_ms ← takenAt`, `elapsed_at ← elapsedRealtimeAt`
+- [x] `ApiClient.uploadMarks(raceId:teamId:sourceInstallId:marks:) async -> PostResult<MarkUploadResponse>` — `post` на `endpoint("/app/race/\(raceId)/marks/")`, тело сериализуется один раз
+- [x] тесты merge (зеркало `MarkDtosTest`): обогащённый снимок, sentinel при частичном снимке, legacy `presentDetails == nil` → все sentinel, `location == nil`, полный `location`
+- [x] тесты JSON-формы: точные имена ключей (снапшот-проверка по декоду в словарь, включая ловушки `cp_nfc_uid`/`cp_code`), `null`-ключи присутствуют у no-default скаляров, ключ `location` **отсутствует** при nil-фиксе, `team_id`/`source_install_id` на батче
+- [x] тест эндпоинта через `FakeTransport`: метод POST, путь `/app/race/7/marks/` (со слэшем), `Content-Type: application/json`, парс `accepted`
+- [x] прогнать тесты — зелёные до Task 3
 
 ### Task 3: Data/Repositories — actor MarkUploadRepository + drainUploadLoop
 

@@ -169,6 +169,38 @@ struct ApiClient {
         }
     }
 
+    // MARK: - Эндпоинты (загрузка)
+
+    /// `POST /app/race/<raceId>/marks/` — выгрузка батча взятий [marks] команды [teamId]. Тело —
+    /// `MarkUploadRequest(team_id, source_install_id, marks)`, сериализуется в `Data` **один раз**
+    /// (те же байты хэшируются в подпись и отправляются — конвенция `post`). `200`/`201` →
+    /// `.success` с распарсенным `MarkUploadResponse` (принятые клиентские `id` для идемпотентного
+    /// upsert); прочие статусы маппятся по `post`. Один и тот же метод обслуживает обе цели
+    /// (cloud / local LAN) — цель выбирается экземпляром `ApiClient`, не URL-ом вызова. **Не
+    /// ретраится** (гарантия `post`: 403 auth-vs-skew неразличим, replay небезопасен).
+    func uploadMarks(
+        raceId: Int,
+        teamId: Int,
+        sourceInstallId: String,
+        marks: [MarkDto]
+    ) async -> PostResult<MarkUploadResponse> {
+        let request = MarkUploadRequest(
+            teamId: teamId,
+            sourceInstallId: sourceInstallId,
+            marks: marks
+        )
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(request)
+        } catch {
+            // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
+            return .error(code: nil)
+        }
+        return await post(url: endpoint("/app/race/\(raceId)/marks/"), body: body) {
+            try JSONDecoder().decode(MarkUploadResponse.self, from: $0)
+        }
+    }
+
     /// URL эндпоинта из `baseURL` (без хвостового `/`) + `path` (с завершающим слэшем — он входит в
     /// подписанную канонику).
     private func endpoint(_ path: String) -> URL {
