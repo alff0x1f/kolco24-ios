@@ -174,10 +174,10 @@
 - Create: `kolco24/UploadView.swift`
 - Modify: `kolco24/TeamView.swift`
 
-- [ ] Ряд `MiscRowView` «Загрузка данных» в TeamView (иконка `arrow.up.circle.fill` или аналог, sub = `pendingLabel`), тап → `.sheet` с `UploadView` (конвенция шитов TeamView); модель — через `makeUploadModel()`
-- [ ] `UploadView`: `List`/`ScrollView` + `.refreshable { await model.refresh() }`; секция «Отметки» — receipt-лайны «Интернет» (всегда) и «Финиш» (по правилу видимости): `uploaded/total` в `Font.mono`, done → зелёный глиф (`GreenCheckCircle`/`Color.good`), error/offline → `Color.brandRed`, вторая строка `«{relativeTime} · {ok|нет интернета|сервер недоступен|ошибка}»`; empty state «Пока нечего загружать»
-- [ ] дизайн-токены/типографика по `DesignTokens`/`SharedComponents` (адаптивная палитра, `DS.hPad`/`DS.cardRadius`), русский UI; `#Preview` с in-memory окружением
-- [ ] прогнать полный сьют + сборку — зелёные до Task 7
+- [x] Ряд `MiscRowView` «Загрузка данных» в TeamView (иконка `arrow.up.circle.fill` или аналог, sub = `pendingLabel`), тап → `.sheet` с `UploadView` (конвенция шитов TeamView); модель — через `makeUploadModel()`
+- [x] `UploadView`: `List`/`ScrollView` + `.refreshable { await model.refresh() }`; секция «Отметки» — receipt-лайны «Интернет» (всегда) и «Финиш» (по правилу видимости): `uploaded/total` в `Font.mono`, done → зелёный глиф (`GreenCheckCircle`/`Color.good`), error/offline → `Color.brandRed`, вторая строка `«{relativeTime} · {ok|нет интернета|сервер недоступен|ошибка}»`; empty state «Пока нечего загружать»
+- [x] дизайн-токены/типографика по `DesignTokens`/`SharedComponents` (адаптивная палитра, `DS.hPad`/`DS.cardRadius`), русский UI; `#Preview` с in-memory окружением
+- [x] прогнать полный сьют + сборку — зелёные до Task 7
 
 ### Task 7: Верификация приёмки
 
