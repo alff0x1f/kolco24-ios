@@ -37,6 +37,9 @@ final class TeamModel {
     private(set) var bindings: [Int: MemberChipBinding] = [:]
     /// Категории гонки выбранной команды — для строки «Категория X · N человек» на герой-карточке.
     private(set) var categories: [Category] = []
+    /// Сырые точки GPS-трека выбранной команды (этап 8), из `trackStore.observeForTeam` (уже
+    /// отсортированы SQL). Пусто между `rebind` и первой эмиссией новой команды (stale-guard).
+    private(set) var trackPoints: [TrackPoint] = []
 
     // MARK: - Bind-флоу (этап 5, задача 9)
 
@@ -61,8 +64,13 @@ final class TeamModel {
     private(set) var bindState: BindSheetState = .waiting
 
     @ObservationIgnored private let env: AppEnvironment
+    /// Инжект-замыкание «выдана только примерная геолокация» (этап 8): iOS-аналог андроидного «нет
+    /// GPS-провайдера». Прод — `env.isReducedAccuracy` (чтение `accuracyAuthorization` с удерживаемого
+    /// `CLLocationManager`), тесты подают своё. Старт записи не блокируется — лишь тихий хинт в TrackCard.
+    @ObservationIgnored private let isReducedAccuracy: () -> Bool
     @ObservationIgnored private var bindingsTask: Task<Void, Never>?
     @ObservationIgnored private var categoriesTask: Task<Void, Never>?
+    @ObservationIgnored private var trackTask: Task<Void, Never>?
     @ObservationIgnored private var bindStreamTask: Task<Void, Never>?
     @ObservationIgnored private var bindScanner: (any ChipScanning)?
     /// Потокобезопасное зеркало «bind-лист жив и ждёт чип» для `NfcChipScanner.shouldRestart` (читается
@@ -82,13 +90,15 @@ final class TeamModel {
     @ObservationIgnored private var boundTeamId: Int?
     @ObservationIgnored private var boundRaceId: Int?
 
-    init(env: AppEnvironment) {
+    init(env: AppEnvironment, isReducedAccuracy: @escaping () -> Bool = { false }) {
         self.env = env
+        self.isReducedAccuracy = isReducedAccuracy
     }
 
     deinit {
         bindingsTask?.cancel()
         categoriesTask?.cancel()
+        trackTask?.cancel()
         bindStreamTask?.cancel()
     }
 
@@ -103,8 +113,10 @@ final class TeamModel {
         cancelBind()
         bindingsTask?.cancel()
         categoriesTask?.cancel()
+        trackTask?.cancel()
         bindings = [:]
         categories = []
+        trackPoints = []
         boundTeamId = teamId
         boundRaceId = raceId
 
@@ -127,6 +139,19 @@ final class TeamModel {
                     for try await cats in observation {
                         guard let self, !Task.isCancelled else { return }
                         self.categories = cats
+                    }
+                } catch {}
+            }
+        }
+
+        // Точки трека нуждаются в ОБОИХ ключах (`observeForTeam` скоупит по `teamId` + `raceId`).
+        if let teamId, let raceId {
+            let observation = env.trackStore.observeForTeam(teamId: teamId, raceId: raceId)
+            trackTask = Task { [weak self] in
+                do {
+                    for try await points in observation {
+                        guard let self, !Task.isCancelled else { return }
+                        self.trackPoints = points
                     }
                 } catch {}
             }
@@ -155,6 +180,53 @@ final class TeamModel {
     /// Привязка слота [numberInTeam] или `nil`, если не привязан.
     func binding(for numberInTeam: Int) -> MemberChipBinding? {
         bindings[numberInTeam]
+    }
+
+    // MARK: - Derived (GPS-трек, этап 8)
+
+    /// Точки для отображения/экспорта: отфильтрованные по точности и reboot-safe отсортированные
+    /// (`filterPoints` + `sortedTrackPoints`). База «Времени» и GPX-шаринга (порт `trackUsable`).
+    var trackUsable: [TrackPoint] {
+        sortedTrackPoints(filterPoints(trackPoints))
+    }
+
+    /// Число записанных точек (СЫРОЕ, не фильтрованное — порт `safeTrack.size`): сессия из одних грубых
+    /// фиксов всё равно считается «записанной» (иначе метрика вводила бы в заблуждение).
+    var trackPointCount: Int {
+        trackPoints.count
+    }
+
+    /// Число сессий записи = число различных `segmentId` по СЫРЫМ точкам (порт `trackSegmentCount`).
+    var trackSegmentCount: Int {
+        Set(trackPoints.map { $0.segmentId }).count
+    }
+
+    /// Диапазон времени трека «HH:mm–HH:mm» (несколько точек) / «HH:mm» (одна) / `nil` (пусто) —
+    /// от `trackPointTimeMs` первой и последней `trackUsable`-точки (локальное время, порт TrackMetrics).
+    var trackTimeRange: String? {
+        let usable = trackUsable
+        guard let first = usable.first, let last = usable.last else { return nil }
+        let firstLabel = formatHHmm(trackPointTimeMs(first))
+        if first.id == last.id { return firstLabel }
+        return "\(firstLabel)–\(formatHHmm(trackPointTimeMs(last)))"
+    }
+
+    /// Выдана ли только «примерная» локация — тихий хинт «Только примерная геолокация (нет GPS).»
+    /// в TrackCard (старт записи не блокируется).
+    var degradedAccuracy: Bool {
+        isReducedAccuracy()
+    }
+
+    /// `HH:mm` в локальном часовом поясе (POSIX-локаль ради стабильного разделителя, порт `formatPointTime`).
+    private static let hhmmFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    private func formatHHmm(_ epochMs: Int64) -> String {
+        Self.hhmmFormatter.string(from: Date(timeIntervalSince1970: Double(epochMs) / 1000))
     }
 
     // MARK: - Действия

@@ -30,6 +30,16 @@ struct InfoPlistTests {
         #expect(!usage.isEmpty)
     }
 
+    @Test func backgroundLocationModeIsDeclared() throws {
+        // UIBackgroundModes = [location] приходит из частичного kolco24/Info.plist
+        // (Xcode не поддерживает INFOPLIST_KEY_ для этого массива-ключа). Без него
+        // фоновая запись GPS-трека (этап 8) молча обрывается при уходе в фон.
+        let modes = try #require(
+            Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String]
+        )
+        #expect(modes.contains("location"))
+    }
+
     @Test func generatedKeysSurviveMergeWithPartialPlist() throws {
         // NFCReaderUsageDescription приходит из генерируемой части plist;
         // регресс слияния (например, GENERATE_INFOPLIST_FILE = NO) молча

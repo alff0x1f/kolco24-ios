@@ -383,7 +383,7 @@ actor MarkUploadRepository {
 
 /// Сохранить кейс `PostResult`, преобразовав только payload успеха — так `drainUploadLoop` получает
 /// `PostResult<[String]>` (извлечённый `accepted`) без потери информации об ошибке.
-private extension PostResult {
+extension PostResult {
     func mapSuccess<U>(_ transform: (T) -> U) -> PostResult<U> {
         switch self {
         case .success(let v): return .success(transform(v))

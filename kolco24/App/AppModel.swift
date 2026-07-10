@@ -36,6 +36,11 @@ final class AppModel {
     /// Последняя ошибка refresh (текст тоста). Успех молчалив (`nil`).
     var toastMessage: String?
 
+    /// Единый рекордер GPS-трека (этап 8): один экземпляр на весь жизненный цикл приложения (переживает
+    /// уходы с таба). Вьюха «Команда» держит его напрямую (`@Observable` — SwiftUI трекает
+    /// `state`/`pointCount`); смена/сброс выбранной команды останавливает живую запись (см. `handleSelection`).
+    let trackRecorder: TrackRecorder
+
     /// Интервал повторной попытки дренажа выгрузки (`UPLOAD_RETRY_INTERVAL_MS`, имя как в Kotlin).
     /// Инжектится, чтобы тесты не ждали реальные 5 минут.
     static let uploadRetryIntervalMs = 300_000
@@ -61,6 +66,19 @@ final class AppModel {
         self.env = env
         self.now = now
         self.uploadRetryIntervalMs = uploadRetryIntervalMs
+        self.trackRecorder = TrackRecorder(
+            trackStore: env.trackStore,
+            trackUploadRepository: env.trackUploadRepository,
+            markUploadRepository: env.markUploadRepository,
+            trustedClock: env.trustedClock,
+            makeEngine: env.makeEngine,
+            hasLocationAccess: env.hasLocationAccess,
+            requestAuthorization: env.requestLocationAuthorization
+        )
+        // Отказ геодоступа на старте записи → тост (все stored props уже проинициализированы — `self` готов).
+        trackRecorder.onGeoDenied = { [weak self] in
+            self?.toastMessage = "Нет доступа к геолокации — разрешите его в настройках, чтобы записывать трек."
+        }
     }
 
     // MARK: - Жизненный цикл
@@ -98,10 +116,13 @@ final class AppModel {
     private func startUploadLoop() {
         uploadLoopTask?.cancel()
         let repo = env.markUploadRepository
+        let trackRepo = env.trackUploadRepository
         let intervalMs = uploadRetryIntervalMs
         uploadLoopTask = Task {
             while !Task.isCancelled {
                 await repo.uploadAllPending()
+                // Этап 8: тем же таймером досылаем и точки трека (обе цели, self-heal).
+                await trackRepo.uploadAllPending()
                 do {
                     try await Task.sleep(for: .milliseconds(intervalMs))
                 } catch {
@@ -143,6 +164,13 @@ final class AppModel {
     /// вложенное наблюдение прежней команды, публикует id'шники, выставляет `.loading`, дёргает
     /// реактивный refresh при смене гонки и перезапускает `observeTeamById`.
     private func handleSelection(_ selection: SelectedTeam?) async {
+        // Этап 8: останавливаем живую запись трека ТОЛЬКО при подлинной смене команды (или сбросе). На
+        // стартовой эмиссии и на повторной эмиссии той же команды (resync) запись не трогаем —
+        // безусловный `stop()` молча убил бы её (порт guard'а `MainActivity.kt` L893–899).
+        if case let .recording(recTeamId) = trackRecorder.state, selection?.teamId != recTeamId {
+            trackRecorder.stop()
+        }
+
         innerTeamTask?.cancel()
         selectedRaceId = selection?.raceId
         selectedTeamId = selection?.teamId
@@ -159,6 +187,9 @@ final class AppModel {
         // всех pending-взятий (порт flush из `Kolco24App.kt` L84–99). Fire-and-forget, guard'ится актором.
         let uploadRepo = env.markUploadRepository
         Task { await uploadRepo.uploadAllPending() }
+        // Этап 8: смена команды (и первая эмиссия) — заодно оппортунистический дренаж точек трека.
+        let trackRepo = env.trackUploadRepository
+        Task { await trackRepo.uploadAllPending() }
 
         // Launch B: реактивный refresh при смене гонки (teams/legend/member_tags), ошибка → тост.
         if selection.raceId != lastReactiveRaceId {
@@ -205,10 +236,11 @@ final class AppModel {
         TeamPickerModel(env: env, appModel: self, now: now)
     }
 
-    /// Фабрика модели вкладки «Команда» (наблюдение привязок чипов + отвязка). Держит `env`
-    /// инкапсулированным — вьюха не видит граф зависимостей.
+    /// Фабрика модели вкладки «Команда» (наблюдение привязок чипов + отвязка + производные трека).
+    /// Держит `env` инкапсулированным — вьюха не видит граф зависимостей. `isReducedAccuracy`
+    /// протянут из графа (этап 8) для хинта деградации точности в TrackCard.
     func makeTeamModel() -> TeamModel {
-        TeamModel(env: env)
+        TeamModel(env: env, isReducedAccuracy: env.isReducedAccuracy)
     }
 
     /// Фабрика модели вкладки «Легенда» (наблюдение КП/агрегатов/взятий). Держит `env`

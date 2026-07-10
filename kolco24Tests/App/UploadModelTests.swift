@@ -57,6 +57,21 @@ struct UploadModelTests {
         )
     }
 
+    /// Точка GPS-трека с раздельными флагами доставки `uploadedLocal/Cloud`.
+    private func trackPoint(
+        id: String, raceId: Int = 7, teamId: Int = 5,
+        segmentId: String = "seg-1",
+        uploadedLocal: Bool = false, uploadedCloud: Bool = false
+    ) -> TrackPoint {
+        TrackPoint(
+            id: id, raceId: raceId, teamId: teamId,
+            lat: 55.75, lon: 37.62, accuracy: 5,
+            gpsTimeMs: 1000, elapsedRealtimeAt: 1000, wallMs: 1000,
+            segmentId: segmentId,
+            uploadedLocal: uploadedLocal, uploadedCloud: uploadedCloud
+        )
+    }
+
     private func waitUntil(
         timeout: Duration = .seconds(3),
         _ condition: () async -> Bool
@@ -294,6 +309,111 @@ struct UploadModelTests {
         #expect(model.metadataCounts?.cloud == 1)
     }
 
+    // MARK: - Секция «Трек» (точки GPS)
+
+    /// Точки трека pending → секция «Трек» видна с корректными счётчиками per-target.
+    @Test func trackSection_visibleWithCounts() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        // 3 точки: одна доехала до cloud, одна до local, одна ни туда ни сюда.
+        try await env.trackStore.insertAll([
+            trackPoint(id: "t1", uploadedCloud: true),
+            trackPoint(id: "t2", uploadedLocal: true),
+            trackPoint(id: "t3")
+        ])
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.trackCounts?.total == 3 }
+        #expect(model.hasTrack)
+        #expect(model.trackCounts?.total == 3)
+        #expect(model.trackCounts?.local == 1)
+        #expect(model.trackCounts?.cloud == 1)
+        // «Интернет» секции «Трек» виден всегда (когда секция видима), не done (1/3).
+        #expect(model.trackCloudLine.label == "Интернет")
+        #expect(model.trackCloudLine.uploaded == 1)
+        #expect(model.trackCloudLine.total == 3)
+        #expect(model.trackCloudLine.done == false)
+    }
+
+    /// Ноль точек → секция «Трек» скрыта (правило секции «Фото»).
+    @Test func trackSection_hiddenWhenNoPoints() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.markStore.upsert(mark(id: "a")) // только взятие, точек нет
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.trackCounts != nil }
+        #expect(model.trackCounts?.total == 0)
+        #expect(model.hasTrack == false)
+        // «Финиш» трека скрыт до исхода/доставки; «Интернет» трека — калм-стейт 0/0.
+        #expect(model.trackFinishLine == nil)
+    }
+
+    /// Только точки трека (взятий нет) → секция «Отметки» скрыта, секция «Трек» видна, экран не пуст.
+    @Test func marksSection_hiddenWhenOnlyTrack() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.trackStore.insertAll([trackPoint(id: "t1"), trackPoint(id: "t2")])
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.trackCounts?.total == 2 }
+        // Взятий нет → «Отметки» скрыта (иначе рисовался бы вводящий в заблуждение ряд «0/0»).
+        #expect(model.metadataCounts?.total == 0)
+        #expect(model.hasMarks == false)
+        // …но трек виден и экран не пуст.
+        #expect(model.hasTrack)
+        #expect(model.hasContent)
+    }
+
+    /// Офлайн-исход дренажа трека доходит до модели со второй строкой; `refresh()` дренирует и трек.
+    @Test func trackRefresh_offlineOutcomeReachesModel() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.trackStore.insertAll([trackPoint(id: "t1")])
+        // Марок нет → markUploadAllPending без POST; трек: Local-POST, затем Cloud-POST.
+        transport.enqueueError(URLError(.notConnectedToInternet)) // track local
+        transport.enqueueError(URLError(.notConnectedToInternet)) // track cloud
+
+        let model = UploadModel(env: env, nowMs: { 0 })
+        model.rebind(teamId: 5, raceId: 7)
+        await waitUntil { model.trackCounts?.total == 1 }
+
+        await model.refresh()
+
+        await waitUntil { model.trackOutcomes[.cloud]?.kind == .offline }
+        #expect(model.trackOutcomes[.cloud]?.kind == .offline)
+        // Флаги остались 0 (self-heal), строка не done → вторая строка с офлайн-лейблом.
+        #expect(model.trackCloudLine.done == false)
+        #expect(model.trackCloudLine.isError)
+        #expect(model.trackCloudLine.secondLine == "только что · нет интернета")
+        // «Финиш» трека стал видимым (есть исход) с собственным офлайн-лейблом.
+        #expect(model.trackFinishLine?.secondLine == "только что · сервер недоступен")
+    }
+
+    /// `pendingLabel` суммирует незалитые отметки + кадры + точки трека.
+    @Test func pendingLabel_sumsMarksFramesPoints() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        // 1 NFC-взятие pending + 1 фото-марка (2 кадра) pending → counts.total 2, cloud 0 (2 pending).
+        try await env.markStore.upsert(mark(id: "a"))
+        try await env.markStore.upsert(photoMark(id: "p1", frames: 2))
+        // 2 точки трека pending → trackCounts 2 pending.
+        try await env.trackStore.insertAll([trackPoint(id: "t1"), trackPoint(id: "t2")])
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.counts?.total == 2 && model.trackCounts?.total == 2 }
+        // 2 отметки (photo-aware) + 2 точки = 4 не отправлено.
+        #expect(model.pendingLabel == "4 не отправлено")
+    }
+
     // MARK: - rebind при смене команды чистит состояние
 
     @Test func rebind_clearsStateOnTeamChange() async throws {
@@ -311,7 +431,9 @@ struct UploadModelTests {
         #expect(model.counts == nil) // синхронный сброс до первой эмиссии
         #expect(model.metadataCounts == nil)
         #expect(model.photoCounts == nil)
+        #expect(model.trackCounts == nil)
         #expect(model.outcomes.isEmpty)
+        #expect(model.trackOutcomes.isEmpty)
 
         await waitUntil { model.counts?.total == 0 }
         #expect(model.counts?.total == 0)

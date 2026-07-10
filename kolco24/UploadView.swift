@@ -40,15 +40,19 @@ struct UploadView: View {
 
     private var content: some View {
         List {
-            Section {
-                ReceiptRow(line: model.cloudLine)
-                    .listRowBackground(Color.card)
-                if let finish = model.finishLine {
-                    ReceiptRow(line: finish)
+            // Секция «Отметки» — только когда есть взятия (скрыта при нуле, как «Фото»/«Трек»: трек-only
+            // скоуп иначе показал бы вводящий в заблуждение ряд «0/0» отметок).
+            if model.hasMarks {
+                Section {
+                    ReceiptRow(line: model.cloudLine)
                         .listRowBackground(Color.card)
+                    if let finish = model.finishLine {
+                        ReceiptRow(line: finish)
+                            .listRowBackground(Color.card)
+                    }
+                } header: {
+                    Text("Отметки")
                 }
-            } header: {
-                Text("Отметки")
             }
 
             // Секция «Фото» — только когда есть кадры (скрыта при нуле, как Android).
@@ -62,6 +66,20 @@ struct UploadView: View {
                     }
                 } header: {
                     Text("Фото")
+                }
+            }
+
+            // Секция «Трек» — только когда есть точки GPS (скрыта при нуле, правило секции «Фото»).
+            if model.hasTrack {
+                Section {
+                    ReceiptRow(line: model.trackCloudLine)
+                        .listRowBackground(Color.card)
+                    if let finish = model.trackFinishLine {
+                        ReceiptRow(line: finish)
+                            .listRowBackground(Color.card)
+                    }
+                } header: {
+                    Text("Трек")
                 }
             }
         }
