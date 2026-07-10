@@ -130,11 +130,11 @@
 - Create: `kolco24/Photo/PhotoStorage.swift`
 - Create: `kolco24Tests/Photo/PhotoStorageTests.swift`
 
-- [ ] `struct PhotoStorage { let rootURL: URL }` — прод-фабрика от Application Support (каталог `kolco24.db`); константы `maxEdgePx = 1600`, `jpegQuality = 0.8`, `thumbMaxEdge = 512`, `thumbJpegQuality = 0.75`
-- [ ] `writeDownscaledJpeg(markId:jpegData:) -> String?` — ImageIO (`CGImageSourceCreateThumbnailAtIndex`, `kCGImageSourceThumbnailMaxPixelSize`, `kCGImageSourceCreateThumbnailWithTransform=true`) → `<uuid>.jpg` → best-effort `<uuid>.thumb.jpg` → относительный путь; любой сбой → `nil`
-- [ ] `deleteFrame(relPath:)` (кадр + тумба, только через `isSafeRelativePhotoPath`), `absoluteURL(relPath:)`, `sweepOrphanDirs(liveMarkIds:)` (список подкаталогов `marks/` + чистый `orphanPhotoDirs` + удаление)
-- [ ] тесты (временный каталог + сгенерированный тестовый JPEG, в т.ч. с EXIF-ориентацией): запись → файл и тумба существуют, размеры ≤ 1600/512, ориентация запечена (пиксельные размеры повернуты); мусорные байты → `nil`, каталога/файлов нет; delete удаляет пару; sweep сносит только сирот
-- [ ] прогнать тесты — зелёные до Task 4
+- [x] `struct PhotoStorage { let rootURL: URL }` — прод-фабрика от Application Support (каталог `kolco24.db`); константы `maxEdgePx = 1600`, `jpegQuality = 0.8`, `thumbMaxEdge = 512`, `thumbJpegQuality = 0.75`
+- [x] `writeDownscaledJpeg(markId:jpegData:) -> String?` — ImageIO (`CGImageSourceCreateThumbnailAtIndex`, `kCGImageSourceThumbnailMaxPixelSize`, `kCGImageSourceCreateThumbnailWithTransform=true`) → `<uuid>.jpg` → best-effort `<uuid>.thumb.jpg` → относительный путь; любой сбой → `nil`
+- [x] `deleteFrame(relPath:)` (кадр + тумба, только через `isSafeRelativePhotoPath`), `absoluteURL(relPath:)`, `sweepOrphanDirs(liveMarkIds:)` (список подкаталогов `marks/` + чистый `orphanPhotoDirs` + удаление)
+- [x] тесты (временный каталог + сгенерированный тестовый JPEG, в т.ч. с EXIF-ориентацией): запись → файл и тумба существуют, размеры ≤ 1600/512, ориентация запечена (пиксельные размеры повернуты); мусорные байты → `nil`, каталога/файлов нет; delete удаляет пару; sweep сносит только сирот
+- [x] прогнать тесты — зелёные до Task 4
 
 ### Task 4: Net — эндпоинт кадра uploadMarkPhoto
 
