@@ -20,7 +20,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct PhotoCaptureView: View {
     let model: PhotoModel

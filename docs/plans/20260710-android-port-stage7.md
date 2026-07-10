@@ -222,10 +222,10 @@
 
 ### Task 10: Верификация приёмки
 
-- [ ] все требования Overview: attach-в-окне и пикер-ветка, кадры на диске относительными путями, покадровый идемпотентный дрейн после метаданных на обе цели, тайлы/лайтбокс/нотис/секция «Фото», sweep
-- [ ] grep-инварианты: `import AVFoundation` только под `Audio/` и `Photo/`; `import ImageIO` только под `Photo/`; `import CoreNFC`/`CoreLocation` — на местах; `Core/`/`Model/`/`App/`-модели без `UIKit`/`SwiftUI`/`GRDB`/AVFoundation/ImageIO-типов; `import GRDB` только под `Data/`; `Photo/` без GRDB
-- [ ] полный тест-сьют: `** TEST SUCCEEDED **`
-- [ ] сборка: `** BUILD SUCCEEDED **`
+- [x] все требования Overview: attach-в-окне и пикер-ветка, кадры на диске относительными путями, покадровый идемпотентный дрейн после метаданных на обе цели, тайлы/лайтбокс/нотис/секция «Фото», sweep
+- [x] grep-инварианты: `import AVFoundation` только под `Audio/` и `Photo/`; `import ImageIO` только под `Photo/`; `import CoreNFC`/`CoreLocation` — на местах; `Core/`/`Model/`/`App/`-модели без `UIKit`/`SwiftUI`/`GRDB`/AVFoundation/ImageIO-типов; `import GRDB` только под `Data/`; `Photo/` без GRDB (устранён лишний `import UIKit` в `PhotoCaptureView.swift` — `UIImage` доступен через `import SwiftUI`, как в `MarksView`/`PhotoLightboxView`; хаптики через `.sensoryFeedback`, Настройки через `@Environment(\.openURL)`)
+- [x] полный тест-сьют: `** TEST SUCCEEDED **`
+- [x] сборка: `** BUILD SUCCEEDED **`
 
 ### Task 11: [Final] Документация
 
