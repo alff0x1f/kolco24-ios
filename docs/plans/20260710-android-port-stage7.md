@@ -102,11 +102,11 @@
 - Modify: `kolco24/Data/Stores/MarkStore.swift` (убрать вложенный `MarkPhotoPaths`, перейти на Core)
 - Create: `kolco24Tests/Core/PhotoPathsTests.swift`
 
-- [ ] перенести `encodePhotoPaths`/`decodePhotoPaths`/`isSafeRelativePhotoPath` из `MarkStore.MarkPhotoPaths` в `Core/Marks/PhotoPaths.swift` (чистый Foundation; decode никогда не бросает: null/blank/мусор → `[]`)
-- [ ] добавить `frameIdOf(_ relPath:) -> String` (стем без `.jpg` — ключ идемпотентности) и `thumbPathOf(_ framePath:) -> String` — зеркало `PhotoPaths.kt`
-- [ ] `MarkStore.attachPhotos` и все использования — на Core-функции; вложенный enum удалить
-- [ ] тесты (зеркало `PhotoPathsTest.kt`): round-trip + порядок, null/blank/malformed → `[]`, абсолютный/traversal/не-3-сегмента/не-`.jpg` отброшены, `frameIdOf` валидный + defensive, `thumbPathOf`
-- [ ] прогнать тесты — зелёные до Task 2
+- [x] перенести `encodePhotoPaths`/`decodePhotoPaths`/`isSafeRelativePhotoPath` из `MarkStore.MarkPhotoPaths` в `Core/Marks/PhotoPaths.swift` (чистый Foundation; decode никогда не бросает: null/blank/мусор → `[]`)
+- [x] добавить `frameIdOf(_ relPath:) -> String` (стем без `.jpg` — ключ идемпотентности) и `thumbPathOf(_ framePath:) -> String` — зеркало `PhotoPaths.kt`
+- [x] `MarkStore.attachPhotos` и все использования — на Core-функции; вложенный enum удалить
+- [x] тесты (зеркало `PhotoPathsTest.kt`): round-trip + порядок, null/blank/malformed → `[]`, абсолютный/traversal/не-3-сегмента/не-`.jpg` отброшены, `frameIdOf` валидный + defensive, `thumbPathOf`
+- [x] прогнать тесты — зелёные до Task 2
 
 ### Task 2: Core — makePhotoMark, scaledDimensions/orphanPhotoDirs, фото-поля MarksDisplay
 

@@ -8,55 +8,12 @@
 //  правило этапа 2). `@Upsert` → `upsert(db)`; `Flow` → `ValueObservation…values`;
 //  `suspend` → `async throws`.
 //
-//  `MarkDao.attachPhotos` в Kotlin опирается на `data/marks/PhotoPaths.kt`
-//  (`photoPaths`/`encodePhotoPaths`/`isSafeRelativePhotoPath`) — в iOS-порте этих
-//  хелперов ещё нет, поэтому минимальный эквивалент живёт тут (`MarkPhotoPaths`).
+//  `MarkDao.attachPhotos` опирается на чистый `Core/Marks/PhotoPaths.swift`
+//  (`PhotoPaths.encode`/`.decode`/`.isSafeRelativePhotoPath`) — порт `data/marks/PhotoPaths.kt`.
 //
 
 import Foundation
 import GRDB
-
-/// Кодек и валидатор JSON-списка относительных путей фото в колонке `marks.photoPath`
-/// — 1:1 из Kotlin `data/marks/PhotoPaths.kt`. Пути хранятся **относительно** каталога
-/// приложения (`marks/<markId>/<uuid>.jpg`); абсолютный путь и любой сегмент `..`
-/// отбрасываются (guard от path traversal).
-enum MarkPhotoPaths {
-    /// JSON-кодирование списка относительных путей; порядок сохраняется.
-    /// Делегирует общему `JSONColumnCodec`.
-    static func encode(_ paths: [String]) -> String {
-        JSONColumnCodec.encode(paths, fallback: "[]")
-    }
-
-    /// Декодирование `photoPath`-колонки в список **валидированных** относительных путей.
-    /// Никогда не бросает: nil/пусто/битый JSON/не-массив → `[]`. Каждый элемент обязан
-    /// иметь форму `marks/<markId>/<uuid>.jpg`; абсолютные пути и `..` отбрасываются.
-    static func decode(_ raw: String?) -> [String] {
-        guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return []
-        }
-        return JSONColumnCodec.decode(raw, as: [String].self, category: "MarkPhotoPaths", fallback: [])
-            .filter(isSafeRelativePhotoPath)
-    }
-
-    /// `marks/<markId>/<uuid>.jpg`: 3-сегментный относительный путь под `marks/`, без
-    /// абсолютного префикса, без `..`, оканчивающийся на `.jpg`. Пустые и состоящие только из
-    /// пробелов сегменты отбрасываются (зеркало Kotlin `isBlank()`).
-    static func isSafeRelativePhotoPath(_ path: String) -> Bool {
-        if isBlank(path) { return false }
-        if path.hasPrefix("/") { return false }
-        if !path.hasSuffix(".jpg") { return false }
-        let segments = path.components(separatedBy: "/")
-        if segments.count != 3 { return false }
-        if segments.first != "marks" { return false }
-        if segments.contains(where: { isBlank($0) || $0 == "." || $0 == ".." }) { return false }
-        return true
-    }
-
-    /// Зеркало Kotlin `String.isBlank()`: пусто или только whitespace.
-    private static func isBlank(_ s: String) -> Bool {
-        s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-}
 
 struct MarkStore {
     let dbWriter: any DatabaseWriter
@@ -193,8 +150,8 @@ struct MarkStore {
             guard let mark = try Mark.fetchOne(db, sql: "SELECT * FROM marks WHERE id = ?", arguments: [id]) else {
                 return
             }
-            let existing = MarkPhotoPaths.decode(mark.photoPath)
-            let safeNew = newPaths.filter(MarkPhotoPaths.isSafeRelativePhotoPath)
+            let existing = PhotoPaths.decode(mark.photoPath)
+            let safeNew = newPaths.filter(PhotoPaths.isSafeRelativePhotoPath)
             var merged: [String] = []
             for path in existing + safeNew where !merged.contains(path) {
                 merged.append(path)
@@ -202,7 +159,7 @@ struct MarkStore {
             try db.execute(
                 sql: "UPDATE marks SET photoPath = ?, updatedAt = ?, "
                     + "photosUploadedLocal = 0, photosUploadedCloud = 0 WHERE id = ?",
-                arguments: [MarkPhotoPaths.encode(merged), now, id]
+                arguments: [PhotoPaths.encode(merged), now, id]
             )
         }
     }

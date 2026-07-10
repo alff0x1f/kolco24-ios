@@ -234,7 +234,7 @@ struct MarkStoreTests {
         try await store.attachPhotos(id: "nfc-1", newPaths: ["marks/nfc-1/b.jpg"], now: 3_000)
 
         let row = try #require(try await store.getById("nfc-1"))
-        #expect(MarkPhotoPaths.decode(row.photoPath) == ["marks/nfc-1/a.jpg", "marks/nfc-1/b.jpg"])
+        #expect(PhotoPaths.decode(row.photoPath) == ["marks/nfc-1/a.jpg", "marks/nfc-1/b.jpg"])
         #expect(row.updatedAt == 3_000)
         // uploaded* не изменены — photoPath не в upload-DTO.
         #expect(row.uploadedLocal == true)
@@ -267,7 +267,7 @@ struct MarkStoreTests {
         try await store.attachPhotos(id: "photo-1", newPaths: ["marks/photo-1/b.jpg"], now: 2_000)
 
         let row = try #require(try await store.getById("photo-1"))
-        #expect(MarkPhotoPaths.decode(row.photoPath) == ["marks/photo-1/a.jpg", "marks/photo-1/b.jpg"])
+        #expect(PhotoPaths.decode(row.photoPath) == ["marks/photo-1/a.jpg", "marks/photo-1/b.jpg"])
         #expect(row.photosUploadedLocal == false)
         #expect(row.photosUploadedCloud == false)
         #expect(row.uploadedLocal == true)
@@ -501,7 +501,7 @@ struct MarkStoreTests {
     /// Зеркало `PhotoPathsTest.wrongShapeEntriesAreDropped` + whitespace-only сегменты
     /// (Kotlin `isBlank()` их отбрасывает — Swift-порт обязан вести себя так же).
     @Test func decode_dropsWrongShapeAndBlankSegments() {
-        let raw = MarkPhotoPaths.encode([
+        let raw = PhotoPaths.encode([
             "other/m1/a.jpg",   // неправильный корень
             "marks/m1/a.png",   // неправильное расширение
             "marks/m1",         // слишком мало сегментов
@@ -510,12 +510,12 @@ struct MarkStoreTests {
             "marks/ /a.jpg",    // whitespace-only сегмент
             "marks/m1/a.jpg",   // единственный валидный
         ])
-        #expect(MarkPhotoPaths.decode(raw) == ["marks/m1/a.jpg"])
+        #expect(PhotoPaths.decode(raw) == ["marks/m1/a.jpg"])
     }
 
     @Test func isSafeRelativePhotoPath_rejectsWhitespaceOnlySegment() {
-        #expect(!MarkPhotoPaths.isSafeRelativePhotoPath("marks/ /a.jpg")) // whitespace-only middle segment
-        #expect(!MarkPhotoPaths.isSafeRelativePhotoPath("   ")) // whitespace-only path
-        #expect(MarkPhotoPaths.isSafeRelativePhotoPath("marks/m1/a.jpg"))
+        #expect(!PhotoPaths.isSafeRelativePhotoPath("marks/ /a.jpg")) // whitespace-only middle segment
+        #expect(!PhotoPaths.isSafeRelativePhotoPath("   ")) // whitespace-only path
+        #expect(PhotoPaths.isSafeRelativePhotoPath("marks/m1/a.jpg"))
     }
 }
