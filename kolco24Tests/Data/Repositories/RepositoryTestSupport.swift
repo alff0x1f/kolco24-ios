@@ -48,6 +48,12 @@ final class CallCounter: @unchecked Sendable {
         n += 1
         return v
     }
+
+    /// Текущее число вызовов `next()` (без инкремента).
+    var value: Int {
+        lock.lock(); defer { lock.unlock() }
+        return n
+    }
 }
 
 /// Первое значение `AsyncValueObservation` — аналог `Flow.first()` из Kotlin-тестов.
