@@ -202,11 +202,11 @@
 - Modify: `kolco24/MarksView.swift` (реальный `PhotoTileView`, нотис)
 - Create: `kolco24/PhotoLightboxView.swift`
 
-- [ ] `PhotoTileView` реальный: первый кадр (`thumbPathOf` с фолбэком на полный, `UIImage(contentsOfFile:)`; кэп-заглушка при нечитаемом файле), чип `<cost>-<number>`, глиф камеры только у `kind == .photo`, бейдж «+N» при `photoCount > 1`; тап (только при наличии кадров) → лайтбокс
-- [ ] `PhotoLightboxView`: `fullScreenCover`, `TabView(.page)` по `lightboxPhotos`, счётчик k/N, чип КП страницы, `ShareLink` (URL кадра), drag-to-dismiss, чёрный фон, статус-бар скрыт
-- [ ] нотис `PhotoReviewNotice` на «Отметках» из `photoReviewSummary` («N КП по фото (tokens) · P баллов», токены через `tokensLabel`-конвенцию, warning-стилистика по токенам)
-- [ ] `MarksModel`: derived-поля для нотиса/лайтбокса (чистые фны уже в Core, тесты — дополнить `MarksModelTests` кейсом фото-марки: тайл с photoCount, summary непустой)
-- [ ] прогнать полный сьют + сборку — зелёные до Task 9
+- [x] `PhotoTileView` реальный: первый кадр (`thumbPathOf` с фолбэком на полный, `UIImage(contentsOfFile:)`; кэп-заглушка при нечитаемом файле), чип `<cost>-<number>`, глиф камеры только у `kind == .photo`, бейдж «+N» при `photoCount > 1`; тап (только при наличии кадров) → лайтбокс
+- [x] `PhotoLightboxView`: `fullScreenCover`, `TabView(.page)` по `lightboxPhotos`, счётчик k/N, чип КП страницы, `ShareLink` (URL кадра), drag-to-dismiss, чёрный фон, статус-бар скрыт
+- [x] нотис `PhotoReviewNotice` на «Отметках» из `photoReviewSummary` («N КП по фото (tokens) · P баллов», токены через `tokensLabel`-конвенцию, warning-стилистика по токенам)
+- [x] `MarksModel`: derived-поля для нотиса/лайтбокса (чистые фны уже в Core, тесты — дополнить `MarksModelTests` кейсом фото-марки: тайл с photoCount, summary непустой)
+- [x] прогнать полный сьют + сборку — зелёные до Task 9
 
 ### Task 9: Upload UI — секция «Фото»
 

@@ -25,6 +25,9 @@ struct MarksView: View {
     /// Фото-модель текущего кавера; ненулевая ⇒ кавер открыт (`.fullScreenCover(item:)`). Строится по
     /// тапу FAB «Фото» через `AppModel.makePhotoModel()` (nil без команды — ведём в выбор команды).
     @State private var photoModel: PhotoModel?
+    /// Открытый лайтбокс (ненулевой ⇒ `fullScreenCover`); несёт глобальную ленту кадров и стартовый
+    /// индекс (первый кадр тапнутого тайла).
+    @State private var lightbox: LightboxContext?
     /// Точка входа во флоу выбора команды (пробрасывается хостом; в превью — no-op).
     var onChooseTeam: () -> Void = {}
     /// Переход на вкладку «Команда» для привязки чипов (нудж пустого состояния).
@@ -48,6 +51,22 @@ struct MarksView: View {
             .fullScreenCover(item: $photoModel, onDismiss: flushAfterScan) { model in
                 PhotoFlowView(model: model)
             }
+            .fullScreenCover(item: $lightbox) { ctx in
+                PhotoLightboxView(
+                    photos: ctx.photos,
+                    initialIndex: ctx.initialIndex,
+                    urlFor: { rel in model?.photoURL(rel) ?? nil }
+                )
+            }
+    }
+
+    /// Тап по тайлу с кадрами: открыть лайтбокс на глобальной ленте, стартуя с первого кадра тайла.
+    /// Индекс ищем по объектному равенству кадра (путь+тайл) в общей ленте — свайп затем листает по всем.
+    private func openLightbox(tile: MarkTile) {
+        guard let model, let first = tile.photoPaths.first else { return }
+        let photos = model.lightboxPhotos
+        let start = photos.firstIndex { $0.path == first && $0.tile == tile } ?? 0
+        lightbox = LightboxContext(photos: photos, initialIndex: start)
     }
 
     /// Тап FAB «Фото»: строим фото-модель выбранной команды. Нет команды (`makePhotoModel` → nil) —
@@ -110,6 +129,12 @@ struct MarksView: View {
                 .padding(.horizontal, DS.hPad)
                 .padding(.bottom, 14)
 
+                if let review = model?.photoReview {
+                    PhotoReviewNotice(summary: review)
+                        .padding(.horizontal, DS.hPad)
+                        .padding(.bottom, 14)
+                }
+
                 if !hidden.isEmpty {
                     HiddenKpNotice(tokens: hidden)
                         .padding(.horizontal, DS.hPad)
@@ -128,10 +153,17 @@ struct MarksView: View {
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 4), spacing: 2) {
                         ForEach(Array(tiles.enumerated()), id: \.offset) { _, tile in
-                            if tile.kind == .nfc {
-                                NFCTileView(tile: tile)
+                            // Порт `ColorTile`: тайл с кадрами (любого вида — фото-взятие ИЛИ NFC-взятие
+                            // с доклеенным фото) показывает первый кадр и открывает лайтбокс; голое
+                            // NFC-взятие остаётся chip-картой.
+                            if tile.photoCount > 0 {
+                                PhotoTileView(
+                                    tile: tile,
+                                    urlFor: { rel in model?.photoURL(rel) ?? nil },
+                                    onTap: { openLightbox(tile: tile) }
+                                )
                             } else {
-                                PhotoTileView(tile: tile)
+                                NFCTileView(tile: tile)
                             }
                         }
                     }
@@ -372,38 +404,140 @@ private struct ContactlessGlyph: View {
 }
 
 // MARK: - Photo Tile
-// Заглушка до этапа 7 (реального фото нет): гладкий градиент с CP-бейджем.
+// Реальный тайл фото-взятия (порт `PhotoTileBody`): первый кадр во всю плитку (thumb с фолбэком на
+// полный кадр), тёмный градиент-«сиденье» под ним (и заглушка при нечитаемом файле), нижний скрим +
+// время каптионом, КП-чип top-left, глиф камеры top-right ТОЛЬКО у photo-взятия, бейдж «+N» скрытых
+// кадров bottom-left. Тап открывает лайтбокс (тайл используется лишь при `photoCount > 0`).
 private struct PhotoTileView: View {
     let tile: MarkTile
+    let urlFor: (String) -> URL?
+    let onTap: () -> Void
 
-    private let gradient = LinearGradient(
-        colors: [Color(hex: "C7C0A6"), Color(hex: "A8A085")],
-        startPoint: .topLeading, endPoint: .bottomTrailing
-    )
+    /// Абсолютный URL первого кадра: предпочитаем `<uuid>.thumb.jpg` (дешевле декод при сетке тайлов),
+    /// фолбэк на полный кадр (кадры до появления тумб / сбой тумбы). Один stat на тайл.
+    private var firstFrameURL: URL? {
+        guard let rel = tile.photoPaths.first else { return nil }
+        if let thumb = urlFor(PhotoPaths.thumbPathOf(rel)),
+           FileManager.default.fileExists(atPath: thumb.path) {
+            return thumb
+        }
+        return urlFor(rel)
+    }
 
     var body: some View {
         ZStack {
-            gradient
-            Canvas { ctx, s in
-                let step: CGFloat = 8
-                var x: CGFloat = -s.height
-                while x < s.width + s.height {
-                    var p = Path()
-                    p.move(to: CGPoint(x: x, y: 0))
-                    p.addLine(to: CGPoint(x: x + s.height, y: s.height))
-                    ctx.stroke(p, with: .color(Color.white.opacity(0.06)), lineWidth: 2)
-                    x += step
-                }
+            // Charcoal «сиденье» — показывается, пока кадр грузится / если файл отсутствует.
+            LinearGradient(
+                colors: [Color(hex: "1D242D"), Color(hex: "2A323C")],
+                startPoint: .top, endPoint: .bottom
+            )
+            if let url = firstFrameURL, let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                // Кап-заглушка при нечитаемом файле (тот же тёмный фон + глиф фото).
+                Image(systemName: "photo")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.white.opacity(0.3))
             }
-            LinearGradient(colors: [.white.opacity(0.06), .black.opacity(0.10)], startPoint: .top, endPoint: .bottom)
+            // Нижний скрим — время читается каптионом над яркой нижней кромкой кадра.
+            VStack {
+                Spacer()
+                LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                    .frame(maxHeight: .infinity)
+            }
         }
         .aspectRatio(1, contentMode: .fit)
+        .clipped()
         .overlay(alignment: .topLeading) {
-            CPBadge(number: tile.number, size: 28)
+            PhotoKpChip(token: markTileToken(tile))
                 .padding(4)
         }
+        .overlay(alignment: .topTrailing) {
+            // Глиф камеры — эксклюзив photo-взятия (NFC-взятие с фото им не помечается).
+            if tile.kind == .photo {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(5)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .padding(4)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Text(tile.time)
+                .font(.mono(10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.82))
+                .padding(.trailing, 8)
+                .padding(.bottom, 6)
+        }
+        .overlay(alignment: .bottomLeading) {
+            // Первый кадр — это фон тайла, поэтому счётчик показывает лишь СКРЫТЫЙ остаток («+N-1»).
+            if tile.photoCount > 1 {
+                Text("+\(tile.photoCount - 1)")
+                    .font(.mono(10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .padding(.leading, 8)
+                    .padding(.bottom, 6)
+            }
+        }
         .overlay { Rectangle().stroke(Color.hairline, lineWidth: 0.5) }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
     }
+}
+
+// MARK: - Photo Review Notice («N КП по фото · P баллов»)
+// Порт `PhotoReviewNotice`: нотис-предупреждение под метриками, пока есть хоть одно фото-only взятие.
+// Объясняет, что фото-часть СУММЫ провизорная — засчитается после проверки судьёй. Заголовок называет
+// КП их тайл-токенами; при нулевых баллах (все фото-КП ещё locked) хвост «· P баллов» опускается.
+// Warning-палитра (`brandRed`) — те же ставки-под-вопросом, что помечает красный в других нотисах.
+private struct PhotoReviewNotice: View {
+    let summary: PhotoReviewSummary
+
+    private var title: String {
+        let tokens = tokensLabel(summary.tokens)
+        if summary.points > 0 {
+            return "\(summary.count) КП по фото (\(tokens)) · \(pointsLabel(summary.points))"
+        }
+        return "\(summary.count) КП по фото (\(tokens))"
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(Color.brandRed)
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.ink)
+                Text("Баллы засчитают после проверки судьями")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.sub)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.brandRed.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+    }
+}
+
+// MARK: - Lightbox context
+/// Открытый лайтбокс: глобальная лента кадров + стартовый индекс. `Identifiable` для `fullScreenCover(item:)`.
+private struct LightboxContext: Identifiable {
+    let id = UUID()
+    let photos: [LightboxPhoto]
+    let initialIndex: Int
 }
 
 // MARK: - NFC Strip

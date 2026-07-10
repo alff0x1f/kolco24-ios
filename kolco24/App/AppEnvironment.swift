@@ -69,6 +69,11 @@ final class AppEnvironment {
     let writeFrame: @Sendable (String, Data) -> String?
     let deleteFrame: @Sendable (String) -> Void
     let sweepOrphanPhotoDirs: @Sendable (Set<String>) -> Void
+    /// Резолвер относительного пути кадра (`marks/<markId>/<uuid>.jpg`) в абсолютный файловый URL —
+    /// шов чтения кадров во вьюхах (тайл-превью через `UIImage(contentsOfFile:)`, `ShareLink` в
+    /// лайтбоксе). Прод — над `PhotoStorage.rootURL`; `inMemory` — `{ _ in nil }` (диска нет).
+    /// Держит `import GRDB`/`Photo/` вне вьюх (grep-инвариант): вью получает только замыкание.
+    let photoURL: @Sendable (String) -> URL?
 
     /// - Parameters:
     ///   - cloudOrigin/localOrigin: base URL'ы — ключи-партиции ETag в `sync_meta`.
@@ -86,6 +91,7 @@ final class AppEnvironment {
         writeFrame: @escaping @Sendable (String, Data) -> String? = { _, _ in nil },
         deleteFrame: @escaping @Sendable (String) -> Void = { _ in },
         sweepOrphanPhotoDirs: @escaping @Sendable (Set<String>) -> Void = { _ in },
+        photoURL: @escaping @Sendable (String) -> URL? = { _ in nil },
         wallNow: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.database = database
@@ -95,6 +101,7 @@ final class AppEnvironment {
         self.writeFrame = writeFrame
         self.deleteFrame = deleteFrame
         self.sweepOrphanPhotoDirs = sweepOrphanPhotoDirs
+        self.photoURL = photoURL
         let writer = database.writer
 
         raceStore = RaceStore(writer)
@@ -190,7 +197,8 @@ final class AppEnvironment {
             // Этап 7: дисковые операции фото-кадров над тем же `PhotoStorage`.
             writeFrame: { markId, data in photoStorage.writeDownscaledJpeg(markId: markId, jpegData: data) },
             deleteFrame: { rel in photoStorage.deleteFrame(relPath: rel) },
-            sweepOrphanPhotoDirs: { ids in photoStorage.sweepOrphanDirs(liveMarkIds: ids) }
+            sweepOrphanPhotoDirs: { ids in photoStorage.sweepOrphanDirs(liveMarkIds: ids) },
+            photoURL: { rel in photoStorage.absoluteURL(relPath: rel) }
         )
     }
 
@@ -206,7 +214,8 @@ final class AppEnvironment {
         feedback: any ScanFeedbackPlaying = SilentFeedback(),
         writeFrame: @escaping @Sendable (String, Data) -> String? = { _, _ in nil },
         deleteFrame: @escaping @Sendable (String) -> Void = { _ in },
-        sweepOrphanPhotoDirs: @escaping @Sendable (Set<String>) -> Void = { _ in }
+        sweepOrphanPhotoDirs: @escaping @Sendable (Set<String>) -> Void = { _ in },
+        photoURL: @escaping @Sendable (String) -> URL? = { _ in nil }
     ) throws -> AppEnvironment {
         let database = try AppDatabase.makeInMemory()
         return AppEnvironment(
@@ -221,7 +230,8 @@ final class AppEnvironment {
             feedback: feedback,
             writeFrame: writeFrame,
             deleteFrame: deleteFrame,
-            sweepOrphanPhotoDirs: sweepOrphanPhotoDirs
+            sweepOrphanPhotoDirs: sweepOrphanPhotoDirs,
+            photoURL: photoURL
         )
     }
 
