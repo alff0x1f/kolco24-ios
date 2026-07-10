@@ -115,11 +115,11 @@
 - Create: `kolco24Tests/Core/RaceLeaseStoreTests.swift`
 - Create: `kolco24Tests/Core/LeaseHolderTests.swift`
 
-- [ ] `RaceLeaseStore` в идиоме `ClockAnchorStore`: load/save-замыкания + `fromUserDefaults` (ключ `race_lease`); encode `"raceId|expiresAtMs"`, decode строго 2 числовых компонента через `components(separatedBy:)`, иначе `nil`; `save(nil)` удаляет ключ
-- [ ] `LeaseHolder`: `final class`, значение под `NSLock`; sync `var value: RaceLease?`; `set(_:)` — write-through в persist-замыкание + публикация в `nonisolated` `AsyncStream<RaceLease?>` (`.bufferingNewest(1)`, дедуп равных значений вручную — идиома `TrustedClock.statusUpdates`); сидится из стора при создании
-- [ ] зеркало `RaceLeaseStoreTest.kt` → `RaceLeaseStoreTests` (round-trip, один ключ, clear, pre-seeded read, отбраковка мусора: лишние/недостающие/нечисловые части, пустая строка)
-- [ ] свежие `LeaseHolderTests` (сид из стора, write-through, стрим публикует изменения и дедупит равные)
-- [ ] run tests - must pass before next task
+- [x] `RaceLeaseStore` в идиоме `ClockAnchorStore`: load/save-замыкания + `fromUserDefaults` (ключ `race_lease`); encode `"raceId|expiresAtMs"`, decode строго 2 числовых компонента через `components(separatedBy:)`, иначе `nil`; `save(nil)` удаляет ключ
+- [x] `LeaseHolder`: `final class`, значение под `NSLock`; sync `var value: RaceLease?`; `set(_:)` — write-through в persist-замыкание + публикация в `nonisolated` `AsyncStream<RaceLease?>` (`.bufferingNewest(1)`, дедуп равных значений вручную — идиома `TrustedClock.statusUpdates`); сидится из стора при создании
+- [x] зеркало `RaceLeaseStoreTest.kt` → `RaceLeaseStoreTests` (round-trip, один ключ, clear, pre-seeded read, отбраковка мусора: лишние/недостающие/нечисловые части, пустая строка)
+- [x] свежие `LeaseHolderTests` (сид из стора, write-through, стрим публикует изменения и дедупит равные)
+- [x] run tests - must pass before next task
 
 ### Task 3: Core — ThemePreference
 
