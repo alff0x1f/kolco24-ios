@@ -140,8 +140,7 @@ struct SettingsView: View {
                     systemImage: "wifi",
                     iconBg: Color.good,
                     label: "Локальный сервер (Wi-Fi гонки)",
-                    sub: model.localModeBusy ? "Обновление…" : model.localModeSubtitle,
-                    showChevron: false
+                    sub: model.localModeBusy ? "Обновление…" : model.localModeSubtitle
                 )
                 if model.localModeBusy {
                     ProgressView()
@@ -154,7 +153,6 @@ struct SettingsView: View {
                     .tint(Color.kolcoOrange)
                 }
             }
-            .disabled(model.localModeBusy)
             .listRowBackground(Color.card)
         } header: {
             Text("Данные")
@@ -211,8 +209,7 @@ struct SettingsView: View {
                     systemImage: "info.circle",
                     iconBg: Color.charcoal,
                     label: "Версия",
-                    sub: model.versionLabel,
-                    showChevron: false
+                    sub: model.versionLabel
                 )
             }
             .buttonStyle(.plain)
@@ -254,7 +251,7 @@ private enum DebugConfirmKind: Identifiable {
 
 // MARK: - Settings Row
 
-/// Ряд настроек: цветной глиф-аватар, заголовок + сабтайтл, опциональный chevron. Порт стиля
+/// Ряд настроек: цветной глиф-аватар, заголовок + сабтайтл. Порт стиля
 /// `MiscRowView` из `TeamView` под `List`-секции (без внешних отступов — их даёт `List`).
 private struct SettingsRow: View {
     let systemImage: String
@@ -262,7 +259,6 @@ private struct SettingsRow: View {
     let label: String
     let sub: String
     var tint: Color = Color.ink
-    var showChevron: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -284,11 +280,6 @@ private struct SettingsRow: View {
                     .foregroundStyle(Color.sub)
             }
             Spacer(minLength: 8)
-            if showChevron {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.sub.opacity(0.45))
-            }
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())

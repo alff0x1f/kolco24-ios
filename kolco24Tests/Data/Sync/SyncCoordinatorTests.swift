@@ -42,12 +42,51 @@ private final class Fakes: @unchecked Sendable {
     private func log(_ s: String) { lock.lock(); calls.append(s); lock.unlock() }
     func callLog() -> [String] { lock.lock(); defer { lock.unlock() }; return calls }
 
+    // MARK: - Гейт `fetchSync` (для interleave-теста mutex'а)
+    //
+    // Когда `gateEnabled`, `fetchSync` виснет на continuation'е, пока тест не вызовет `releaseGate()` —
+    // так проба удерживает lease-замок в подвешенном состоянии, а тест запускает конкурентный `exitLocalMode`.
+    var gateEnabled = false
+    private let gateLock = NSLock()
+    private var gateContinuation: CheckedContinuation<Void, Never>?
+    private var gateReleased = false
+    private var _fetchSyncEntered = false
+
+    func didEnterFetchSync() -> Bool { gateLock.lock(); defer { gateLock.unlock() }; return _fetchSyncEntered }
+
+    private func waitGate() async {
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            gateLock.lock()
+            _fetchSyncEntered = true
+            if gateReleased {
+                gateLock.unlock()
+                cont.resume()
+            } else {
+                gateContinuation = cont
+                gateLock.unlock()
+            }
+        }
+    }
+
+    func releaseGate() {
+        gateLock.lock()
+        gateReleased = true
+        let cont = gateContinuation
+        gateContinuation = nil
+        gateLock.unlock()
+        cont?.resume()
+    }
+
     func makeCoordinator() -> SyncCoordinator {
         SyncCoordinator(
             readLease: { self.lease },
             writeLease: { self.lease = $0 },
             nowMs: { self.now },
-            fetchSync: { raceId in self.log("fetchSync(\(raceId))"); return self.manifest },
+            fetchSync: { raceId in
+                self.log("fetchSync(\(raceId))")
+                if self.gateEnabled { await self.waitGate() }
+                return self.manifest
+            },
             selectedRaceId: { self.selectedRaceId },
             cachedRaces: { self.races },
             refreshRaces: { source in
@@ -335,6 +374,81 @@ struct SyncCoordinatorTests {
         #expect(calls.contains("refreshTeams(7,Local)"))
         let noCloudTeams = !calls.contains(where: { $0 == "refreshTeams(7,Cloud)" })
         #expect(noCloudTeams)
+    }
+
+    // MARK: lease-замок (сериализация поперёк await)
+
+    /// Порт семантики `leaseMutex.withLock`: `exitLocalMode`, стартовавший, пока проба висит на
+    /// `fetchSync`, обязан ЛЕЧЬ ПОСЛЕ пробы — иначе stale renew пробы ре-пинил бы гонку, которую
+    /// пользователь только что открепил. С замком выключение — последнее → гонка не запинена.
+    @Test func exitDuringSuspendedProbe_leavesRaceUnpinned() async {
+        let fakes = Fakes()
+        // Пользователь запинен; проба вернула бы renew (ре-пин), если бы легла после exit.
+        fakes.lease = RaceLease(raceId: 7, expiresAtMs: 1_000_000)
+        fakes.now = 1_000
+        fakes.selectedRaceId = 7
+        fakes.manifest = manifest(race: 7, dataSource: "local", ttl: 3600)
+        fakes.gateEnabled = true
+        let coordinator = fakes.makeCoordinator()
+
+        // Проба стартует и виснет на `fetchSync`, удерживая lease-замок.
+        let probe = Task { await coordinator.probeLocalAndRenew(7) }
+        while !fakes.didEnterFetchSync() { await Task.yield() }
+
+        // Пользователь выключает LAN: `exit` должен встать в очередь за замком, а не проехать.
+        let exit = Task { await coordinator.exitLocalMode() }
+        // Дать exit'у шанс попытаться захватить замок (без замка он бы уже записал nil и завис на fanOut).
+        try? await Task.sleep(for: .milliseconds(50))
+
+        // Отпускаем пробу: она renew'ит (ре-пин), отдаёт замок, затем exit снимает пин последним.
+        fakes.releaseGate()
+        _ = await probe.value
+        _ = await exit.value
+
+        #expect(fakes.lease == nil)
+        #expect(isPinned(fakes.lease, raceId: 7, nowMs: fakes.now) == false)
+    }
+
+    /// Отменённый ждущий замка (задача-подписчик пересоздаётся) не должен позже провести lease/сетевые
+    /// мутации, а сам замок обязан остаться исправным. probe1 держит замок (висит на `fetchSync`), probe2
+    /// встаёт в очередь и отменяется — он не выполняет тело (ни одного лишнего `fetchSync`), lease отражает
+    /// только probe1, а последующий захват замка работает.
+    @Test func cancelledWaiter_doesNotMutateLease_andLockStaysUsable() async {
+        let fakes = Fakes()
+        fakes.lease = nil
+        fakes.now = 1_000
+        fakes.manifest = manifest(race: 7, dataSource: "local", ttl: 3600)
+        fakes.gateEnabled = true
+        let coordinator = fakes.makeCoordinator()
+
+        // probe1 захватывает замок и виснет на `fetchSync` (гейт).
+        let probe1 = Task { await coordinator.probeLocalAndRenew(7) }
+        while !fakes.didEnterFetchSync() { await Task.yield() }
+
+        // probe2 встаёт в очередь за замком (fetchSync ещё НЕ вызывал — заблокирован на замке).
+        let probe2 = Task { await coordinator.probeLocalAndRenew(7) }
+        try? await Task.sleep(for: .milliseconds(50))
+
+        // Отменяем ждущего probe2 и дожидаемся его ДО отпускания probe1: пока probe1 держит замок,
+        // единственный путь возобновления probe2 — `cancelWaiter` (не hand-off) → `.keep`, тело не бежит.
+        probe2.cancel()
+        let cancelled = await probe2.value
+        #expect(cancelled == .keep)
+
+        // Отпускаем probe1: он renew'ит lease и снимает замок (пропуская уже снятого ждущего).
+        fakes.releaseGate()
+        _ = await probe1.value
+
+        // Ровно один `fetchSync(7)` — probe1; отменённый probe2 тела не выполнил.
+        #expect(fakes.callLog().filter { $0 == "fetchSync(7)" }.count == 1)
+        #expect(fakes.lease == RaceLease(raceId: 7, expiresAtMs: 1_000 + 3600 * 1000))
+
+        // Замок исправен: последующий захват работает (cloud-handback чистит lease).
+        fakes.manifest = manifest(race: 7, dataSource: "cloud")
+        let after = await coordinator.probeLocalAndRenew(7)
+        #expect(after == .clear)
+        #expect(fakes.lease == nil)
+        #expect(fakes.callLog().filter { $0 == "fetchSync(7)" }.count == 2)
     }
 
     // MARK: combineRefreshResults

@@ -252,13 +252,12 @@ final class AppModel {
         }
     }
 
-    /// Русский тост по исходу LAN-переключения (Technical Details, таблица тостов).
-    private static func localModeToast(_ outcome: LocalModeOutcome) -> String {
+    /// Русский тост по исходу LAN-переключения (Technical Details, таблица тостов). `internal` (не
+    /// `private`) — таблицу маппинга исход→строка напрямую покрывает `AppModelTests`.
+    static func localModeToast(_ outcome: LocalModeOutcome) -> String {
         switch outcome {
         case let .pinnedUntil(expiresAtMs, dataStale):
-            let time = Date(timeIntervalSince1970: Double(expiresAtMs) / 1000)
-                .formatted(.dateTime.hour().minute())
-            return "Локальный режим до \(time)" + (dataStale ? " (данные не обновлены)" : "")
+            return localModeUntilLabel(expiresAtMs: expiresAtMs) + (dataStale ? " (данные не обновлены)" : "")
         case .localNoPin, .cloudUpdated:
             return "Обновлено из интернета"
         case .localUnreachable:
@@ -484,4 +483,13 @@ final class AppModel {
             }
         }
     }
+}
+
+/// «Локальный режим до HH:mm» (локальная таймзона) из epoch-ms истечения lease — общий формат
+/// для тоста LAN-переключения (`AppModel.localModeToast`) и сабтайтла ряда LAN в `SettingsModel`.
+/// Free-функция App-слоя (Foundation-only) — без дублирования формата в двух местах.
+func localModeUntilLabel(expiresAtMs: Int64) -> String {
+    let time = Date(timeIntervalSince1970: Double(expiresAtMs) / 1000)
+        .formatted(.dateTime.hour().minute())
+    return "Локальный режим до \(time)"
 }

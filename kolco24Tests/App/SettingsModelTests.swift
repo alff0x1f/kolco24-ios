@@ -215,4 +215,99 @@ struct SettingsModelTests {
         for try await value in env.raceStore.observeRaces() { races = value; break }
         #expect(races.isEmpty)
     }
+
+    /// `wipeDatabase` также снимает LAN-пин (порт `AppContainer.clearDatabase()`: тумблер не должен
+    /// указывать на стёртую гонку) — держатель обнуляется, стрим гасит тумблер.
+    @Test func wipeDatabase_clearsRaceLease() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        env.leaseHolder.set(RaceLease(raceId: 11, expiresAtMs: 5000))
+        let appModel = AppModel(env: env)
+        let model = SettingsModel(env: env, appModel: appModel, raceId: 11, teamId: 4, nowMs: { 1000 })
+
+        #expect(model.localModeOn == true) // до wipe гонка запинена
+        model.wipeDatabase()
+
+        await waitUntil { env.leaseHolder.value == nil }
+        #expect(env.leaseHolder.value == nil)
+        await waitUntil { model.localModeOn == false }
+        #expect(model.localModeOn == false)
+    }
+
+    // MARK: - clearTrackEnabled — запись ДРУГОЙ команды
+
+    /// Точки есть, а рекордер пишет ДРУГУЮ команду (не скоуп) → очистка доступна.
+    @Test func clearTrackEnabled_trueWhileRecordingDifferentTeam() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.trackStore.insertAll([
+            trackPoint(id: "p1", raceId: 7, teamId: 5),
+            trackPoint(id: "p2", raceId: 7, teamId: 5),
+        ])
+        let appModel = AppModel(env: env)
+        let model = SettingsModel(env: env, appModel: appModel, raceId: 7, teamId: 5)
+
+        await waitUntil { model.trackPointCount == 2 }
+        // Запись ДРУГОЙ команды (99), а скоуп настроек — команда 5.
+        appModel.trackRecorder.start(raceId: 7, teamId: 99)
+        #expect(appModel.trackRecorder.state == .recording(teamId: 99))
+        #expect(model.clearTrackEnabled == true)
+    }
+
+    // MARK: - clearTrack — no-op во время записи
+
+    /// `clearTrack()` во время записи ЭТОЙ команды — no-op (guard `state == .idle`): точки не тронуты.
+    @Test func clearTrack_noOpWhileRecording() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.trackStore.insertAll([
+            trackPoint(id: "p1", raceId: 7, teamId: 5),
+            trackPoint(id: "p2", raceId: 7, teamId: 5),
+        ])
+        let appModel = AppModel(env: env)
+        let model = SettingsModel(env: env, appModel: appModel, raceId: 7, teamId: 5)
+
+        await waitUntil { model.trackPointCount == 2 }
+        appModel.trackRecorder.start(raceId: 7, teamId: 5)
+        #expect(appModel.trackRecorder.state == .recording(teamId: 5))
+
+        model.clearTrack() // guard state == .idle → no-op
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(model.trackPointCount == 2) // точки не тронуты
+    }
+
+    // MARK: - resetTeam делегирует clearTeam
+
+    /// `resetTeam()` делегирует `AppModel.clearTeam()` — выбранная команда сбрасывается в `.none`.
+    @Test func resetTeam_delegatesToClearTeam() async throws {
+        let transport = FakeTransport()
+        enqueue304s(transport, 12)
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.teamStore.insertTeams([team(id: 4, raceId: 11)])
+        try await env.selectedTeamStore.upsert(SelectedTeam(raceId: 11, teamId: 4))
+        let appModel = AppModel(env: env)
+        await appModel.start()
+        await waitUntil { appModel.selectedTeamState == .present(self.team(id: 4, raceId: 11)) }
+
+        let model = SettingsModel(env: env, appModel: appModel, raceId: 11, teamId: 4)
+        model.resetTeam()
+
+        await waitUntil { appModel.selectedTeamState == .none }
+        #expect(appModel.selectedTeamState == .none)
+    }
+
+    // MARK: - Тема (прокси AppModel)
+
+    /// `themeMode`-прокси читает/пишет прямо в `AppModel` (и, через него, в `ThemePreference`).
+    @Test func themeMode_proxiesToAppModelAndPref() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        let appModel = AppModel(env: env)
+        let model = SettingsModel(env: env, appModel: appModel, raceId: 7, teamId: 5)
+
+        #expect(model.themeMode == appModel.themeMode)
+        model.themeMode = .dark
+        #expect(appModel.themeMode == .dark)
+        #expect(env.themePreference.mode == .dark)
+    }
 }

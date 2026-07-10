@@ -6,10 +6,14 @@
 //  pin-aware автосинков. Сама lease-математика живёт в чистом `Core/Lease/RaceLease.swift`
 //  (`applySyncResponse`/`isPinned`) — этот тип только секвенирует вызовы и исполняет их исходы.
 //
-//  **Не 1:1 по структуре:** котлиновский `leaseMutex` заменён изоляцией `actor` (прецедент
-//  `MarkUploadRepository`) — сериализация read-decide-write последовательностей (`probeLocalAndRenew`,
-//  `enterLocalMode`/`exitLocalMode`) гарантируется тем, что все они — методы одного актора. Без этого
-//  stale in-flight `Renew` пробы мог бы лечь после явного `exitLocalMode()` и молча ре-пинить гонку.
+//  **Не 1:1 по структуре:** тип — `actor` (прецедент `MarkUploadRepository`), но одной actor-изоляции
+//  для котлиновского `leaseMutex` НЕ хватает: изоляция снимается на каждом `await`, поэтому
+//  read-decide-write последовательности (`probeLocalAndRenew`, `enterLocalMode`/`exitLocalMode`),
+//  охватывающие `await fetchSync`/`await fanOut`, без явного замка НЕ были бы взаимоисключающими —
+//  Kotlin-`Mutex.withLock` держится ПОПЕРЁК suspend'ов. Поэтому эти три метода берут внутренний
+//  async-замок (`lockLease`/`unlockLease`: переживает await, FIFO-честный прямой hand-off) — он и
+//  воспроизводит семантику `leaseMutex`. Без него stale in-flight `Renew` пробы мог бы лечь после
+//  явного `exitLocalMode()` и молча ре-пинить гонку, которую пользователь только что открепил.
 //
 //  Каждая зависимость — замыкание-seam (идиома `ApiClient`/`ScanModel`), так что `SyncCoordinatorTests`
 //  инжектит фейки без БД/сети. Координатор — под `Data/`, потому `SyncManifestDto` (`Net/Dto/`) ему
@@ -116,6 +120,79 @@ actor SyncCoordinator {
         self.refreshMemberTags = refreshMemberTags
     }
 
+    // MARK: - Lease-замок (сериализация, переживающая await)
+    //
+    // Изоляция `actor` снимается на каждом `await`, поэтому read-decide-write последовательности
+    // (`probeLocalAndRenew`/`enterLocalMode`/`exitLocalMode`), охватывающие `await fetchSync`/
+    // `await fanOut`, без этого замка НЕ были бы взаимоисключающими — котлиновский `leaseMutex.withLock`
+    // держится ПОПЕРЁК suspend'ов. Прямой FIFO-честный hand-off владения: `unlockLease` возобновляет
+    // следующего ожидающего, НЕ сбрасывая `leaseLocked` (владение передаётся напрямую, без гонки за
+    // замок между resume и его подхватом).
+    private var leaseLocked = false
+    private var leaseWaiters: [Waiter] = []
+    private var nextWaiterId: UInt64 = 0
+
+    /// Один ожидающий замка. `cont` обнуляется в момент разрешения (hand-off ИЛИ отмена), так что
+    /// продолжение возобновляется РОВНО раз — гонка «hand-off vs cancel» безопасна (кто первый обнулил,
+    /// тот и резюмировал; второй видит `nil` и пропускает).
+    private final class Waiter {
+        let id: UInt64
+        var cont: CheckedContinuation<Bool, Never>?
+        init(id: UInt64, cont: CheckedContinuation<Bool, Never>) { self.id = id; self.cont = cont }
+    }
+
+    /// Берёт lease-замок, переживая await. Возвращает `true`, если владение получено; `false`, если
+    /// ожидание было ОТМЕНЕНО (задача-подписчик `selectedTeamStore` пересоздаётся, тумблер уходит) —
+    /// тогда вызывающий обязан выйти БЕЗ `unlockLease()` (владения он не получил). Cancellation-aware:
+    /// котлиновский `Mutex.withLock` снимает/отменяет ожидающих при отмене; здесь то же — отменённый
+    /// ждущий убирается из `leaseWaiters` и не может позже провести сетевые/lease-мутации.
+    private func lockLease() async -> Bool {
+        if !leaseLocked {
+            leaseLocked = true
+            return true
+        }
+        let id = nextWaiterId
+        nextWaiterId &+= 1
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+                // Тело suspend'а исполняется в actor-изоляции. Уже отменён на входе → не подвешиваемся.
+                if Task.isCancelled {
+                    cont.resume(returning: false)
+                } else {
+                    leaseWaiters.append(Waiter(id: id, cont: cont))
+                }
+            }
+        } onCancel: {
+            // Хендлер вне actor-изоляции — возврат в actor через unstructured Task (сам не отменяем).
+            Task { await self.cancelWaiter(id) }
+        }
+    }
+
+    /// Снимает отменённого ждущего с `id` (если ещё в очереди) и резюмирует его `false`. No-op, если
+    /// его уже подхватил hand-off (`unlockLease`) — двойного resume нет (`cont` уже `nil`).
+    private func cancelWaiter(_ id: UInt64) {
+        guard let idx = leaseWaiters.firstIndex(where: { $0.id == id }) else { return }
+        let waiter = leaseWaiters.remove(at: idx)
+        if let cont = waiter.cont {
+            waiter.cont = nil
+            cont.resume(returning: false)
+        }
+    }
+
+    private func unlockLease() {
+        // Прямой hand-off владения: возобновляем следующего ЖИВОГО ждущего (`leaseLocked` остаётся true).
+        // Пропускаем уже отменённых (их `cont == nil` / их уберёт `cancelWaiter`) — берём первого живого.
+        while !leaseWaiters.isEmpty {
+            let waiter = leaseWaiters.removeFirst()
+            if let cont = waiter.cont {
+                waiter.cont = nil
+                cont.resume(returning: true) // hand-off: владение передано напрямую
+                return
+            }
+        }
+        leaseLocked = false
+    }
+
     /// `.local`, когда [raceId] сейчас запинен, иначе `.cloud`. `nonisolated` — замыкания
     /// (`readLease`/`nowMs`) синхронны, actor-hop не нужен (репозитории читают источник синхронно).
     nonisolated func sourceFor(_ raceId: Int) -> SyncSource {
@@ -139,6 +216,12 @@ actor SyncCoordinator {
     /// pull-to-refresh под пином.
     @discardableResult
     func probeLocalAndRenew(_ raceId: Int) async -> LeaseAction {
+        // Отмена в ожидании замка → выходим без владения (и без `unlockLease`): lease не трогаем.
+        guard await lockLease() else { return .keep }
+        defer { unlockLease() }
+        // Владение могло достаться отменённой задаче через hand-off (гонка `unlockLease` vs `cancelWaiter`):
+        // не мутируем lease под отменой — `defer` корректно передаст замок дальше.
+        if Task.isCancelled { return .keep }
         let manifest = await fetchSync(raceId)
         let action = leaseAction(for: manifest, raceId: raceId)
         switch action {
@@ -157,6 +240,12 @@ actor SyncCoordinator {
     /// (манифест доступен, но не `local`, вкл. нераспознанный `data_source`) рефрешит с cloud без пина,
     /// либо — LAN недоступен — не пишет ничего.
     func enterLocalMode() async -> LocalModeOutcome {
+        // Отмена в ожидании замка → выходим без владения (и без `unlockLease`): ничего не записано,
+        // пин не тронут — ровно семантика `.localUnreachable`.
+        guard await lockLease() else { return .localUnreachable }
+        defer { unlockLease() }
+        // Hand-off отменённой задаче (гонка `unlockLease` vs `cancelWaiter`) → не пишем ничего под отменой.
+        if Task.isCancelled { return .localUnreachable }
         let selected = await selectedRaceId()
         var races = await cachedRaces()
         if selected == nil, races.isEmpty {
@@ -207,6 +296,11 @@ actor SyncCoordinator {
 
     /// Поток выключения: безусловно снимает lease, затем рефрешит с cloud в фоне.
     func exitLocalMode() async -> LocalModeOutcome {
+        // Отмена в ожидании замка → выходим без владения (и без `unlockLease`): пин не снят, сети не было.
+        guard await lockLease() else { return .offline }
+        defer { unlockLease() }
+        // Hand-off отменённой задаче (гонка `unlockLease` vs `cancelWaiter`) → не снимаем пин под отменой.
+        if Task.isCancelled { return .offline }
         writeLease(nil)
         let raceId: Int?
         if let selected = await selectedRaceId() {

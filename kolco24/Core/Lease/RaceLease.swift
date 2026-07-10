@@ -27,15 +27,35 @@ let DEFAULT_LEASE_MS: Int64 = 12 * 60 * 60 * 1000
 /// (полагается на вменяемые часы сервера) → [nowMs] + [DEFAULT_LEASE_MS] (оба `nil`, сегодняшняя
 /// заглушка).
 func renewedLease(raceId: Int, serverTtlSec: Int64?, serverLeaseExpiresAtSec: Int64?, nowMs: Int64) -> RaceLease {
+    // Kotlin `Long`-арифметика при переполнении молча оборачивается; Swift `*`/`+` ТРАПят. Огромный,
+    // но валидный `lease_ttl_seconds`/`lease_expires_at` из LAN-манифеста не должен ронять приложение —
+    // считаем с насыщением (клампом к `Int64.max`/`.min` по знаку результата). Клампнутый lease ведёт
+    // себя вменяемо в `isPinned` (`.max` → «практически бессрочный», `.min` → уже просрочен) — краш хуже.
     let expiresAtMs: Int64
     if let serverTtlSec {
-        expiresAtMs = nowMs + serverTtlSec * 1000
+        expiresAtMs = saturatingAdd(nowMs, saturatingMul(serverTtlSec, 1000))
     } else if let serverLeaseExpiresAtSec {
-        expiresAtMs = serverLeaseExpiresAtSec * 1000
+        expiresAtMs = saturatingMul(serverLeaseExpiresAtSec, 1000)
     } else {
-        expiresAtMs = nowMs + DEFAULT_LEASE_MS
+        expiresAtMs = saturatingAdd(nowMs, DEFAULT_LEASE_MS)
     }
     return RaceLease(raceId: raceId, expiresAtMs: expiresAtMs)
+}
+
+/// Умножение с насыщением: при переполнении зажимает к `Int64.max`/`.min` (по знаку результата)
+/// вместо трапа Swift-`*`.
+private func saturatingMul(_ a: Int64, _ b: Int64) -> Int64 {
+    let (result, overflow) = a.multipliedReportingOverflow(by: b)
+    guard overflow else { return result }
+    return (a < 0) == (b < 0) ? .max : .min
+}
+
+/// Сложение с насыщением: при переполнении зажимает к `Int64.max`/`.min` (по знаку слагаемого)
+/// вместо трапа Swift-`+`.
+private func saturatingAdd(_ a: Int64, _ b: Int64) -> Int64 {
+    let (result, overflow) = a.addingReportingOverflow(b)
+    guard overflow else { return result }
+    return b < 0 ? .min : .max
 }
 
 /// `true`, когда [lease] пинит [raceId] и ещё не истёк на момент [nowMs]. Строгое `<` на границе

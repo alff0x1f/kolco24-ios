@@ -48,9 +48,7 @@ final class SettingsModel {
         guard let raceId, let lease = currentLease, isPinned(lease, raceId: raceId, nowMs: nowMs()) else {
             return "Обновление из интернета"
         }
-        let time = Date(timeIntervalSince1970: Double(lease.expiresAtMs) / 1000)
-            .formatted(.dateTime.hour().minute())
-        return "Локальный режим до \(time)"
+        return localModeUntilLabel(expiresAtMs: lease.expiresAtMs)
     }
 
     /// Идёт ли вход/выход LAN-режима — прокси app-scoped `AppModel.localModeBusy` (спиннер тумблера,
@@ -82,6 +80,11 @@ final class SettingsModel {
     /// без андроидного guard'а под upload-мьютексом: гонка «drain дошлёт удалённую точку» безвредна,
     /// `markUploaded*` по несуществующим id — no-op). Дренаж в unstructured `Task` с захватом СТОРА
     /// (не `self`): закрытие шита не абортит удаление (§6-идиома этапа 5).
+    ///
+    /// Guard здесь СТРОЖЕ, чем `clearTrackEnabled` (тот блокирует только запись ИМЕННО этой команды):
+    /// `state == .idle` отказывает при ЛЮБОЙ активной записи — намеренная защита деструктивного
+    /// действия. Расхождение недостижимо в UI (шит скоуп-локальный к выбранной команде, чужая запись
+    /// не идёт), но оставлено строгим, чтобы кнопка+действие не могли разойтись при будущих правках.
     func clearTrack() {
         guard appModel.trackRecorder.state == .idle, let teamId, let raceId else { return }
         let store = env.trackStore
@@ -96,11 +99,16 @@ final class SettingsModel {
     }
 
     /// «Очистить базу данных» — `AppDatabase.wipeAllTables()` (fire-and-forget, захват СТОРА БД, не `self`),
-    /// затем тост «База очищена» через `AppModel`. Схема остаётся жить — следующий refresh перезальёт данные.
+    /// затем снятие LAN-пина (`leaseHolder.set(nil)` — write-through чистит и держатель, и стор) и тост
+    /// «База очищена» через `AppModel`. Порт `AppContainer.clearDatabase()` (Kotlin чистит `raceLease`
+    /// вместе с таблицами: тумблер LAN-режима не должен указывать на только что стёртую гонку). Схема
+    /// остаётся жить — следующий refresh перезальёт данные.
     func wipeDatabase() {
         let database = env.database
+        let leaseHolder = env.leaseHolder
         Task { @MainActor [weak self] in
             try? await database.wipeAllTables()
+            leaseHolder.set(nil)
             self?.appModel.toastMessage = "База очищена"
         }
     }

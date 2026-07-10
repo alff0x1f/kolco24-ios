@@ -409,4 +409,91 @@ struct AppModelTests {
         #expect(model.toastMessage?.hasPrefix("Локальный режим до") == true)
         #expect(didRequest(transport, suffix: "/app/race/11/sync/"))
     }
+
+    /// `toggleLocalMode(false)` (выход): безусловно снимает пин, cloud-refresh успешен → тост
+    /// «Обновлено из интернета», busy сброшен.
+    @Test func toggleLocalMode_off_clearsLeaseAndToastsCloudUpdated() async throws {
+        let transport = FakeTransport()
+        enqueue304s(transport, 8) // exit fan-out (races/teams/legend/member_tags) + запас
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.teamStore.insertTeams([team(id: 4, raceId: 11)])
+        try await env.selectedTeamStore.upsert(SelectedTeam(raceId: 11, teamId: 4))
+        // Гонка 11 запинена — выход должен снять пин.
+        env.leaseHolder.set(RaceLease(raceId: 11, expiresAtMs: .max))
+        let model = AppModel(env: env)
+
+        model.toggleLocalMode(false)
+        await waitUntil { env.leaseHolder.value == nil && !model.localModeBusy }
+
+        #expect(env.leaseHolder.value == nil)
+        #expect(model.localModeBusy == false)
+        #expect(model.toastMessage == "Обновлено из интернета")
+    }
+
+    /// Двойной вход `toggleLocalMode(true)`, пока первый в полёте (проба `/sync/` висит в гейте):
+    /// guard `!localModeBusy` глотает второй вызов — ровно одна проба `/sync/` в логе.
+    @Test func toggleLocalMode_doubleEntry_runsSingleSequence() async throws {
+        let transport = GatedTransport(gateSuffix: "/app/race/11/sync/")
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.teamStore.insertTeams([team(id: 4, raceId: 11)])
+        try await env.selectedTeamStore.upsert(SelectedTeam(raceId: 11, teamId: 4))
+        let model = AppModel(env: env)
+
+        // Первый вход — проба `/sync/` повисает в гейте.
+        model.toggleLocalMode(true)
+        await waitUntil { transport.requested(suffix: "/app/race/11/sync/") }
+        #expect(model.localModeBusy == true)
+
+        // Второй вход, пока первый в полёте — проглочен guard'ом.
+        model.toggleLocalMode(true)
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let syncProbes = transport.recorded.filter {
+            $0.url?.absoluteString.hasSuffix("/app/race/11/sync/") ?? false
+        }.count
+        #expect(syncProbes == 1)
+
+        // Отпускаем гейт → цикл завершается, busy сбрасывается.
+        transport.release(statusCode: 304)
+        await waitUntil { model.localModeBusy == false }
+        #expect(model.localModeBusy == false)
+    }
+
+    // MARK: - Тост-маппинг LAN-исходов (таблица тостов)
+
+    @Test func localModeToast_mapsEveryOutcomeToString() {
+        let expiresAtMs: Int64 = 1_800_000_000_000
+        #expect(AppModel.localModeToast(.pinnedUntil(expiresAtMs: expiresAtMs, dataStale: false))
+            .hasPrefix("Локальный режим до"))
+        #expect(AppModel.localModeToast(.pinnedUntil(expiresAtMs: expiresAtMs, dataStale: false))
+            .contains("данные не обновлены") == false)
+        #expect(AppModel.localModeToast(.pinnedUntil(expiresAtMs: expiresAtMs, dataStale: true))
+            .contains("(данные не обновлены)"))
+        #expect(AppModel.localModeToast(.localNoPin) == "Обновлено из интернета")
+        #expect(AppModel.localModeToast(.cloudUpdated) == "Обновлено из интернета")
+        #expect(AppModel.localModeToast(.localUnreachable) == "Локальный сервер недоступен")
+        #expect(AppModel.localModeToast(.offline) == "Нет сети")
+        #expect(AppModel.localModeToast(.noRace) == "Гонка не выбрана")
+    }
+
+    // MARK: - Тема (seed + persist)
+
+    /// `themeMode` засеивается из `ThemePreference` в `init`; сеттер персистит через стор; новый
+    /// `AppModel` над тем же (обновлённым) стором отражает сохранённое значение.
+    @Test func themeMode_seedsFromPrefAndPersists() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        // Пре-сид: тёмная тема в сторе → новый AppModel её отражает.
+        env.themePreference.setMode(.dark)
+        let model = AppModel(env: env)
+        #expect(model.themeMode == .dark)
+
+        // Сеттер персистит через стор (didSet → ThemePreference.setMode).
+        model.themeMode = .light
+        #expect(env.themePreference.mode == .light)
+
+        // Свежий AppModel над обновлённым стором читает сохранённое значение.
+        let model2 = AppModel(env: env)
+        #expect(model2.themeMode == .light)
+    }
 }

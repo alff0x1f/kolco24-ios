@@ -3,8 +3,9 @@
 //  kolco24
 //
 //  Хранилище текущего `RaceLease` (LAN-пин). Порт `data/lease/RaceLeaseStore.kt` 1:1: та же
-//  идиома, что у `ClockAnchorStore` (инъекция `load`/`save`-seam + продовый
-//  `fromUserDefaults`-адаптер, синхронное чтение при конструировании).
+//  идиома, что у `ClockAnchorStore` (инъекция `load`/`save`-seam + продовый `fromUserDefaults`-адаптер).
+//  `init` только сохраняет замыкания — чтение ЛЕНИВОЕ, через `read()` (его синхронно дёргает
+//  `AppEnvironment` при засеве `LeaseHolder`), в отличие от `ThemePreference`, читающего значение сразу в `init`.
 //
 //  **Атомарная запись:** lease хранится **одной delimited-строкой под одним ключом** —
 //  `"raceId|expiresAtMs"` — так что `write` = одна `save`; персистнутый lease всегда целый
@@ -15,7 +16,9 @@ import Foundation
 
 struct RaceLeaseStore {
 
-    /// Ключ хранения (совпадает с Android `KEY_LEASE`).
+    /// Ключ хранения — iOS-local выбор, заданный планом (`race_lease`). Android `KEY_LEASE` = `"lease"`;
+    /// паритет ключей НЕ требуется: хранилище пер-платформенное (UserDefaults vs SharedPreferences),
+    /// общего/синхронизируемого стора нет, миграции нет.
     static let keyLease = "race_lease"
 
     private let load: (String) -> String?

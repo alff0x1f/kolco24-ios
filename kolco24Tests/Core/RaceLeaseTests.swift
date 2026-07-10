@@ -31,6 +31,29 @@ struct RaceLeaseTests {
         #expect(lease == RaceLease(raceId: 1, expiresAtMs: 10_000 + DEFAULT_LEASE_MS))
     }
 
+    // MARK: renewedLease overflow (deviation от Kotlin: насыщение вместо трапа/wrap)
+
+    /// Огромный, но валидный `lease_ttl_seconds` из LAN-манифеста не должен ронять приложение
+    /// (Swift `*`/`+` ТРАПят, Kotlin `Long` оборачивается) — считаем с насыщением к `Int64.max`.
+    @Test func renewedLease_saturatesToMax_onTtlOverflow() {
+        let lease = renewedLease(raceId: 1, serverTtlSec: Int64.max, serverLeaseExpiresAtSec: nil, nowMs: 1_000)
+        #expect(lease.expiresAtMs == Int64.max)
+        #expect(isPinned(lease, raceId: 1, nowMs: 1_000)) // насыщенный lease ведёт себя как «бессрочный»
+    }
+
+    /// Переполнение по `nowMs + ttl*1000` (само умножение в пределах, а сложение — нет) тоже
+    /// насыщается, а не трапает.
+    @Test func renewedLease_saturatesToMax_onNowPlusTtlOverflow() {
+        let lease = renewedLease(raceId: 1, serverTtlSec: 1, serverLeaseExpiresAtSec: nil, nowMs: Int64.max - 100)
+        #expect(lease.expiresAtMs == Int64.max)
+    }
+
+    /// Огромный `lease_expires_at` (absolute epoch-сек) тоже насыщается при `* 1000`.
+    @Test func renewedLease_saturatesToMax_onAbsoluteExpiryOverflow() {
+        let lease = renewedLease(raceId: 1, serverTtlSec: nil, serverLeaseExpiresAtSec: Int64.max, nowMs: 1_000)
+        #expect(lease.expiresAtMs == Int64.max)
+    }
+
     // MARK: isPinned
 
     @Test func isPinned_true_whenRaceMatchesAndNotExpired() {

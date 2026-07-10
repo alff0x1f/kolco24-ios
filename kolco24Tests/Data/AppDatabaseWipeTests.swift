@@ -78,4 +78,21 @@ struct AppDatabaseWipeTests {
         }
         #expect(try count(db, "races") == 1)
     }
+
+    /// Анти-регресс: `allTableNames` обязан покрывать РОВНО реальный набор таблиц (тот же запрос к
+    /// `sqlite_master`, что в `AppDatabaseSchemaTests`). Без этого забытая в списке таблица
+    /// (добавленная в схему позже) осталась бы с непочищенными строками, а wipe-тест выше — зелёным
+    /// (он итерирует сам `allTableNames`, а не независимый источник истины).
+    @Test func allTableNamesCoversEveryRealTable() throws {
+        let appDb = try AppDatabase.makeInMemory()
+        let actualTables = try appDb.writer.read { database -> Set<String> in
+            let names = try String.fetchAll(database, sql: """
+                SELECT name FROM sqlite_master
+                WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+                  AND name != 'grdb_migrations'
+                """)
+            return Set(names)
+        }
+        #expect(Set(AppDatabase.allTableNames) == actualTables)
+    }
 }
