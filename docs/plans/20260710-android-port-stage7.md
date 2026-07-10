@@ -142,9 +142,9 @@
 - Modify: `kolco24/Net/ApiClient.swift`
 - Create: `kolco24Tests/Net/MarkPhotoUploadTests.swift`
 
-- [ ] `uploadMarkPhoto(raceId:markId:frameId:bytes:) async -> PostResult<Void>` — POST сырых JPEG-байт на `/app/race/<raceId>/mark/<markId>/photo/<frameId>` (путь **без** trailing slash — 1:1 с Kotlin L267–273), `Content-Type: image/jpeg`, подпись по хэшу тех же байт, без ретраев; 200/201 → `.success`, тело не парсится
-- [ ] тесты через `FakeTransport`: метод/путь/Content-Type/тело-байты как есть; 201 → success; 403 → ровно один запрос (нет ретрая); 413 → `.error(413)`; URLError → `.offline`
-- [ ] прогнать тесты — зелёные до Task 5
+- [x] `uploadMarkPhoto(raceId:markId:frameId:bytes:) async -> PostResult<Void>` — POST сырых JPEG-байт на `/app/race/<raceId>/mark/<markId>/photo/<frameId>` (путь **без** trailing slash — 1:1 с Kotlin L267–273), `Content-Type: image/jpeg`, подпись по хэшу тех же байт, без ретраев; 200/201 → `.success`, тело не парсится
+- [x] тесты через `FakeTransport`: метод/путь/Content-Type/тело-байты как есть; 201 → success; 403 → ровно один запрос (нет ретрая); 413 → `.error(413)`; URLError → `.offline`
+- [x] прогнать тесты — зелёные до Task 5
 
 ### Task 5: Data/Repositories — кадровый дрейн в MarkUploadRepository
 
