@@ -222,6 +222,32 @@ struct ApiClient {
         ) { _ in () }
     }
 
+    /// `POST /app/race/<raceId>/track/` — выгрузка батча точек GPS-трека [points] команды [teamId].
+    /// Тело — `TrackUploadRequest(team_id, points)` (**без** `source_install_id` — зеркало Kotlin-
+    /// клиента), сериализуется в `Data` **один раз** (те же байты хэшируются в подпись и отправляются
+    /// — конвенция `post`). `200`/`201` → `.success` с распарсенным `TrackUploadResponse` (принятые
+    /// клиентские `id` для идемпотентного upsert); прочие статусы маппятся по `post`. Один и тот же
+    /// метод обслуживает обе цели (cloud / local LAN) — цель выбирается экземпляром `ApiClient`. **Не
+    /// ретраится** (гарантия `post`: 403 auth-vs-skew неразличим, replay небезопасен). Путь — с
+    /// завершающим слэшем (как `/marks/`).
+    func uploadTrack(
+        raceId: Int,
+        teamId: Int,
+        points: [TrackPointDto]
+    ) async -> PostResult<TrackUploadResponse> {
+        let request = TrackUploadRequest(teamId: teamId, points: points)
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(request)
+        } catch {
+            // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
+            return .error(code: nil)
+        }
+        return await post(url: endpoint("/app/race/\(raceId)/track/"), body: body) {
+            try JSONDecoder().decode(TrackUploadResponse.self, from: $0)
+        }
+    }
+
     /// URL эндпоинта из `baseURL` (без хвостового `/`) + `path` (с завершающим слэшем — он входит в
     /// подписанную канонику).
     private func endpoint(_ path: String) -> URL {

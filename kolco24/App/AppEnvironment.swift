@@ -37,6 +37,9 @@ final class AppEnvironment {
     /// Привязки чипов дёргаются напрямую (без репозитория-обёртки — YAGNI, Android-обёртка тривиальна).
     let memberChipBindingStore: MemberChipBindingStore
     let syncMetaStore: SyncMetaStore
+    /// Точки GPS-трека (этап 8): наблюдение/дренаж выгрузки. Питает `TrackUploadRepository` (и
+    /// `TrackRecorder` задачи 6).
+    let trackStore: TrackStore
 
     // MARK: - Репозитории (этап 3)
     let raceRepository: RaceRepository
@@ -49,6 +52,12 @@ final class AppEnvironment {
     /// (таймер / смена команды / закрытие скан-оверлея). `cloud`/`local`-клиенты и `installId`
     /// протянуты в граф явно (раньше клиенты потреблялись лишь в `init` sync-репозиториев).
     let markUploadRepository: MarkUploadRepository
+
+    // MARK: - Этап 8 (выгрузка GPS-трека)
+    /// Идемпотентный дренаж точек трека в обе цели (LAN + облако). Дёргается теми же триггерами
+    /// `AppModel`, что и marks (5-мин таймер / смена команды), плюс live-upload из `TrackRecorder`
+    /// (задача 6). Структурный клон `markUploadRepository` без frame-цикла/version-guard.
+    let trackUploadRepository: TrackUploadRepository
 
     // MARK: - Этап 5 (скан-флоу)
     /// Общие доверенные часы: прод — `pair.clock` из `ApiClients.makeDefaultPair()` (раньше терялся),
@@ -75,6 +84,20 @@ final class AppEnvironment {
     /// Держит `import GRDB`/`Photo/` вне вьюх (grep-инвариант): вью получает только замыкание.
     let photoURL: @Sendable (String) -> URL?
 
+    // MARK: - Этап 8 (GPS-трек, платформенный шов)
+    /// Фабрика движка записи трека (`TrackEngine`-шов): прод — `CoreLocationTrackEngine` (единственный
+    /// `import CoreLocation`), `inMemory` — `NoTrackEngine`-фейк (реальный GPS только на устройстве).
+    /// `TrackRecorder` (задача 6) строится из этих замыканий через `AppModel`.
+    let makeEngine: @Sendable () -> any TrackEngine
+    /// TOCTOU-проверка геодоступа перед стартом записи (чтение `authorizationStatus` с удерживаемого
+    /// `CLLocationManager` прод-движка); `inMemory` → `true`.
+    let hasLocationAccess: @Sendable () -> Bool
+    /// Выдана ли только «примерная» локация (деградация точности в TrackCard, задача 7); `inMemory` → `false`.
+    let isReducedAccuracy: @Sendable () -> Bool
+    /// Прогрев разрешения «при использовании» при тапе «Начать запись» (первый старт записи из TrackCard,
+    /// если пользователь ни разу не открывал скан-оверлей). Прод — `CoreLocationTrackEngine`; `inMemory` → no-op.
+    let requestLocationAuthorization: @Sendable () -> Void
+
     /// - Parameters:
     ///   - cloudOrigin/localOrigin: base URL'ы — ключи-партиции ETag в `sync_meta`.
     private init(
@@ -92,6 +115,10 @@ final class AppEnvironment {
         deleteFrame: @escaping @Sendable (String) -> Void = { _ in },
         sweepOrphanPhotoDirs: @escaping @Sendable (Set<String>) -> Void = { _ in },
         photoURL: @escaping @Sendable (String) -> URL? = { _ in nil },
+        makeEngine: @escaping @Sendable () -> any TrackEngine = { NoTrackEngine() },
+        hasLocationAccess: @escaping @Sendable () -> Bool = { true },
+        isReducedAccuracy: @escaping @Sendable () -> Bool = { false },
+        requestLocationAuthorization: @escaping @Sendable () -> Void = {},
         wallNow: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.database = database
@@ -102,6 +129,10 @@ final class AppEnvironment {
         self.deleteFrame = deleteFrame
         self.sweepOrphanPhotoDirs = sweepOrphanPhotoDirs
         self.photoURL = photoURL
+        self.makeEngine = makeEngine
+        self.hasLocationAccess = hasLocationAccess
+        self.isReducedAccuracy = isReducedAccuracy
+        self.requestLocationAuthorization = requestLocationAuthorization
         let writer = database.writer
 
         raceStore = RaceStore(writer)
@@ -114,6 +145,7 @@ final class AppEnvironment {
         memberTagStore = MemberTagStore(writer)
         memberChipBindingStore = MemberChipBindingStore(writer)
         syncMetaStore = SyncMetaStore(writer)
+        trackStore = TrackStore(writer)
 
         // Этап 4: источник всегда cloud, гонки не пришпилены к LAN.
         let notPinned: (Int) -> Bool = { _ in false }
@@ -166,6 +198,15 @@ final class AppEnvironment {
             wallNow: wallNow,
             frameReader: frameReader
         )
+
+        // Этап 8: дренаж точек трека поверх тех же cloud/local-клиентов (без installId — трек не
+        // несёт source_install_id, зеркало Kotlin-клиента).
+        trackUploadRepository = TrackUploadRepository(
+            trackStore: trackStore,
+            cloud: cloud,
+            local: local,
+            wallNow: wallNow
+        )
     }
 
     // MARK: - Фабрики
@@ -179,6 +220,11 @@ final class AppEnvironment {
         // (тот же корень, что `kolco24.db`). `PhotoPaths.decode` уже отфильтровал небезопасные пути
         // до вызова reader'а, так что `absoluteURL` получает только `marks/<id>/<uuid>.jpg`.
         let photoStorage = try PhotoStorage.makeShared()
+        // Этап 8: один удерживаемый `CoreLocationTrackEngine` — источник и фиксов (`makeEngine`), и
+        // чтений авторизации (`hasLocationAccess`/`isReducedAccuracy` над удерживаемым `CLLocationManager`;
+        // одноразовый инстанс в замыкании врал бы `.notDetermined`). Запись держит один движок за раз;
+        // `stop()` идемпотентен, `fixes()` рестартует — переиспользование инстанса безопасно.
+        let trackEngine = CoreLocationTrackEngine()
         return AppEnvironment(
             database: database,
             cloud: pair.cloud,
@@ -198,7 +244,11 @@ final class AppEnvironment {
             writeFrame: { markId, data in photoStorage.writeDownscaledJpeg(markId: markId, jpegData: data) },
             deleteFrame: { rel in photoStorage.deleteFrame(relPath: rel) },
             sweepOrphanPhotoDirs: { ids in photoStorage.sweepOrphanDirs(liveMarkIds: ids) },
-            photoURL: { rel in photoStorage.absoluteURL(relPath: rel) }
+            photoURL: { rel in photoStorage.absoluteURL(relPath: rel) },
+            makeEngine: { trackEngine },
+            hasLocationAccess: { trackEngine.hasLocationAccess() },
+            isReducedAccuracy: { trackEngine.isReducedAccuracy() },
+            requestLocationAuthorization: { trackEngine.requestWhenInUseAuthorization() }
         )
     }
 
@@ -215,7 +265,11 @@ final class AppEnvironment {
         writeFrame: @escaping @Sendable (String, Data) -> String? = { _, _ in nil },
         deleteFrame: @escaping @Sendable (String) -> Void = { _ in },
         sweepOrphanPhotoDirs: @escaping @Sendable (Set<String>) -> Void = { _ in },
-        photoURL: @escaping @Sendable (String) -> URL? = { _ in nil }
+        photoURL: @escaping @Sendable (String) -> URL? = { _ in nil },
+        makeEngine: @escaping @Sendable () -> any TrackEngine = { NoTrackEngine() },
+        hasLocationAccess: @escaping @Sendable () -> Bool = { true },
+        isReducedAccuracy: @escaping @Sendable () -> Bool = { false },
+        requestLocationAuthorization: @escaping @Sendable () -> Void = {}
     ) throws -> AppEnvironment {
         let database = try AppDatabase.makeInMemory()
         return AppEnvironment(
@@ -231,7 +285,11 @@ final class AppEnvironment {
             writeFrame: writeFrame,
             deleteFrame: deleteFrame,
             sweepOrphanPhotoDirs: sweepOrphanPhotoDirs,
-            photoURL: photoURL
+            photoURL: photoURL,
+            makeEngine: makeEngine,
+            hasLocationAccess: hasLocationAccess,
+            isReducedAccuracy: isReducedAccuracy,
+            requestLocationAuthorization: requestLocationAuthorization
         )
     }
 
@@ -279,4 +337,24 @@ struct NoLocationProvider: CurrentLocationProvider {
 struct SilentFeedback: ScanFeedbackPlaying {
     func play(_ kind: ScanFeedbackKind) {}
     func fanfare() {}
+}
+
+/// No-op движок трека для `inMemory`-графа: стрим ОСТАЁТСЯ открытым (фиксов нет — реальный GPS только
+/// на устройстве), завершается лишь на `stop()` — как прод-движок. Иначе мгновенно завершившийся стрим
+/// сигналил бы `TrackRecorder` «движок умер» и тут же откатывал запись в `.idle`. Прод —
+/// `CoreLocationTrackEngine` (`Location/`).
+final class NoTrackEngine: TrackEngine, @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: AsyncStream<RawFix>.Continuation?
+
+    func fixes() -> AsyncStream<RawFix> {
+        AsyncStream { cont in
+            lock.lock(); continuation?.finish(); continuation = cont; lock.unlock()
+        }
+    }
+
+    func stop() {
+        lock.lock(); let c = continuation; continuation = nil; lock.unlock()
+        c?.finish()
+    }
 }

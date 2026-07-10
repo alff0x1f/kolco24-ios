@@ -136,6 +136,17 @@ struct TeamView: View {
                     .padding(.horizontal, DS.hPad + 4)
                     .padding(.top, 8)
 
+                if let model {
+                    TrackCardView(
+                        recorder: appModel.trackRecorder,
+                        model: model,
+                        team: team,
+                        raceId: appModel.selectedRaceId,
+                        teamId: appModel.selectedTeamId
+                    )
+                    .padding(.top, 20)
+                }
+
                 SectionHeader("Прочее")
                     .padding(.top, 20)
 
@@ -386,6 +397,240 @@ private struct MiscRowView: View {
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Track Card (этап 8)
+
+/// Карточка «GPS-трек» на вкладке «Команда». Порт строк/состояний `ui/track/TrackCard.kt` 1:1:
+/// - `recording` → пульсирующая точка + «Идёт запись» + `pointsLabel` (сырой live-счётчик рекордера) +
+///   «Остановить» (brandRed);
+/// - idle + 0 точек → онбординг-текст + CTA «Начать запись»;
+/// - idle + >0 → метрики Точки/Сегменты/Время + «Начать запись» + вторичная «Поделиться GPX».
+///
+/// Держит и `recorder`, и `model` (оба `@Observable`) — SwiftUI трекает `recorder.state`/`recorder.pointCount`
+/// напрямую, поэтому карточка перерисовывается на старт/стоп без ручного моста. GPX-файл пере-генерится
+/// офф-мейн при смене `trackUsable` в temp-каталог и раздаётся системным `ShareLink`.
+private struct TrackCardView: View {
+    let recorder: TrackRecorder
+    let model: TeamModel
+    let team: Team
+    let raceId: Int?
+    let teamId: Int?
+
+    /// Готовый временный GPX-файл для `ShareLink` (пере-генерится офф-мейн при смене трека).
+    @State private var gpxURL: URL?
+
+    private var recording: Bool {
+        if case .recording = recorder.state { return true }
+        return false
+    }
+
+    /// Метка для имени файла: стартовый номер команды, иначе id (порт `label`).
+    private var teamLabel: String {
+        if let number = team.startNumber?.trimmingCharacters(in: .whitespaces), !number.isEmpty {
+            return number
+        }
+        return teamId.map(String.init) ?? "track"
+    }
+
+    /// Имя трека в GPX `<name>` (порт `teamForTab?.teamname ?: "Команда $label"`).
+    private var trackName: String {
+        let name = team.teamname.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? "Команда \(teamLabel)" : name
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionHeader("GPS-трек")
+
+            VStack(alignment: .leading, spacing: 0) {
+                if recording {
+                    recordingContent
+                } else {
+                    idleContent
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.card)
+            .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+            .padding(.horizontal, DS.hPad)
+        }
+        // Пере-генерация GPX-файла офф-мейн при смене набора точек (recording не показывает шаринг,
+        // но пустой набор гасит `gpxURL`, а финальные точки после стопа перегенерят файл).
+        .task(id: model.trackUsable) { await regenerateGpx() }
+    }
+
+    // MARK: Recording
+
+    @ViewBuilder
+    private var recordingContent: some View {
+        HStack(spacing: 10) {
+            PulsingDot()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Идёт запись")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.ink)
+                Text(pointsLabel(recorder.pointCount))
+                    .font(.mono(11))
+                    .foregroundStyle(Color.sub)
+            }
+            Spacer()
+        }
+        .padding(.bottom, 14)
+
+        Button { recorder.stop() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "stop.fill").font(.system(size: 15))
+                Text("Остановить").font(.system(size: 15, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.brandRed.opacity(0.14))
+            .foregroundStyle(Color.brandRed)
+            .clipShape(RoundedRectangle(cornerRadius: DS.ctaRadius))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Idle
+
+    @ViewBuilder
+    private var idleContent: some View {
+        if model.trackPointCount > 0 {
+            TrackMetricsRow(
+                pointCount: model.trackPointCount,
+                segmentCount: model.trackSegmentCount,
+                timeRange: model.trackTimeRange
+            )
+            .padding(.bottom, 14)
+        } else {
+            Text("Запишите GPS-трек команды во время гонки.")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.sub)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 14)
+        }
+
+        Button {
+            if let raceId, let teamId { recorder.start(raceId: raceId, teamId: teamId) }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "play.fill").font(.system(size: 15))
+                Text("Начать запись").font(.system(size: 15, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(Color.kolcoOrange)
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: DS.ctaRadius))
+            .opacity(teamId == nil ? 0.5 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(teamId == nil)
+
+        if model.trackPointCount > 0, let gpxURL {
+            ShareLink(item: gpxURL) {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 15))
+                    Text("Поделиться GPX").font(.system(size: 15, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .foregroundStyle(Color.ink)
+                .clipShape(RoundedRectangle(cornerRadius: DS.ctaRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.ctaRadius)
+                        .stroke(Color.hairline, lineWidth: 0.75)
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
+        }
+
+        if model.degradedAccuracy {
+            Text("Только примерная геолокация (нет GPS).")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.sub)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 8)
+        }
+    }
+
+    // MARK: GPX
+
+    private func regenerateGpx() async {
+        let points = model.trackUsable
+        guard !points.isEmpty else { gpxURL = nil; return }
+        let name = trackName
+        let fileName = gpxFileName(teamLabel: teamLabel, dateIso: todayIso())
+        // Сериализацию GPX (CPU) гоним офф-мейн, а ЗАПИСЬ на детерминированный путь — только после проверки
+        // отмены. `.task(id:)` отменяет старое поколение при смене `trackUsable`, и отменённое поколение
+        // выходит ДО записи: без этого отставшая старая генерация перезаписала бы файл устаревшим треком,
+        // и `ShareLink` отдавал бы неактуальное содержимое. Запись сериализована на MainActor (структурный
+        // контекст `.task`) — два поколения не перекрывают запись.
+        let gpx = await Task.detached(priority: .utility) { buildGpx(points: points, trackName: name) }.value
+        if Task.isCancelled { return }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tracks", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let fileURL = dir.appendingPathComponent(fileName)
+        do {
+            try Data(gpx.utf8).write(to: fileURL)
+            gpxURL = fileURL
+        } catch {
+            gpxURL = nil
+        }
+    }
+}
+
+/// Пульсирующая точка «идёт запись» (порт `PulsingDot`): infinite fade 1 → 0.25.
+private struct PulsingDot: View {
+    @State private var on = false
+    var body: some View {
+        Circle()
+            .fill(Color.kolcoOrange)
+            .frame(width: 12, height: 12)
+            .opacity(on ? 0.25 : 1)
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: on)
+            .onAppear { on = true }
+    }
+}
+
+/// Ряд метрик idle-трека: Точки / Сегменты / Время (порт `TrackMetrics`). Слова склоняются по счётчику
+/// (`pointsWord`/`segmentsWord`) и капитализируются, значения — `Font.mono`.
+private struct TrackMetricsRow: View {
+    let pointCount: Int
+    let segmentCount: Int
+    let timeRange: String?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 20) {
+            metric(value: "\(pointCount)", label: pointsWord(pointCount).capitalizedFirst)
+            metric(value: "\(segmentCount)", label: segmentsWord(segmentCount).capitalizedFirst)
+            metric(value: timeRange ?? "—", label: "Время")
+        }
+    }
+
+    private func metric(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value)
+                .font(.mono(16, weight: .bold))
+                .foregroundStyle(Color.ink)
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.sub)
+                .textCase(.uppercase)
+                .tracking(0.4)
+        }
+    }
+}
+
+private extension String {
+    /// Капитализирует только первый символ (порт `replaceFirstChar { it.uppercase() }`).
+    var capitalizedFirst: String {
+        guard let first else { return self }
+        return first.uppercased() + dropFirst()
     }
 }
 

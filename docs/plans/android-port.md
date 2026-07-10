@@ -75,7 +75,11 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 - AVFoundation-камера (порт PhotoCaptureScreen, но ориентация — через `AVCaptureDevice.RotationCoordinator`, а не акселерометр; EXIF запекается ImageIO), `PhotoStorage` в Application Support (относительные пути в БД), PhotoNumberPicker / авто-привязка к недавнему взятию, лайтбокс, покадровая идемпотентная загрузка (poison-frame 400/413), sweep осиротевших папок.
 
 ### Этап 8. GPS-трек
-- `CLLocationManager` с background mode «location» (аналог foreground-service): профили Precise/Economy, сегменты, lossless-стоп, live-upload раз в ~10 мин, TrackCard в Команде, GPX-экспорт через share sheet.
+
+✅ выполнен — см. [детальный план](completed/20260710-android-port-stage8.md).
+
+- Фоновая запись через `CLLocationUpdate.liveUpdates(.fitness)` + `CLBackgroundActivitySession` (background mode «location», аналог foreground-service), даунсемплинг 15 с, сегменты, lossless-стоп (дренаж стрима, без `flush`), live-upload раз в ~10 мин (пиггибек на GPS-пробуждение, дошлёт и отметки), дрейн на обе цели, TrackCard в Команде, GPX-экспорт через `ShareLink`.
+- Отложено на этап 9: профили Precise/Economy + тумблер «Экономия батареи», «Очистить трек» (guard «не во время записи»), LAN-lease.
 
 ### Этап 9. LAN-режим и настройки
 - Полный local-mode: `/sync/`-манифест, lease на 12 ч, переключение источников, экран настроек (тема, GPS-профиль, LAN, очистка трека, скрытая отладка).

@@ -400,4 +400,125 @@ struct TeamModelTests {
         #expect(model.bindState == .waiting)
         #expect(feedback.successCount == 0)
     }
+
+    // MARK: - GPS-трек (этап 8): производные точек/сегментов/времени
+
+    private static let hhmm: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    private func hhmm(_ epochMs: Int64) -> String {
+        Self.hhmm.string(from: Date(timeIntervalSince1970: Double(epochMs) / 1000))
+    }
+
+    private func trackPoint(
+        id: String, seg: String, accuracy: Float = 5,
+        trustedMs: Int64, bootCount: Int? = nil, elapsed: Int64 = 0
+    ) -> TrackPoint {
+        TrackPoint(
+            id: id, raceId: bindRace, teamId: bindTeam, lat: 55.0, lon: 37.0,
+            accuracy: accuracy, gpsTimeMs: trustedMs, elapsedRealtimeAt: elapsed,
+            bootCount: bootCount, wallMs: trustedMs, trustedMs: trustedMs, segmentId: seg
+        )
+    }
+
+    /// Точки/сегменты/время: 2 сегмента, две точки в одном + одна в другом → count 3, segments 2,
+    /// диапазон времени «HH:mm–HH:mm» по первой/последней usable-точке.
+    @Test func track_pointsSegmentsAndTimeRange() async throws {
+        let env = try makeEnv()
+        let base: Int64 = 1_700_000_000_000
+        let t2 = base + 3_600_000, t3 = base + 7_200_000
+        try await env.trackStore.insertAll([
+            trackPoint(id: "a", seg: "s1", trustedMs: base),
+            trackPoint(id: "b", seg: "s1", trustedMs: t2),
+            trackPoint(id: "c", seg: "s2", trustedMs: t3),
+        ])
+        let model = TeamModel(env: env)
+        model.rebind(teamId: bindTeam, raceId: bindRace)
+
+        await waitUntil { model.trackPointCount == 3 }
+        #expect(model.trackPointCount == 3)
+        #expect(model.trackSegmentCount == 2)
+        #expect(model.trackUsable.count == 3)
+        #expect(model.trackTimeRange == "\(hhmm(base))–\(hhmm(t3))")
+    }
+
+    /// Одна точка → диапазон это одиночная «HH:mm» (не «HH:mm–HH:mm»).
+    @Test func track_singlePoint_timeRangeIsSingleLabel() async throws {
+        let env = try makeEnv()
+        let t: Int64 = 1_700_000_123_000
+        try await env.trackStore.insertAll([trackPoint(id: "a", seg: "s1", trustedMs: t)])
+        let model = TeamModel(env: env)
+        model.rebind(teamId: bindTeam, raceId: bindRace)
+
+        await waitUntil { model.trackPointCount == 1 }
+        #expect(model.trackTimeRange == hhmm(t))
+    }
+
+    /// Грубый фикс (accuracy > 50) НЕ входит в `trackUsable`/время, но считается в СЫРЫХ count/segments.
+    @Test func track_coarseFixFilteredFromUsableButCountedRaw() async throws {
+        let env = try makeEnv()
+        let base: Int64 = 1_700_000_000_000
+        let t2 = base + 3_600_000, t3 = base + 7_200_000
+        try await env.trackStore.insertAll([
+            // Грубый фикс с САМЫМ ранним временем в отдельном сегменте.
+            trackPoint(id: "coarse", seg: "s2", accuracy: 60, trustedMs: base),
+            trackPoint(id: "a", seg: "s1", trustedMs: t2),
+            trackPoint(id: "b", seg: "s1", trustedMs: t3),
+        ])
+        let model = TeamModel(env: env)
+        model.rebind(teamId: bindTeam, raceId: bindRace)
+
+        await waitUntil { model.trackPointCount == 3 }
+        // Сырые count/segments учитывают грубый фикс.
+        #expect(model.trackPointCount == 3)
+        #expect(model.trackSegmentCount == 2)
+        // usable исключил его → 2 точки, все из s1, диапазон стартует с t2 (не base).
+        #expect(model.trackUsable.count == 2)
+        #expect(model.trackUsable.allSatisfy { $0.segmentId == "s1" })
+        #expect(model.trackTimeRange == "\(hhmm(t2))–\(hhmm(t3))")
+    }
+
+    /// Reboot-safe порядок: при равном времени тай-брейк по `bootCount` (не по монотонному elapsed).
+    @Test func track_usableOrderIsRebootSafe() async throws {
+        let env = try makeEnv()
+        let t: Int64 = 1_700_000_000_000
+        try await env.trackStore.insertAll([
+            // Одинаковое время; больший bootCount, но меньший elapsed.
+            trackPoint(id: "later-boot", seg: "s1", trustedMs: t, bootCount: 5, elapsed: 100),
+            // Одинаковое время; меньший bootCount, но больший elapsed — должен идти ПЕРВЫМ.
+            trackPoint(id: "earlier-boot", seg: "s1", trustedMs: t, bootCount: 2, elapsed: 999),
+        ])
+        let model = TeamModel(env: env)
+        model.rebind(teamId: bindTeam, raceId: bindRace)
+
+        await waitUntil { model.trackPointCount == 2 }
+        #expect(model.trackUsable.map(\.id) == ["earlier-boot", "later-boot"])
+    }
+
+    /// Rebind на другую команду синхронно чистит track-стейт (до первой эмиссии новой).
+    @Test func track_rebindClearsTrackStateSynchronously() async throws {
+        let env = try makeEnv()
+        try await env.trackStore.insertAll([
+            trackPoint(id: "a", seg: "s1", trustedMs: 1_700_000_000_000),
+        ])
+        let model = TeamModel(env: env)
+        model.rebind(teamId: bindTeam, raceId: bindRace)
+        await waitUntil { !model.trackPoints.isEmpty }
+
+        model.rebind(teamId: 999, raceId: 999)
+        #expect(model.trackPoints.isEmpty)
+        #expect(model.trackTimeRange == nil)
+        #expect(model.trackSegmentCount == 0)
+    }
+
+    /// `degradedAccuracy` отражает инжект-замыкание (прод — `env.isReducedAccuracy`).
+    @Test func track_degradedAccuracyFromInjectedClosure() async throws {
+        let env = try makeEnv()
+        #expect(TeamModel(env: env).degradedAccuracy == false)
+        #expect(TeamModel(env: env, isReducedAccuracy: { true }).degradedAccuracy == true)
+    }
 }
