@@ -313,6 +313,84 @@ struct MarkUploadRepositoryTests {
         #expect(transport.callCount == 4)
     }
 
+    // MARK: - drainUploadLoop: ошибка БД (fetch/mark бросили) → .error + лог
+
+    /// `fetch` бросил (SQL-ошибка) → цикл сворачивает в `.error`, не роняя процесс. Прямой тест
+    /// generic-цикла — семантика «ошибка БД → .error» из спеки не зависит от конкретного store'а.
+    @Test func drainLoop_fetchThrows_returnsError() async {
+        struct Boom: Error {}
+        let result = await drainUploadLoop(
+            fetch: { () async throws -> [String] in throw Boom() },
+            id: { $0 },
+            upload: { _ in PostResult<[String]>.success([]) },
+            mark: { _, _ in }
+        )
+        #expect(result == .error)
+    }
+
+    /// `mark` бросил после успешного POST (гонка/SQL-ошибка при пометке) → `.error`; `fetch` при этом
+    /// дёрнут ровно один раз (после броска цикл выходит, не зациклившись на непустом батче).
+    @Test func drainLoop_markThrows_returnsError() async {
+        struct Boom: Error {}
+        let calls = CallCounter()
+        let result = await drainUploadLoop(
+            fetch: { () async throws -> [String] in _ = calls.next(); return ["a"] },
+            id: { $0 },
+            upload: { _ in PostResult<[String]>.success(["a"]) },
+            mark: { _, _ in throw Boom() }
+        )
+        #expect(result == .error)
+        #expect(calls.value == 1)
+    }
+
+    /// Через актор: mark-UPDATE бросает (таблица `marks` уронена гонкой во время POST) → исход цели
+    /// `.error`, актор переживает ошибку БД (доходим до ассертов, краша нет).
+    @Test func dbError_duringMark_recordsErrorOutcome_actorSurvives() async throws {
+        let db = try AppDatabase.makeInMemory()
+        let store = MarkStore(db.writer)
+
+        let calls = CallCounter()
+        // На первом POST'е роняем таблицу marks (гонка «ошибка БД») — последующий mark-UPDATE бросит.
+        let droppingTransport: (URLRequest) async throws -> (Data, HTTPURLResponse) = { request in
+            if calls.next() == 0 {
+                try await db.writer.write { db in
+                    try db.execute(sql: "DROP TABLE marks")
+                }
+            }
+            let body = Data(self.acceptedBody(["m1"]).utf8)
+            let resp = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:])!
+            return (body, resp)
+        }
+        let cloud = makeClient(base: "https://cloud.test", transport: droppingTransport)
+        let local = makeClient(base: "http://local.test", transport: droppingTransport)
+        let repo = MarkUploadRepository(
+            markStore: store, cloud: cloud, local: local, installId: "install-abc", wallNow: { 5000 }
+        )
+        // Cloud уже доставлен → в фокусе Local: fetch пройдёт, POST уронит таблицу, mark бросит.
+        try await store.upsert(makeMark(id: "m1", uploadedCloud: true))
+
+        await repo.uploadPending(raceId: 7, teamId: 42) // не роняет процесс
+
+        let outcome = await repo.outcomes[TrackScope(raceId: 7, teamId: 42)]?[.local]
+        #expect(outcome?.kind == .error)
+        #expect(calls.value == 1) // fetch прошёл, mark бросил — ретрая POST нет
+    }
+
+    // MARK: - Нечего слать → 0 запросов, исход не пишется (nil-ветка)
+
+    /// Полностью выгруженный скоуп: оба `fetch`а сразу пусты → `drainUploadLoop` возвращает `nil` →
+    /// `combineOutcome(nil, nil) == nil` → `recordOutcome` не зовётся. Ни одного запроса, словарь исходов пуст.
+    @Test func nothingToSend_noRequest_noOutcomeRecorded() async throws {
+        let (repo, store, transport, _) = try makeRepo()
+        try await store.upsert(makeMark(id: "m1", uploadedLocal: true, uploadedCloud: true))
+
+        await repo.uploadPending(raceId: 7, teamId: 42)
+
+        #expect(transport.callCount == 0) // fetch'и пусты — POST'а нет
+        let byTarget = await repo.outcomes[TrackScope(raceId: 7, teamId: 42)]
+        #expect(byTarget == nil) // ни .ok, ни .error — исход не записан
+    }
+
     // MARK: - Исход попадает в стрим
 
     @Test func outcome_reachesUpdatesStream() async throws {

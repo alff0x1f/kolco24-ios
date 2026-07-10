@@ -50,7 +50,9 @@ final class UploadModel {
 
     @ObservationIgnored private let env: AppEnvironment
     /// Инжектированные стенные часы «сейчас» (для относительного времени второй строки) — управляемое
-    /// время в тестах; в проде вьюха тикает их раз в ~30 с (порт `produceState`-таймера `UploadScreen`).
+    /// время в тестах. В проде читаются при каждом ре-рендере вьюхи (data-driven обновления счётчиков/
+    /// исходов); отдельного тикающего таймера нет — живое «N мин назад» вне спеки этапа 6, поэтому строка
+    /// освежается лишь при следующей эмиссии данных.
     @ObservationIgnored private let nowMs: () -> Int64
     @ObservationIgnored private var countsTask: Task<Void, Never>?
     @ObservationIgnored private var outcomesTask: Task<Void, Never>?
