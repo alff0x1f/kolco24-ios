@@ -188,8 +188,8 @@
 
 ### Task 8: [Final] Документация
 
-- [ ] секция «Upload layer (этап 6)» в `CLAUDE.md` (конвенция пер-этапных секций: что где живёт, ключевые решения/ловушки)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] секция «Upload layer (этап 6)» в `CLAUDE.md` (конвенция пер-этапных секций: что где живёт, ключевые решения/ловушки)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
