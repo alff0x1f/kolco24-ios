@@ -100,12 +100,12 @@
 - Create: `kolco24/Core/Lease/RaceLease.swift`
 - Create: `kolco24Tests/Core/RaceLeaseTests.swift`
 
-- [ ] `struct RaceLease: Equatable { let raceId: Int; let expiresAtMs: Int64 }` + `DEFAULT_LEASE_MS`
-- [ ] `renewedLease(raceId:serverTtlSec:serverLeaseExpiresAtSec:nowMs:) -> RaceLease` — приоритет TTL → absolute → 12 ч
-- [ ] `isPinned(_ lease: RaceLease?, raceId: Int, nowMs: Int64) -> Bool` — строгое `<` на границе
-- [ ] `enum LeaseAction: Equatable { case renew(RaceLease), clear, keep }` + `applySyncResponse(race: Int?, dataSource: String?, ttlSec: Int64?, expiresAtSec: Int64?, raceId: Int, nowMs: Int64) -> LeaseAction` — принимает **разобранные поля** (не DTO): `SyncManifestDto` живёт в `Net/Dto/`, а `Core/` от `Net/` не зависит; манифест-`nil` кодируется `race: nil`; маппинг из DTO — на стороне координатора (прецедент `PhotoFrameInput`)
-- [ ] зеркало `RaceLeaseTest.kt` → `RaceLeaseTests` (приоритет TTL > absolute > default; границы `isPinned` вкл. строгое `<`, чужую гонку, просроченный серверный lease; `applySyncResponse` renew/clear/keep для nil/чужой гонки/неизвестного source)
-- [ ] run tests - must pass before next task
+- [x] `struct RaceLease: Equatable { let raceId: Int; let expiresAtMs: Int64 }` + `DEFAULT_LEASE_MS`
+- [x] `renewedLease(raceId:serverTtlSec:serverLeaseExpiresAtSec:nowMs:) -> RaceLease` — приоритет TTL → absolute → 12 ч
+- [x] `isPinned(_ lease: RaceLease?, raceId: Int, nowMs: Int64) -> Bool` — строгое `<` на границе
+- [x] `enum LeaseAction: Equatable { case renew(RaceLease), clear, keep }` + `applySyncResponse(race: Int?, dataSource: String?, ttlSec: Int64?, expiresAtSec: Int64?, raceId: Int, nowMs: Int64) -> LeaseAction` — принимает **разобранные поля** (не DTO): `SyncManifestDto` живёт в `Net/Dto/`, а `Core/` от `Net/` не зависит; манифест-`nil` кодируется `race: nil`; маппинг из DTO — на стороне координатора (прецедент `PhotoFrameInput`)
+- [x] зеркало `RaceLeaseTest.kt` → `RaceLeaseTests` (приоритет TTL > absolute > default; границы `isPinned` вкл. строгое `<`, чужую гонку, просроченный серверный lease; `applySyncResponse` renew/clear/keep для nil/чужой гонки/неизвестного source)
+- [x] run tests - must pass before next task
 
 ### Task 2: Core — RaceLeaseStore + LeaseHolder
 
