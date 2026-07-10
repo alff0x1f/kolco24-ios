@@ -190,11 +190,11 @@
 - Modify: `kolco24/MarksView.swift` (FAB `onPhoto` → fullScreenCover)
 - Modify: `kolco24.xcodeproj/project.pbxproj` (`INFOPLIST_KEY_NSCameraUsageDescription` в оба config)
 
-- [ ] `PhotoCameraController` (`import AVFoundation`, только в `Photo/`): сессия на фоновой очереди, `AVCapturePhotoOutput`, `RotationCoordinator` (capture + preview углы), фронт/тыл, torch (тыл), guard от повторного захвата; колбэк с JPEG `Data`
-- [ ] `PhotoCaptureView`: превью (`UIViewRepresentable` + `AVCaptureVideoPreviewLayer`), затвор (хаптика после записи кадра), лента миниатюр с удалением, «Готово (N)» (активна при ≥1 кадре и не в захвате), фронт/тыл/фонарик, шапка «КП N» / «изменить КП N» (attach); назад с кадрами → `confirmationDialog` «Удалить снимки?»; отказ камеры → заглушка + `openURL` в Настройки
-- [ ] `PhotoNumberPickerView`: цифровое поле (`.numberPad`), живой фильтр (`filterCheckpointsByQuery`), строка `<cost>-<number>` + замок + описание (дизайн-токены), submit → `resolvePhotoCheckpoint`, инлайн-ошибка «КП с таким номером нет в легенде»
-- [ ] `MarksView`: `@State photoModel: PhotoModel?`, FAB `onPhoto` → `makePhotoModel()` (nil → `onChooseTeam`), `fullScreenCover(item:onDismiss: flush)` с `NavigationStack` (пикер → камера по route модели); `#Preview` с in-memory окружением и фейковым провайдером кадров
-- [ ] прогнать полный сьют + сборку — зелёные до Task 8 (камерные вьюхи юнитами не кроются — компиляция + превью; поведенческая логика уже в `PhotoModelTests`)
+- [x] `PhotoCameraController` (`import AVFoundation`, только в `Photo/`): сессия на фоновой очереди, `AVCapturePhotoOutput`, `RotationCoordinator` (capture + preview углы), фронт/тыл, torch (тыл), guard от повторного захвата; колбэк с JPEG `Data`
+- [x] `PhotoCaptureView`: превью (`UIViewRepresentable` + `AVCaptureVideoPreviewLayer`), затвор (хаптика после записи кадра), лента миниатюр с удалением, «Готово (N)» (активна при ≥1 кадре и не в захвате), фронт/тыл/фонарик, шапка «КП N» / «изменить КП N» (attach); назад с кадрами → `confirmationDialog` «Удалить снимки?»; отказ камеры → заглушка + `openURL` в Настройки
+- [x] `PhotoNumberPickerView`: цифровое поле (`.numberPad`), живой фильтр (`filterCheckpointsByQuery`), строка `<cost>-<number>` + замок + описание (дизайн-токены), submit → `resolvePhotoCheckpoint`, инлайн-ошибка «КП с таким номером нет в легенде»
+- [x] `MarksView`: `@State photoModel: PhotoModel?`, FAB `onPhoto` → `makePhotoModel()` (nil → `onChooseTeam`), `fullScreenCover(item:onDismiss: flush)` с `NavigationStack` (пикер → камера по route модели); `#Preview` с in-memory окружением и фейковым провайдером кадров
+- [x] прогнать полный сьют + сборку — зелёные до Task 8 (камерные вьюхи юнитами не кроются — компиляция + превью; поведенческая логика уже в `PhotoModelTests`)
 
 ### Task 8: UI — фото-тайл, лайтбокс, нотис «КП по фото»
 

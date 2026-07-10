@@ -22,6 +22,9 @@ struct MarksView: View {
     /// Скан-модель текущего оверлея; ненулевая ⇒ шит открыт (`.sheet(item:)`). Строится по тапу FAB
     /// через `AppModel.makeScanModel()` (nil, когда команда не выбрана — тогда ведём в выбор команды).
     @State private var scanModel: ScanModel?
+    /// Фото-модель текущего кавера; ненулевая ⇒ кавер открыт (`.fullScreenCover(item:)`). Строится по
+    /// тапу FAB «Фото» через `AppModel.makePhotoModel()` (nil без команды — ведём в выбор команды).
+    @State private var photoModel: PhotoModel?
     /// Точка входа во флоу выбора команды (пробрасывается хостом; в превью — no-op).
     var onChooseTeam: () -> Void = {}
     /// Переход на вкладку «Команда» для привязки чипов (нудж пустого состояния).
@@ -37,11 +40,24 @@ struct MarksView: View {
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                FloatingCTAView(onNFC: openScan, onPhoto: {})
+                FloatingCTAView(onNFC: openScan, onPhoto: openPhoto)
             }
             .sheet(item: $scanModel, onDismiss: flushAfterScan) { model in
                 ScanSheet(model: model)
             }
+            .fullScreenCover(item: $photoModel, onDismiss: flushAfterScan) { model in
+                PhotoFlowView(model: model)
+            }
+    }
+
+    /// Тап FAB «Фото»: строим фото-модель выбранной команды. Нет команды (`makePhotoModel` → nil) —
+    /// снимать некуда, ведём в выбор команды вместо пустого кавера.
+    private func openPhoto() {
+        if let photo = appModel.makePhotoModel() {
+            photoModel = photo
+        } else {
+            onChooseTeam()
+        }
     }
 
     /// Закрытие скан-оверлея (любой путь: кнопка, свайп, авто-close модели) — дренаж накопленных
@@ -471,3 +487,74 @@ private struct FloatingCTAView: View {
         .background(.ultraThinMaterial)
     }
 }
+
+// MARK: - Photo Flow (кавер: пикер → камера по route модели)
+/// Контейнер фото-кавера. `NavigationStack` переключает пикер номера КП ↔ камеру по `model.route`
+/// (`start()` на входе решает цель — attach vs askNumber). `closeRequested` (коммит) → dismiss кавера;
+/// закрытие любым путём триггерит `flushUploads` (этап 6) через `onDismiss` в `MarksView`.
+private struct PhotoFlowView: View {
+    let model: PhotoModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            switch model.route {
+            case .picker:
+                PhotoNumberPickerView(model: model)
+            case .camera(let attach):
+                PhotoCaptureView(model: model, attach: attach)
+            }
+        }
+        .task { await model.start() }
+        .onChange(of: model.closeRequested) { _, requested in
+            if requested { dismiss() }
+        }
+    }
+}
+
+// MARK: - Preview
+#if DEBUG
+/// Хост превью фото-флоу: in-memory окружение + пара КП в легенде + фейковый `writeFrame`
+/// (синтетические пути, без диска). Камера в симуляторе пуста — превью показывает пикер номера КП.
+private struct PhotoFlowPreviewHost: View {
+    @State private var model: PhotoModel?
+
+    var body: some View {
+        Group {
+            if let model {
+                PhotoFlowView(model: model)
+            } else {
+                Color.paper
+            }
+        }
+        .task { await setUp() }
+    }
+
+    private func setUp() async {
+        guard model == nil else { return }
+        guard let env = try? AppEnvironment.inMemory(transport: { _ in
+            (Data(), HTTPURLResponse(
+                url: URL(string: "https://preview.invalid")!, statusCode: 500,
+                httpVersion: nil, headerFields: nil)!)
+        }) else { return }
+
+        try? await env.checkpointStore.insertCheckpoints([
+            Checkpoint(id: 1, raceId: 7, number: 7, cost: 4, type: "cp", description: "Опушка у ЛЭП", locked: false),
+            Checkpoint(id: 2, raceId: 7, number: 12, cost: nil, type: "cp", description: nil, locked: true),
+            Checkpoint(id: 3, raceId: 7, number: 23, cost: 6, type: "cp", description: "Брод через ручей", locked: false),
+        ])
+        model = PhotoModel(
+            raceId: 7, teamId: 42, rosterSize: 4,
+            checkpointStore: env.checkpointStore, markStore: env.markStore,
+            locationProvider: NoLocationProvider(),
+            sampleNow: { TimeSample(wallMs: 0, elapsedMs: 0, trustedMs: nil, bootCount: nil) },
+            writeFrame: { markId, _ in "marks/\(markId)/\(UUID().uuidString.lowercased()).jpg" },
+            deleteFrame: { _ in }
+        )
+    }
+}
+
+#Preview("Photo picker") {
+    PhotoFlowPreviewHost()
+}
+#endif
