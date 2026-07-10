@@ -103,10 +103,10 @@
 - Create: `kolco24/Core/Upload/UploadModels.swift`
 - Create: `kolco24Tests/Core/UploadModelsTests.swift`
 
-- [ ] `UploadTarget` (`local`/`cloud`), `UploadResultKind` (`ok`/`offline`/`error`), `TargetUploadOutcome { kind, atWallMs }` — зеркало `TrackModels.kt` L79–98; чистый Foundation, без framework-импортов
-- [ ] `combineOutcome(_:_:) -> UploadResultKind?` с приоритетом `error > offline > ok > nil` (задел этапа 7 — метаданные+кадры)
-- [ ] тесты: таблица приоритетов `combineOutcome` (все пары), `Equatable`-семантика `TargetUploadOutcome`
-- [ ] прогнать тесты — зелёные до Task 2
+- [x] `UploadTarget` (`local`/`cloud`), `UploadResultKind` (`ok`/`offline`/`error`), `TargetUploadOutcome { kind, atWallMs }` — зеркало `TrackModels.kt` L79–98; чистый Foundation, без framework-импортов
+- [x] `combineOutcome(_:_:) -> UploadResultKind?` с приоритетом `error > offline > ok > nil` (задел этапа 7 — метаданные+кадры)
+- [x] тесты: таблица приоритетов `combineOutcome` (все пары), `Equatable`-семантика `TargetUploadOutcome`
+- [x] прогнать тесты — зелёные до Task 2
 
 ### Task 2: Net — upload-DTO с merge present[] и эндпоинт uploadMarks
 
