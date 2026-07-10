@@ -316,6 +316,21 @@ final class AppModel {
         return model
     }
 
+    /// Фабрика модели экрана «Настройки» (этап 9). Привязывается к ТЕКУЩЕМУ скоупу выбора
+    /// (`selectedRaceId`/`selectedTeamId`) — шит открывается для выбранной команды. Держит обратную
+    /// ссылку на этот `AppModel` (тема/busy/тосты/сброс команды — app-scoped). Версия — из `Bundle.main`
+    /// (`CFBundleShortVersionString`/`CFBundleVersion`); тесты инжектят свои значения напрямую в `init`.
+    func makeSettingsModel() -> SettingsModel {
+        SettingsModel(
+            env: env,
+            appModel: self,
+            raceId: selectedRaceId,
+            teamId: selectedTeamId,
+            versionName: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+            versionCode: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        )
+    }
+
     /// Фабрика хост-редьюсера скан-оверлея (этап 5). Собирается из графа (`legendRepository`, сторы,
     /// `trustedClock.sample` для монотонного окна, `locationProvider`, `feedback`) + ростер выбранной
     /// команды. Возвращает `nil`, когда команда не выбрана (нет ростера — сканировать некуда). Сканер

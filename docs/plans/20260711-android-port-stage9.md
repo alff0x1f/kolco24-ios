@@ -180,14 +180,14 @@
 - Create: `kolco24Tests/App/SettingsModelTests.swift`
 - Modify: `kolco24/App/AppModel.swift` (`makeSettingsModel()`)
 
-- [ ] `@Observable @MainActor final class SettingsModel` (только `Observation`/`Foundation`), минтится `AppModel.makeSettingsModel()` для текущих `raceId`/`teamId`
-- [ ] derived-тумблер: подписка на `leaseHolder`-стрим (сид текущим значением) → `localModeOn = isPinned(lease, raceId, now)`, `localModeSubtitle` («Локальный режим до HH:mm» / «Обновление из интернета»); `localModeBusy` проксирует `AppModel`
-- [ ] `toggleLocalMode(_:)` → `AppModel.toggleLocalMode`; `themeMode` get/set → `AppModel`
-- [ ] трек: подписка `trackStore.countForTeam` → `trackPointCount`, `clearTrackEnabled = count > 0 && рекордер не пишет эту команду`; `clearTrack()` — перепроверка `trackRecorder.state == .idle` → `trackStore.deleteForTeam` в unstructured Task с захватом стора (§6)
-- [ ] отладка: `resetTeam()` → `AppModel.clearTeam()`; `wipeDatabase()` → `env.database.wipeAllTables()` (fire-and-forget, тост «База очищена»)
-- [ ] `versionLabel` — `CFBundleShortVersionString (CFBundleVersion)` из инжектированных значений (тестируемость)
-- [ ] `SettingsModelTests`: derived-тумблер от посеянного lease + реакция на стрим; toggle → busy → тост по outcome (через `FakeTransport`); `clearTrackEnabled` false при записи/нуле; `clearTrack` удаляет точки; wipe очищает таблицы
-- [ ] run tests - must pass before next task
+- [x] `@Observable @MainActor final class SettingsModel` (только `Observation`/`Foundation`), минтится `AppModel.makeSettingsModel()` для текущих `raceId`/`teamId`
+- [x] derived-тумблер: подписка на `leaseHolder`-стрим (сид текущим значением) → `localModeOn = isPinned(lease, raceId, now)`, `localModeSubtitle` («Локальный режим до HH:mm» / «Обновление из интернета»); `localModeBusy` проксирует `AppModel`
+- [x] `toggleLocalMode(_:)` → `AppModel.toggleLocalMode`; `themeMode` get/set → `AppModel`
+- [x] трек: подписка `trackStore.countForTeam` → `trackPointCount`, `clearTrackEnabled = count > 0 && рекордер не пишет эту команду`; `clearTrack()` — перепроверка `trackRecorder.state == .idle` → `trackStore.deleteForTeam` в unstructured Task с захватом стора (§6)
+- [x] отладка: `resetTeam()` → `AppModel.clearTeam()`; `wipeDatabase()` → `env.database.wipeAllTables()` (fire-and-forget, тост «База очищена»)
+- [x] `versionLabel` — `CFBundleShortVersionString (CFBundleVersion)` из инжектированных значений (тестируемость)
+- [x] `SettingsModelTests`: derived-тумблер от посеянного lease + реакция на стрим; toggle → busy → тост по outcome (через `FakeTransport`); `clearTrackEnabled` false при записи/нуле; `clearTrack` удаляет точки; wipe очищает таблицы
+- [x] run tests - must pass before next task
 
 ### Task 8: UI — SettingsView + вход из TeamView
 
