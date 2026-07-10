@@ -36,6 +36,16 @@ final class AppModel {
     /// Последняя ошибка refresh (текст тоста). Успех молчалив (`nil`).
     var toastMessage: String?
 
+    /// Идёт ли сейчас вход/выход LAN-режима (этап 9). App-scoped (переживает закрытие шита настроек):
+    /// спиннер тумблера читает это. Гард от двойного входа — `guard !localModeBusy` в `toggleLocalMode`.
+    var localModeBusy: Bool = false
+
+    /// Текущий режим темы (этап 9). Сид из `ThemePreference`; сеттер персистит через стор. Корневая
+    /// вьюха маппит в `.preferredColorScheme`. `@Observable` трекает stored-property → перекраска мгновенна.
+    var themeMode: ThemeMode {
+        didSet { env.themePreference.setMode(themeMode) }
+    }
+
     /// Единый рекордер GPS-трека (этап 8): один экземпляр на весь жизненный цикл приложения (переживает
     /// уходы с таба). Вьюха «Команда» держит его напрямую (`@Observable` — SwiftUI трекает
     /// `state`/`pointCount`); смена/сброс выбранной команды останавливает живую запись (см. `handleSelection`).
@@ -46,6 +56,8 @@ final class AppModel {
     static let uploadRetryIntervalMs = 300_000
 
     @ObservationIgnored private let env: AppEnvironment
+    /// Оркестратор LAN-режима (этап 9): источник `sourceFor`, проба/вход/выход, pin-aware `refreshAll`.
+    @ObservationIgnored private let coordinator: SyncCoordinator
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let uploadRetryIntervalMs: Int
     @ObservationIgnored private var selectionTask: Task<Void, Never>?
@@ -64,6 +76,8 @@ final class AppModel {
         uploadRetryIntervalMs: Int = AppModel.uploadRetryIntervalMs
     ) {
         self.env = env
+        self.coordinator = env.syncCoordinator
+        self.themeMode = env.themePreference.mode
         self.now = now
         self.uploadRetryIntervalMs = uploadRetryIntervalMs
         self.trackRecorder = TrackRecorder(
@@ -220,6 +234,42 @@ final class AppModel {
         try? await env.selectedTeamStore.clear()
     }
 
+    // MARK: - LAN-режим (этап 9)
+
+    /// Тумблер «Локальный сервер»: вход (`enterLocalMode`) или выход (`exitLocalMode`) LAN-режима.
+    /// Fire-and-forget `Task`, захватывающий КООРДИНАТОР (не `self`) — оркестрация переживает закрытие
+    /// шита настроек. `localModeBusy` (спиннер) гарантированно сбрасывается на возврате координатора
+    /// через `defer`, иначе спиннер бы залип; исход → русский тост. Гард `!localModeBusy` — от двойного
+    /// входа (сам актор сериализует, но UI не должен слать вторую пробу поверх активной).
+    func toggleLocalMode(_ on: Bool) {
+        guard !localModeBusy else { return }
+        localModeBusy = true
+        let coordinator = self.coordinator
+        Task { @MainActor [weak self] in
+            defer { self?.localModeBusy = false }
+            let outcome = on ? await coordinator.enterLocalMode() : await coordinator.exitLocalMode()
+            self?.toastMessage = AppModel.localModeToast(outcome)
+        }
+    }
+
+    /// Русский тост по исходу LAN-переключения (Technical Details, таблица тостов).
+    private static func localModeToast(_ outcome: LocalModeOutcome) -> String {
+        switch outcome {
+        case let .pinnedUntil(expiresAtMs, dataStale):
+            let time = Date(timeIntervalSince1970: Double(expiresAtMs) / 1000)
+                .formatted(.dateTime.hour().minute())
+            return "Локальный режим до \(time)" + (dataStale ? " (данные не обновлены)" : "")
+        case .localNoPin, .cloudUpdated:
+            return "Обновлено из интернета"
+        case .localUnreachable:
+            return "Локальный сервер недоступен"
+        case .offline:
+            return "Нет сети"
+        case .noRace:
+            return "Гонка не выбрана"
+        }
+    }
+
     /// Fire-and-forget дренаж выгрузки одного скоупа `(raceId, teamId)` — шов для закрытия
     /// скан-оверлея (порт flush из `MainActivity.kt` L1311–1319). Захватывает **репозиторий** (не
     /// `self`): закрытие шита не абортит начатую выгрузку (§6-идиома этапа 5). Вызывается из `MarksView`
@@ -350,17 +400,25 @@ final class AppModel {
         guard let nearest = nearestRaceId(await currentRaces(), today: todayIso(now: now())) else {
             return
         }
-        async let teams = try? env.teamRepository.refreshTeams(nearest)
-        async let legend = try? env.legendRepository.refreshLegend(nearest)
-        async let tags = try? env.memberTagsRepository.refreshMemberTags(nearest)
+        // Этап 9: прогрев с источника, назначенного координатором (LAN, если гонка запинена).
+        let source = coordinator.sourceFor(nearest)
+        async let teams = try? env.teamRepository.refreshTeams(nearest, source: source)
+        async let legend = try? env.legendRepository.refreshLegend(nearest, source: source)
+        async let tags = try? env.memberTagsRepository.refreshMemberTags(nearest, source: source)
         _ = await (teams, legend, tags)
     }
 
     /// Launch B: реактивный refresh при смене гонки. Ошибка → `toastMessage`.
     private func reactiveRefresh(raceId: Int) async {
-        async let teams = try? env.teamRepository.refreshTeams(raceId)
-        async let legend = try? env.legendRepository.refreshLegend(raceId)
-        async let tags = try? env.memberTagsRepository.refreshMemberTags(raceId)
+        // Этап 9: под пином сперва heartbeat LAN (renew / детекция handback), затем fan-out через
+        // ПЕРЕЧИТАННЫЙ источник — проба могла только что снять пин (handback на cloud).
+        if coordinator.sourceFor(raceId) == .local {
+            await coordinator.probeLocalAndRenew(raceId)
+        }
+        let source = coordinator.sourceFor(raceId)
+        async let teams = try? env.teamRepository.refreshTeams(raceId, source: source)
+        async let legend = try? env.legendRepository.refreshLegend(raceId, source: source)
+        async let tags = try? env.memberTagsRepository.refreshMemberTags(raceId, source: source)
         let results = [await teams, await legend, await tags]
         // Stale-guard: гонка могла смениться, пока fan-out был в полёте. В Android этот блок живёт
         // под `collectLatest` — смена команды отменяет in-flight refresh, поэтому его ошибка тоста
@@ -371,25 +429,23 @@ final class AppModel {
 
     /// Pull-to-refresh «Легенды»: точечный refresh легенды гонки [raceId], ошибка → `toastMessage`.
     func refreshLegend(raceId: Int) async {
-        let result = try? await env.legendRepository.refreshLegend(raceId)
+        // Этап 9: с источника, назначенного координатором (LAN, если гонка запинена).
+        let result = try? await env.legendRepository.refreshLegend(raceId, source: coordinator.sourceFor(raceId))
         publishError(from: [result])
     }
 
-    /// Pull-to-refresh «Команды»: fan-out всех 4 refresh для текущей гонки, тост — первая ошибка.
+    /// Pull-to-refresh «Команды»: под пином — проба LAN + fan-out с перечитанным источником (делегируется
+    /// координатору), иначе — cloud fan-out. Тост — свёрнутый `RefreshResult`. Без выбора — только races.
     func refreshAll() async {
         guard let raceId = selectedRaceId else {
             let result = try? await env.raceRepository.refreshRaces()
             publishError(from: [result])
             return
         }
-        async let races = try? env.raceRepository.refreshRaces()
-        async let teams = try? env.teamRepository.refreshTeams(raceId)
-        async let legend = try? env.legendRepository.refreshLegend(raceId)
-        async let tags = try? env.memberTagsRepository.refreshMemberTags(raceId)
-        let results = [await races, await teams, await legend, await tags]
+        let result: RefreshResult? = await coordinator.refreshAll(raceId)
         // Stale-guard (см. `reactiveRefresh`): пользователь мог сменить гонку за время fan-out.
         guard selectedRaceId == raceId else { return }
-        publishError(from: results)
+        publishError(from: [result])
     }
 
     // MARK: - Хелперы

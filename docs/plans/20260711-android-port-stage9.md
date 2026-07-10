@@ -155,13 +155,13 @@
 - Modify: `kolco24/kolco24App.swift` (или `ContentView.swift` — где корень)
 - Modify: `kolco24Tests/App/AppModelTests.swift`
 
-- [ ] `AppEnvironment`: `let leaseHolder: LeaseHolder` (сид из `RaceLeaseStore.fromUserDefaults`; `inMemory` — in-memory load/save), `let themePreference: ThemePreference`, `let syncCoordinator: SyncCoordinator` (fetchSync поверх `localApi.fetchSync` — `.success` → DTO, иначе `nil`; `nowMs = { Int64(Date().timeIntervalSince1970 * 1000) }`). ⚠️ Порядок конструирования в `private init` (в **обоих** фабриках): `leaseHolder` — до блока репозиториев (его захватывает `isRacePinned`), `syncCoordinator` — после (захватывает `refresh*` репозиториев + local-клиент)
-- [ ] `isRacePinned` трёх репозиториев: `notPinned` → `{ raceId in isPinned(leaseHolder.value, raceId: raceId, nowMs: …) }`
-- [ ] `AppModel`: Launch A/B и `refreshLegend` — источник `coordinator.sourceFor(raceId)` вместо захардкоженного `.cloud`; в observation `selectedTeamStore` при смене гонки: если `sourceFor == .local` → сначала `await probeLocalAndRenew(raceId)`, затем fan-out с перечитанным `sourceFor`; `refreshAll()` делегирует `coordinator.refreshAll(raceId)` (тост из свёрнутого `RefreshResult` как раньше)
-- [ ] `AppModel`: `var localModeBusy: Bool` + `toggleLocalMode(_ on: Bool)` (fire-and-forget Task с захватом координатора — busy переживает закрытие шита; сброс `localModeBusy = false` — гарантированно по возврату вызова координатора, `defer`/finally, иначе спиннер залипнет; outcome → русский тост через `toastMessage`); `var themeMode: ThemeMode` (сид из стора, сеттер персистит)
-- [ ] корень: `.preferredColorScheme(appModel.themeMode.colorScheme)` (`system → nil`, `light → .light`, `dark → .dark`; маленький расширение-маппер в UI-слое)
-- [ ] дополнение `AppModelTests`: при посеянном lease смена команды шлёт запросы на LAN-origin и пробу `/sync/` (по логу `FakeTransport`); `toggleLocalMode` против `FakeTransport` c `data_source: "local"` пинит и включает busy-цикл
-- [ ] run tests - must pass before next task
+- [x] `AppEnvironment`: `let leaseHolder: LeaseHolder` (сид из `RaceLeaseStore.fromUserDefaults`; `inMemory` — in-memory load/save), `let themePreference: ThemePreference`, `let syncCoordinator: SyncCoordinator` (fetchSync поверх `localApi.fetchSync` — `.success` → DTO, иначе `nil`; `nowMs = { Int64(Date().timeIntervalSince1970 * 1000) }`). ⚠️ Порядок конструирования в `private init` (в **обоих** фабриках): `leaseHolder` — до блока репозиториев (его захватывает `isRacePinned`), `syncCoordinator` — после (захватывает `refresh*` репозиториев + local-клиент)
+- [x] `isRacePinned` трёх репозиториев: `notPinned` → `{ raceId in isPinned(leaseHolder.value, raceId: raceId, nowMs: …) }`
+- [x] `AppModel`: Launch A/B и `refreshLegend` — источник `coordinator.sourceFor(raceId)` вместо захардкоженного `.cloud`; в observation `selectedTeamStore` при смене гонки: если `sourceFor == .local` → сначала `await probeLocalAndRenew(raceId)`, затем fan-out с перечитанным `sourceFor`; `refreshAll()` делегирует `coordinator.refreshAll(raceId)` (тост из свёрнутого `RefreshResult` как раньше)
+- [x] `AppModel`: `var localModeBusy: Bool` + `toggleLocalMode(_ on: Bool)` (fire-and-forget Task с захватом координатора — busy переживает закрытие шита; сброс `localModeBusy = false` — гарантированно по возврату вызова координатора, `defer`/finally, иначе спиннер залипнет; outcome → русский тост через `toastMessage`); `var themeMode: ThemeMode` (сид из стора, сеттер персистит)
+- [x] корень: `.preferredColorScheme(appModel.themeMode.colorScheme)` (`system → nil`, `light → .light`, `dark → .dark`; маленький расширение-маппер в UI-слое)
+- [x] дополнение `AppModelTests`: при посеянном lease смена команды шлёт запросы на LAN-origin и пробу `/sync/` (по логу `FakeTransport`); `toggleLocalMode` против `FakeTransport` c `data_source: "local"` пинит и включает busy-цикл
+- [x] run tests - must pass before next task
 
 ### Task 6: Data — AppDatabase.wipeAllTables
 

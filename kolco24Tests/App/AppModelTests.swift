@@ -349,4 +349,64 @@ struct AppModelTests {
         #expect(model.selectedTeamId == nil)
         #expect(model.selectedRaceId == nil)
     }
+
+    // MARK: - LAN-режим (этап 9)
+
+    /// Подтверждает: при посеянном lease (гонка запинена к LAN) смена команды идёт по LAN-origin —
+    /// сперва heartbeat `/sync/`, затем fan-out teams/legend/member_tags с `http://local.test`.
+    @Test func seededLease_teamChange_probesSyncAndUsesLanOrigin() async throws {
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, headers: ["ETag": "\"v1\""], bodyString: #"{"races":[]}"#) // Launch A races (cloud)
+        enqueue304s(transport, 12) // probe + LAN fan-out (+ запас)
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.teamStore.insertTeams([team(id: 4, raceId: 11)])
+        // Пин гонки 11 на LAN на far-future (переживает wall-clock `nowMs` пин-гарда).
+        env.leaseHolder.set(RaceLease(raceId: 11, expiresAtMs: .max))
+        let model = AppModel(env: env)
+
+        await model.start()
+        await model.selectTeam(raceId: 11, teamId: 4)
+
+        await waitUntil {
+            didRequest(transport, suffix: "/app/race/11/sync/")
+                && didRequest(transport, suffix: "/app/race/11/teams/")
+        }
+
+        // Heartbeat пробы sync-манифеста ушёл на LAN.
+        #expect(transport.recorded.contains {
+            ($0.url?.absoluteString.hasPrefix("http://local.test")) == true
+                && ($0.url?.absoluteString.hasSuffix("/app/race/11/sync/")) == true
+        })
+        // Fan-out teams запинённой гонки ушёл на LAN-origin, а не cloud.
+        #expect(transport.recorded.contains {
+            ($0.url?.absoluteString.hasPrefix("http://local.test")) == true
+                && ($0.url?.absoluteString.hasSuffix("/app/race/11/teams/")) == true
+        })
+    }
+
+    /// `toggleLocalMode(true)` против LAN-манифеста `data_source: "local"` пинит гонку, крутит busy-цикл
+    /// (сброс на возврате) и выдаёт тост «Локальный режим до …».
+    @Test func toggleLocalMode_withLocalDataSource_pinsRaceAndResetsBusy() async throws {
+        let transport = FakeTransport()
+        // Launch A races (cloud): гонка в далёком будущем → и прогрев Launch A, и `enterLocalMode`
+        // (использует РЕАЛЬНЫЙ `todayIso()`) резолвят её через `nearestRaceId` как текущую.
+        transport.enqueue(statusCode: 200, headers: ["ETag": "\"v1\""], bodyString: racesJson(id: 11, date: "2099-12-31"))
+        enqueue304s(transport, 3) // прогрев teams/legend/member_tags (cloud, ещё не запинено)
+        // enterLocalMode: проба sync-манифеста LAN → local → renew + пин.
+        transport.enqueue(statusCode: 200, bodyString: #"{"race":11,"data_source":"local","lease_ttl_seconds":3600,"lease_expires_at":null}"#)
+        enqueue304s(transport, 6) // LAN fan-out (+ запас)
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        let model = AppModel(env: env)
+
+        await model.start()
+        #expect(env.leaseHolder.value == nil)
+
+        model.toggleLocalMode(true)
+        await waitUntil { env.leaseHolder.value != nil && !model.localModeBusy }
+
+        #expect(env.leaseHolder.value?.raceId == 11)
+        #expect(model.localModeBusy == false)
+        #expect(model.toastMessage?.hasPrefix("Локальный режим до") == true)
+        #expect(didRequest(transport, suffix: "/app/race/11/sync/"))
+    }
 }
