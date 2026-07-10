@@ -70,7 +70,22 @@ final class AppModel {
     func start() async {
         startSelectionObservationIfNeeded()
         startUploadLoop()
+        sweepOrphanPhotoDirs()
         await launchStartupRefresh()
+    }
+
+    /// Стартовый sweep осиротевших фото-каталогов (этап 7, fire-and-forget): кадры, чья строка взятия
+    /// так и не записалась (смерть процесса mid-capture), подбираются. Захватывает стор/замыкание графа
+    /// (не `self`): `markStore.allIds()` → `sweepOrphanPhotoDirs`. Порт `sweepOrphanPhotoDirs` из
+    /// `Kolco24App.kt` (startup). Ошибка чтения id → sweep пропускается (пустой набор снёс бы каталоги
+    /// живых взятий).
+    private func sweepOrphanPhotoDirs() {
+        let markStore = env.markStore
+        let sweep = env.sweepOrphanPhotoDirs
+        Task {
+            guard let ids = try? await markStore.allIds() else { return }
+            sweep(Set(ids))
+        }
     }
 
     /// (Пере)запустить 5-минутный foreground-цикл дренажа выгрузки: сразу пробует дослать всё
@@ -250,6 +265,29 @@ final class AppModel {
         )
         model.attachProductionScanner(scanner)
         return model
+    }
+
+    /// Фабрика хост-редьюсера фото-отметки (этап 7). Собирается из графа (`checkpointStore`, `markStore`,
+    /// `trustedClock.sample` для времени/окна, `locationProvider`, дисковые замыкания `writeFrame`/
+    /// `deleteFrame`) + размер ростера выбранной команды. Возвращает `nil`, когда команда не выбрана
+    /// (вьюха тогда зовёт `onChooseTeam`). Держит `env` инкапсулированным.
+    func makePhotoModel() -> PhotoModel? {
+        guard case let .present(team) = selectedTeamState,
+              let raceId = selectedRaceId,
+              let teamId = selectedTeamId
+        else { return nil }
+        let clock = env.trustedClock
+        return PhotoModel(
+            raceId: raceId,
+            teamId: teamId,
+            rosterSize: team.members.count,
+            checkpointStore: env.checkpointStore,
+            markStore: env.markStore,
+            locationProvider: env.locationProvider,
+            sampleNow: { await clock.sample() },
+            writeFrame: env.writeFrame,
+            deleteFrame: env.deleteFrame
+        )
     }
 
     /// Синхронный мост к актору `TrustedClock` для `NfcChipScanner.sampleNow` (§8). Вызывается на
