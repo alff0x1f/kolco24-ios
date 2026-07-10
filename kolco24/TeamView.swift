@@ -18,11 +18,16 @@ struct TeamView: View {
     @Environment(AppModel.self) private var appModel
     /// Модель привязок создаётся один раз в `.task` (env инкапсулирован в `AppModel`).
     @State private var model: TeamModel?
+    /// Модель экрана «Загрузка данных» — живёт вместе с вкладкой, чтобы подзаголовок ряда (`pendingLabel`)
+    /// был реактивным; переиспользуется при открытии шита.
+    @State private var uploadModel: UploadModel?
     /// Точка входа во флоу выбора (пробрасывается хостом; в превью — no-op).
     var onChooseTeam: () -> Void = {}
 
     /// Слот, для которого открыт confirm-диалог отвязки.
     @State private var unbindTarget: TeamMemberItem?
+    /// Открыт ли шит «Загрузка данных».
+    @State private var showUpload = false
 
     var body: some View {
         content
@@ -32,6 +37,13 @@ struct TeamView: View {
             .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeTeamModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
+                if uploadModel == nil { uploadModel = appModel.makeUploadModel() }
+                uploadModel?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
+            }
+            .sheet(isPresented: $showUpload) {
+                if let uploadModel {
+                    UploadView(model: uploadModel)
+                }
             }
             .sheet(isPresented: Binding(
                 get: { model?.bindMember != nil },
@@ -130,6 +142,16 @@ struct TeamView: View {
                 VStack(spacing: 0) {
                     Button { onChooseTeam() } label: {
                         MiscRowView(systemImage: "arrow.left.arrow.right", iconBg: Color.charcoal, label: "Сменить команду", sub: "Выбрать другое соревнование или команду")
+                            .padding(.horizontal, DS.hPad)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    Rectangle()
+                        .fill(Color.hairline)
+                        .frame(height: 0.5)
+                        .padding(.leading, DS.hPad + 30 + 12)
+                    Button { showUpload = true } label: {
+                        MiscRowView(systemImage: "arrow.up.circle.fill", iconBg: Color.good, label: "Загрузка данных", sub: uploadModel?.pendingLabel ?? "Пока нечего загружать")
                             .padding(.horizontal, DS.hPad)
                             .padding(.vertical, 8)
                     }

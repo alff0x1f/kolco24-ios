@@ -44,6 +44,12 @@ final class AppEnvironment {
     let legendRepository: LegendRepository
     let memberTagsRepository: MemberTagsRepository
 
+    // MARK: - Этап 6 (выгрузка взятий)
+    /// Идемпотентный дренаж взятий в обе цели (LAN + облако). Дёргается триггерами `AppModel`
+    /// (таймер / смена команды / закрытие скан-оверлея). `cloud`/`local`-клиенты и `installId`
+    /// протянуты в граф явно (раньше клиенты потреблялись лишь в `init` sync-репозиториев).
+    let markUploadRepository: MarkUploadRepository
+
     // MARK: - Этап 5 (скан-флоу)
     /// Общие доверенные часы: прод — `pair.clock` из `ApiClients.makeDefaultPair()` (раньше терялся),
     /// теперь `ScanModel` семплит его для времени взятия и монотонного окна (Technical Details §8).
@@ -61,11 +67,13 @@ final class AppEnvironment {
         database: AppDatabase,
         cloud: ApiClient,
         local: ApiClient,
+        installId: String,
         cloudOrigin: String,
         localOrigin: String,
         trustedClock: TrustedClock,
         locationProvider: any CurrentLocationProvider,
-        feedback: any ScanFeedbackPlaying
+        feedback: any ScanFeedbackPlaying,
+        wallNow: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.database = database
         self.trustedClock = trustedClock
@@ -125,6 +133,15 @@ final class AppEnvironment {
             localOrigin: localOrigin,
             isRacePinned: notPinned
         )
+
+        // Этап 6: дренаж взятий поверх тех же cloud/local-клиентов + `installId` (провенанс устройства).
+        markUploadRepository = MarkUploadRepository(
+            markStore: markStore,
+            cloud: cloud,
+            local: local,
+            installId: installId,
+            wallNow: wallNow
+        )
     }
 
     // MARK: - Фабрики
@@ -138,6 +155,9 @@ final class AppEnvironment {
             database: database,
             cloud: pair.cloud,
             local: pair.local,
+            // `makeDefaultPair()` не возвращает installId — берём его из публичного свойства клиента
+            // (тот же UUID, что заголовок `X-Install-Id`), см. Context плана.
+            installId: pair.cloud.installId,
             cloudOrigin: Secrets.apiBaseURL,
             localOrigin: Secrets.localAPIBaseURL,
             // Раньше `pair.clock` терялся; теперь общий якорь времени живёт в графе.
@@ -164,6 +184,7 @@ final class AppEnvironment {
             database: database,
             cloud: testClient(baseURL: cloudOrigin, transport: transport),
             local: testClient(baseURL: localOrigin, transport: transport),
+            installId: "install-test",
             cloudOrigin: cloudOrigin,
             localOrigin: localOrigin,
             trustedClock: trustedClock,

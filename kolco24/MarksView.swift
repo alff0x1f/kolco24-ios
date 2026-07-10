@@ -39,9 +39,17 @@ struct MarksView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 FloatingCTAView(onNFC: openScan, onPhoto: {})
             }
-            .sheet(item: $scanModel) { model in
+            .sheet(item: $scanModel, onDismiss: flushAfterScan) { model in
                 ScanSheet(model: model)
             }
+    }
+
+    /// Закрытие скан-оверлея (любой путь: кнопка, свайп, авто-close модели) — дренаж накопленных
+    /// взятий выбранной команды (этап 6). Шов живёт здесь, а не в `ScanSheet`: тому доступен только
+    /// `ScanModel`, а `AppModel` (с репозиторием) — в `@Environment` этой вьюхи.
+    private func flushAfterScan() {
+        guard let raceId = appModel.selectedRaceId, let teamId = appModel.selectedTeamId else { return }
+        appModel.flushUploads(raceId: raceId, teamId: teamId)
     }
 
     /// Тап FAB «Отметить КП»: строим скан-модель выбранной команды. Нет команды (`makeScanModel` →
