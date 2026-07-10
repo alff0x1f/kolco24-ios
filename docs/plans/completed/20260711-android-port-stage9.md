@@ -214,9 +214,9 @@
 
 ### Task 10: [Final] Документация
 
-- [ ] обновить `CLAUDE.md`: новый раздел «LAN & settings layer» (lease/holder/координатор/настройки, deviation по wall clock и по guard очистки трека, grep-инварианты)
-- [ ] обновить `docs/plans/android-port.md`: этап 9 → ✅ со ссылкой; пункт Economy/`TrackProfilePreference` снят с пометкой «не портируется — на iOS `liveUpdates(.fitness)` сам управляет питанием»; «Инфо о чипе» отмечено как перенесённое в этап 10
-- [ ] переместить этот план в `docs/plans/completed/`
+- [x] обновить `CLAUDE.md`: новый раздел «LAN & settings layer» (lease/holder/координатор/настройки, deviation по wall clock и по guard очистки трека, grep-инварианты)
+- [x] обновить `docs/plans/android-port.md`: этап 9 → ✅ со ссылкой; пункт Economy/`TrackProfilePreference` снят с пометкой «не портируется — на iOS `liveUpdates(.fitness)` сам управляет питанием»; «Инфо о чипе» отмечено как перенесённое в этап 10
+- [x] переместить этот план в `docs/plans/completed/`
 
 ## Post-Completion
 
