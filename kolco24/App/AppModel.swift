@@ -36,27 +36,73 @@ final class AppModel {
     /// Последняя ошибка refresh (текст тоста). Успех молчалив (`nil`).
     var toastMessage: String?
 
+    /// Интервал повторной попытки дренажа выгрузки (`UPLOAD_RETRY_INTERVAL_MS`, имя как в Kotlin).
+    /// Инжектится, чтобы тесты не ждали реальные 5 минут.
+    static let uploadRetryIntervalMs = 300_000
+
     @ObservationIgnored private let env: AppEnvironment
     @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private let uploadRetryIntervalMs: Int
     @ObservationIgnored private var selectionTask: Task<Void, Never>?
     @ObservationIgnored private var innerTeamTask: Task<Void, Never>?
+    /// 5-минутный foreground-цикл дренажа выгрузки (порт таймера `MainActivity.kt` L167/589–597).
+    /// Пересоздаётся `scenePhaseChanged(isActive:)` (аналог `repeatOnLifecycle(STARTED)`).
+    @ObservationIgnored private var uploadLoopTask: Task<Void, Never>?
     /// Гонка, для которой уже отработал реактивный refresh (Launch B) — чтобы не перезапускать его на
     /// повторных эмиссиях той же гонки. `nil` при сбросе выбора → повторный выбор той же гонки снова
     /// дёрнет refresh.
     @ObservationIgnored private var lastReactiveRaceId: Int?
 
-    init(env: AppEnvironment, now: @escaping () -> Date = { Date() }) {
+    init(
+        env: AppEnvironment,
+        now: @escaping () -> Date = { Date() },
+        uploadRetryIntervalMs: Int = AppModel.uploadRetryIntervalMs
+    ) {
         self.env = env
         self.now = now
+        self.uploadRetryIntervalMs = uploadRetryIntervalMs
     }
 
     // MARK: - Жизненный цикл
 
-    /// Вызывается один раз из `.task` корневой вьюхи. Запускает подписку на выбранную команду и
-    /// стартовый refresh (Launch A). Идемпотентен по подписке.
+    /// Вызывается один раз из `.task` корневой вьюхи. Запускает подписку на выбранную команду,
+    /// 5-минутный цикл дренажа выгрузки и стартовый refresh (Launch A). Идемпотентен по подписке.
     func start() async {
         startSelectionObservationIfNeeded()
+        startUploadLoop()
         await launchStartupRefresh()
+    }
+
+    /// (Пере)запустить 5-минутный foreground-цикл дренажа выгрузки: сразу пробует дослать всё
+    /// накопленное, затем спит `uploadRetryIntervalMs` мс и повторяет. Порт таймера из
+    /// `MainActivity.kt` (L167/589–597, `repeatOnLifecycle(STARTED)`). Захватывает репозиторий (не
+    /// `self`), но привязан к жизни `uploadLoopTask` — отменяется на уходе в фон.
+    private func startUploadLoop() {
+        uploadLoopTask?.cancel()
+        let repo = env.markUploadRepository
+        let intervalMs = uploadRetryIntervalMs
+        uploadLoopTask = Task {
+            while !Task.isCancelled {
+                await repo.uploadAllPending()
+                do {
+                    try await Task.sleep(for: .milliseconds(intervalMs))
+                } catch {
+                    return // отменён (уход в фон)
+                }
+            }
+        }
+    }
+
+    /// Аналог `repeatOnLifecycle(STARTED)`: на `.active` перезапускаем цикл (немедленный fire —
+    /// возврат в приложение сразу пробует дослать), на фон — отменяем, чтобы не крутить таймер.
+    /// Пробрасывается `ContentView` из `@Environment(\.scenePhase)`.
+    func scenePhaseChanged(isActive: Bool) {
+        if isActive {
+            startUploadLoop()
+        } else {
+            uploadLoopTask?.cancel()
+            uploadLoopTask = nil
+        }
     }
 
     // MARK: - Подписка на выбранную команду (порт produceState)
@@ -91,6 +137,11 @@ final class AppModel {
 
         selectedTeamState = .loading
 
+        // Этап 6: смена выбранной команды (и первая эмиссия на старте) — оппортунистический дренаж
+        // всех pending-взятий (порт flush из `Kolco24App.kt` L84–99). Fire-and-forget, guard'ится актором.
+        let uploadRepo = env.markUploadRepository
+        Task { await uploadRepo.uploadAllPending() }
+
         // Launch B: реактивный refresh при смене гонки (teams/legend/member_tags), ошибка → тост.
         if selection.raceId != lastReactiveRaceId {
             lastReactiveRaceId = selection.raceId
@@ -118,6 +169,15 @@ final class AppModel {
 
     func clearTeam() async {
         try? await env.selectedTeamStore.clear()
+    }
+
+    /// Fire-and-forget дренаж выгрузки одного скоупа `(raceId, teamId)` — шов для закрытия
+    /// скан-оверлея (порт flush из `MainActivity.kt` L1311–1319). Захватывает **репозиторий** (не
+    /// `self`): закрытие шита не абортит начатую выгрузку (§6-идиома этапа 5). Вызывается из `MarksView`
+    /// (`.sheet(item:onDismiss:)`), где `AppModel` в `@Environment`, — у `ScanSheet` доступа к нему нет.
+    func flushUploads(raceId: Int, teamId: Int) {
+        let repo = env.markUploadRepository
+        Task { await repo.uploadPending(raceId: raceId, teamId: teamId) }
     }
 
     /// Фабрика модели флоу выбора гонки/команды. Держит `env` инкапсулированным (вьюхи не видят

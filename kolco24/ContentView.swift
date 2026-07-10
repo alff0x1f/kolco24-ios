@@ -9,6 +9,9 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(AppModel.self) private var appModel
+    /// Фаза сцены — рестарт 5-мин цикла выгрузки на `.active`, отмена на фоне (этап 6, аналог
+    /// `repeatOnLifecycle(STARTED)`).
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
     /// Флоу выбора гонки/команды (`.fullScreenCover`). Точки входа: CTA empty-состояний вкладок и
     /// строка «Сменить команду» в `TeamView`.
@@ -57,6 +60,9 @@ struct ContentView: View {
                 model: appModel.makeTeamPickerModel(),
                 onClose: { showPicker = false }
             )
+        }
+        .onChange(of: scenePhase) { _, phase in
+            appModel.scenePhaseChanged(isActive: phase == .active)
         }
     }
 }

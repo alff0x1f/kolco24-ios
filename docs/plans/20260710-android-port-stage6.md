@@ -146,12 +146,12 @@
 - Modify: `kolco24/ScanSheet.swift` (+ точка вызова в `MarksView.swift`, если hook прокидывается оттуда)
 - Create/Modify: `kolco24Tests/App/AppModelUploadTests.swift` (или расширение существующих AppModel-тестов)
 
-- [ ] `AppEnvironment`: `let markUploadRepository: MarkUploadRepository` в прод-графе и в `inMemory(transport:)` (оба клиента поверх инжектированного транспорта — конвенция этапа 4). **Протянуть зависимости явно**: cloud/local `ApiClient`-ы сейчас потребляются в `init` и не хранятся, `installId` в графе нет (`makeDefaultPair()` его не возвращает) — взять из `pair.cloud.installId` (публичное свойство `ApiClient`) либо `InstallId.fromUserDefaults()` (идемпотентен)
-- [ ] `AppModel.start()`: 5-мин drain-`Task` (fire сразу, затем `Task.sleep(300_000 ms)`); `scenePhaseChanged(isActive:)` — рестарт цикла на active (немедленный fire), отмена на background; `ContentView` наблюдает `\.scenePhase` и пробрасывает
-- [ ] flush при смене команды: в существующем наблюдении `selectedTeamStore` — fire-and-forget `uploadAllPending()` (покрывает и старт: первая эмиссия выбранной команды)
-- [ ] `AppModel.flushUploads(raceId:teamId:)` — fire-and-forget `Task`, захватывающий репозиторий (не `self`) — закрытие шита не абортит выгрузку (§6-идиома этапа 5). **Конкретный шов** (у `ScanSheet` нет доступа к `AppModel` — только `ScanModel`): вызов из `MarksView`, где `AppModel` уже в `@Environment` и шит презентуется, — `.sheet(item:onDismiss:)` покрывает все пути закрытия; `TODO(этап 6)` в `ScanSheet.swift:111` удалить с отсылкой на новый шов
-- [ ] тесты (`FakeTransport`-лог): смена выбранной команды триггерит выгрузку pending-строки; `flushUploads` дренирует скоуп; инжектированный интервал/время — таймер проверяется без реальных 5 минут (интервал — параметр модели)
-- [ ] прогнать тесты — зелёные до Task 5
+- [x] `AppEnvironment`: `let markUploadRepository: MarkUploadRepository` в прод-графе и в `inMemory(transport:)` (оба клиента поверх инжектированного транспорта — конвенция этапа 4). **Протянуть зависимости явно**: cloud/local `ApiClient`-ы сейчас потребляются в `init` и не хранятся, `installId` в графе нет (`makeDefaultPair()` его не возвращает) — взять из `pair.cloud.installId` (публичное свойство `ApiClient`) либо `InstallId.fromUserDefaults()` (идемпотентен)
+- [x] `AppModel.start()`: 5-мин drain-`Task` (fire сразу, затем `Task.sleep(300_000 ms)`); `scenePhaseChanged(isActive:)` — рестарт цикла на active (немедленный fire), отмена на background; `ContentView` наблюдает `\.scenePhase` и пробрасывает
+- [x] flush при смене команды: в существующем наблюдении `selectedTeamStore` — fire-and-forget `uploadAllPending()` (покрывает и старт: первая эмиссия выбранной команды)
+- [x] `AppModel.flushUploads(raceId:teamId:)` — fire-and-forget `Task`, захватывающий репозиторий (не `self`) — закрытие шита не абортит выгрузку (§6-идиома этапа 5). **Конкретный шов** (у `ScanSheet` нет доступа к `AppModel` — только `ScanModel`): вызов из `MarksView`, где `AppModel` уже в `@Environment` и шит презентуется, — `.sheet(item:onDismiss:)` покрывает все пути закрытия; `TODO(этап 6)` в `ScanSheet.swift:111` удалить с отсылкой на новый шов
+- [x] тесты (`FakeTransport`-лог): смена выбранной команды триггерит выгрузку pending-строки; `flushUploads` дренирует скоуп; инжектированный интервал/время — таймер проверяется без реальных 5 минут (интервал — параметр модели)
+- [x] прогнать тесты — зелёные до Task 5
 
 ### Task 5: App/UploadModel — модель экрана
 

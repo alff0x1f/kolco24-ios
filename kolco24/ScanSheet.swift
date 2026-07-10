@@ -108,7 +108,8 @@ struct ScanSheet: View {
         .onDisappear {
             // Любое закрытие оверлея инвалидирует NFC-сессию; начатые записи в БД живут в своих Task'ах.
             model.stop()
-            // TODO(этап 6): flush-загрузка накопленных взятий на сервер (сейчас no-op).
+            // Flush накопленных взятий (этап 6) живёт в `MarksView.sheet(item:onDismiss:)` — у ScanSheet
+            // нет доступа к `AppModel`/репозиторию, а `onDismiss` покрывает все пути закрытия шита.
         }
     }
 
