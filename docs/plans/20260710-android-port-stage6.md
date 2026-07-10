@@ -181,10 +181,10 @@
 
 ### Task 7: Верификация приёмки
 
-- [ ] все требования Overview реализованы: дуал-таргет идемпотентный батч-дренаж marks, tryLock-семантика, триггеры (таймер/смена команды/закрытие оверлея/pull), экран со счётчиками
-- [ ] grep-инварианты: `Core/Upload` — без `UIKit`/`SwiftUI`/`GRDB`/`CoreNFC`; `App/`-модели — только `Observation`/`Foundation`; `import GRDB` — только под `Data/`; `Net/` — без GRDB
-- [ ] полный тест-сьют: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
+- [x] все требования Overview реализованы: дуал-таргет идемпотентный батч-дренаж marks, tryLock-семантика, триггеры (таймер/смена команды/закрытие оверлея/pull), экран со счётчиками — проверено по коду (`MarkUploadRepository` actor+`inFlight`, `flushScope` Local→Cloud батч 500 GPS-aware, `AppModel` 5-мин цикл + `scenePhaseChanged` + team-change flush, `MarksView.sheet(onDismiss:)` → `flushUploads`, `UploadView.refreshable`+счётчики)
+- [x] grep-инварианты: `Core/Upload` — без `UIKit`/`SwiftUI`/`GRDB`/`CoreNFC` (пусто); `App/`-модели — только `Observation`/`Foundation`; `import GRDB` — только под `Data/` (хиты в `Net/URLSessionTransport` и `App/AppEnvironment` — комментарии, не импорты); `Net/` — без GRDB. Нарушений нет
+- [x] полный тест-сьют: `** TEST SUCCEEDED **` (id=9D9F760F… — name-based назначение неоднозначно из-за двух клонов iPhone 16)
+- [x] сборка: `** BUILD SUCCEEDED **`
 
 ### Task 8: [Final] Документация
 
