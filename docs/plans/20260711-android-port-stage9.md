@@ -169,9 +169,9 @@
 - Modify: `kolco24/Data/AppDatabase.swift`
 - Create: `kolco24Tests/Data/AppDatabaseWipeTests.swift`
 
-- [ ] `func wipeAllTables() async throws` — одна транзакция `DELETE FROM …` по всем 13 таблицам (без erase+remigrate в рантайме; список таблиц — из инвентаря схемы)
-- [ ] тест: посеять по строке в несколько таблиц (вкл. `selected_team`, `sync_meta`) → wipe → все таблицы пусты, схема жива (повторный insert работает)
-- [ ] run tests - must pass before next task
+- [x] `func wipeAllTables() async throws` — одна транзакция `DELETE FROM …` по всем 13 таблицам (без erase+remigrate в рантайме; список таблиц — из инвентаря схемы)
+- [x] тест: посеять по строке в несколько таблиц (вкл. `selected_team`, `sync_meta`) → wipe → все таблицы пусты, схема жива (повторный insert работает)
+- [x] run tests - must pass before next task
 
 ### Task 7: App — SettingsModel
 

@@ -52,6 +52,37 @@ struct AppDatabase {
         try AppDatabase(try DatabaseQueue())
     }
 
+    // MARK: - Очистка данных
+
+    /// Полное имя всех 13 таблиц схемы Room v5 (инвентарь из миграции `"v1"`,
+    /// заперт `AppDatabaseSchemaTests`). Порядок неважен — FK нет нигде.
+    static let allTableNames: [String] = [
+        "races",
+        "sync_meta",
+        "categories",
+        "teams",
+        "selected_team",
+        "checkpoints",
+        "tags",
+        "member_tags",
+        "member_chip_bindings",
+        "marks",
+        "legend_meta",
+        "track_points",
+        "judge_scans",
+    ]
+
+    /// Очистить все таблицы (`DELETE FROM …`) одной транзакцией — «Очистить базу
+    /// данных» из скрытой отладки этапа 9. Схема остаётся жить (не erase+remigrate
+    /// в рантайме): после вызова таблицы пусты, но структура цела.
+    func wipeAllTables() async throws {
+        try await writer.write { db in
+            for table in Self.allTableNames {
+                try db.execute(sql: "DELETE FROM \(table)")
+            }
+        }
+    }
+
     // MARK: - Миграции
 
     /// Единственная миграция `"v1"` — снимок схемы Room v5 (все 13 таблиц + индексы).
