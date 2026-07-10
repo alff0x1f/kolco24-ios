@@ -23,6 +23,7 @@ import os
 enum PhotoPaths {
     private static let encoder = JSONEncoder()
     private static let decoder = JSONDecoder()
+    private static let log = Logger(subsystem: "kolco24", category: "PhotoPaths")
 
     /// JSON-кодирование списка относительных путей фото. Зеркало Room JSON-конвертеров; порядок сохраняется.
     /// При сбое кодирования → `"[]"` (никогда не бросает).
@@ -47,8 +48,7 @@ enum PhotoPaths {
         do {
             decoded = try decoder.decode([String].self, from: data)
         } catch {
-            Logger(subsystem: "kolco24", category: "PhotoPaths")
-                .error("Failed to decode photo paths JSON: \(String(describing: error))")
+            log.error("Failed to decode photo paths JSON: \(String(describing: error))")
             return []
         }
         return decoded.filter(isSafeRelativePhotoPath)

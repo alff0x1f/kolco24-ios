@@ -31,16 +31,21 @@ final class PhotoModel: Identifiable {
     /// Стабильный id для `.fullScreenCover(item:)` в `MarksView` (один кавер = одна модель).
     nonisolated let id = UUID()
 
-    /// Куда сейчас смотрит кавер: пикер номера КП или камера (attach — доклейка к существующему взятию).
+    /// Куда сейчас смотрит кавер: ещё маршрутизируется (`start()` не завершён), пикер номера КП или
+    /// камера (attach — доклейка к существующему взятию).
     enum Route: Equatable {
+        case loading
         case picker
         case camera(attach: Bool)
     }
 
     // MARK: - UI-состояние (observable)
 
-    /// Текущий экран кавера. Стартовое значение перезаписывает `start()`; до него — пикер.
-    private(set) var route: Route = .picker
+    /// Текущий экран кавера. Стартовое значение — `.loading` (маршрут ещё не решён): вьюха рендерит
+    /// НЕинтерактивную заглушку, пока `start()` не выставит `.picker`/`.camera` — зеркалит Android,
+    /// решающий attach-vs-picker в `onPhotoClick` ДО композиции оверлея (иначе пользователь мог бы
+    /// действовать в пикере до async-резолва, а `start()` затем перезатёр бы маршрут/буфер).
+    private(set) var route: Route = .loading
     /// Живой текст числового фильтра пикера (биндится `TextField`). Пустой → вся легенда.
     var query: String = ""
     /// Инлайн-ошибка пикера («КП с таким номером нет в легенде») — сбрасывается на успешном выборе.
@@ -176,12 +181,15 @@ final class PhotoModel: Identifiable {
             pickerError = "КП с таким номером нет в легенде"
             return
         }
+        select(cp)
+    }
+
+    /// Ввод в поле пикера: фильтр до цифр (поле — номер КП) + сброс устаревшей ошибки (порт `onValueChange`
+    /// из `PhotoNumberPicker.kt` — `notFound = false` на каждое изменение), чтобы красная ошибка не висела
+    /// до следующего успешного выбора.
+    func updateQuery(_ text: String) {
+        query = text.filter(\.isNumber)
         pickerError = nil
-        cpNumber = cp.number
-        targetCheckpointId = cp.id
-        captureMarkId = newMarkId()
-        resetCaptureBuffer()
-        route = .camera(attach: false)
     }
 
     /// Тап по строке отфильтрованной легенды — то же, что `submit(number:)` по уже-разрезолвленному КП.
@@ -195,14 +203,20 @@ final class PhotoModel: Identifiable {
     }
 
     /// Из attach-камеры вернуться в пикер (кнопка «изменить»). Сбрасывает markId цели — станет standalone.
-    /// Кадры, снятые под прежним (attach) markId, осиротают под своим каталогом (sweep подберёт) —
-    /// как в Android, где state `PhotoCaptureScreen` уничтожается при закрытии камеры.
+    /// Кадры, снятые В ЭТОЙ сессии, УДАЛЯЮТСЯ с диска перед переходом (1:1 с Android — кнопка «изменить»
+    /// в `PhotoCaptureScreen` зовёт `PhotoStorage.deletePhoto` на каждый кадр сессии, затем `frames.clear()`).
+    /// Удаляется ТОЛЬКО снятое сейчас: у attach-цели могут быть старые кадры прежнего NFC-взятия — их не
+    /// трогаем (они не в `frames`). Логика зеркалит `discard()`.
     func changeCheckpoint() {
+        let paths = frames
         captureMarkId = nil
         targetCheckpointId = 0
         resetCaptureBuffer()
         pickerError = nil
         route = .picker
+        guard !paths.isEmpty else { return }
+        let del = deleteFrame
+        Task.detached { for p in paths { del(p) } }
     }
 
     // MARK: - Буфер кадров

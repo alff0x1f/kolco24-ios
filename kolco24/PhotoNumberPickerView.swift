@@ -83,11 +83,12 @@ struct PhotoNumberPickerView: View {
         }
     }
 
-    /// Числовое поле: биндинг фильтрует ввод до цифр (поле — номер КП), живой фильтр легенды идёт от `query`.
+    /// Числовое поле: биндинг фильтрует ввод до цифр (поле — номер КП) и сбрасывает устаревшую ошибку;
+    /// живой фильтр легенды идёт от `query`.
     private var digitQuery: Binding<String> {
         Binding(
             get: { model.query },
-            set: { model.query = $0.filter(\.isNumber) }
+            set: { model.updateQuery($0) }
         )
     }
 

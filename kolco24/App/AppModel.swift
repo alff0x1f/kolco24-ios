@@ -84,7 +84,10 @@ final class AppModel {
         let sweep = env.sweepOrphanPhotoDirs
         Task {
             guard let ids = try? await markStore.allIds() else { return }
-            sweep(Set(ids))
+            let liveIds = Set(ids)
+            // Синхронный `sweep` перечисляет/удаляет каталоги (диск I/O); этот `Task` наследует
+            // исполнитель `@MainActor`, поэтому уводим блокирующую работу с главного потока.
+            Task.detached { sweep(liveIds) }
         }
     }
 

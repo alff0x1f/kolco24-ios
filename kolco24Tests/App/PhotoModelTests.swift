@@ -137,6 +137,32 @@ struct PhotoModelTests {
         }
     }
 
+    // MARK: - стартовый маршрут .loading до резолва start() (гейт интерактива)
+
+    @Test func routeIsLoadingBeforeStartResolves() async throws {
+        let env = try makeEnv()
+        // attach-цель есть — по резолву start() уйдёт в камеру, НЕ в пикер.
+        try await env.markStore.upsert(
+            completeNfcMark(id: "nfc-1", cpId: 100, number: 32, cost: 4, wall: 5000)
+        )
+        let model = makeModel(env: env, sampleNow: fixedSample(5000))
+        // До start() — заглушка, не интерактивный пикер (иначе пользователь мог бы действовать
+        // до async-резолва, а start() затем перезатёр бы маршрут).
+        #expect(model.route == .loading)
+
+        await model.start()
+        #expect(model.route == .camera(attach: true))   // резолв в attach-камеру, не в пикер
+    }
+
+    @Test func routeResolvesToPickerWhenNoAttachTarget() async throws {
+        let env = try makeEnv()
+        try await insertCp(env, id: 100, number: 32, cost: 4)
+        let model = makeModel(env: env, sampleNow: fixedSample())
+        #expect(model.route == .loading)
+        await model.start()
+        #expect(model.route == .picker)                 // нет свежего взятия → пикер
+    }
+
     // MARK: - attach-ветка (свежее взятие в окне)
 
     @Test func attachBranchAppendsFramesAndResetsPhotoFlags() async throws {
@@ -207,14 +233,20 @@ struct PhotoModelTests {
         try await env.markStore.upsert(
             completeNfcMark(id: "nfc-1", cpId: 100, number: 32, cost: 4, wall: 7000)
         )
-        let model = makeModel(env: env, sampleNow: fixedSample(7000))
+        let deleter = FrameDeleter()
+        let model = makeModel(env: env, sampleNow: fixedSample(7000), deleter: deleter)
         await model.start()
         #expect(model.route == .camera(attach: true))
-        await model.addFrame(jpegData: Data([0xFF]))    // пишется под nfc-1 (осиротеет)
+        await model.addFrame(jpegData: Data([0xFF]))    // пишется под nfc-1
+        let sessionPaths = model.frames
+        #expect(sessionPaths.count == 1)
 
         model.changeCheckpoint()
         #expect(model.route == .picker)
         #expect(model.frames.isEmpty)
+        // Кадры сессии удаляются с диска на «изменить» (1:1 с Android), а не осиротают под nfc-1.
+        await poll { deleter.count == 1 }
+        #expect(deleter.deleted == sessionPaths)
         await poll { !model.legend.isEmpty }
 
         model.submit(number: 32)
@@ -244,6 +276,26 @@ struct PhotoModelTests {
         #expect(model.pickerError != nil)
         #expect(model.route == .picker)
         #expect(try await env.markStore.allIds().isEmpty)
+    }
+
+    // MARK: - редактирование запроса сбрасывает ошибку пикера (порт onValueChange notFound=false)
+
+    @Test func updateQueryClearsPickerError() async throws {
+        let env = try makeEnv()
+        try await insertCp(env, id: 100, number: 32, cost: 4)
+        let model = makeModel(env: env, sampleNow: fixedSample())
+        await model.start()
+        await poll { !model.legend.isEmpty }
+
+        model.submit(number: 99)          // нет в легенде → ошибка
+        #expect(model.pickerError != nil)
+
+        model.updateQuery("9")            // правка ввода → ошибка снимается
+        #expect(model.pickerError == nil)
+        #expect(model.query == "9")
+
+        model.updateQuery("3a2")          // нецифры отфильтрованы
+        #expect(model.query == "32")
     }
 
     // MARK: - orphan-guard коммита (nil team) — марки нет, без краша
@@ -346,5 +398,93 @@ struct PhotoModelTests {
         await poll { !fm.fileExists(atPath: orphanDir.path) }
         #expect(!fm.fileExists(atPath: orphanDir.path))   // сирота снесена
         #expect(fm.fileExists(atPath: liveDir.path))      // живой каталог сохранён
+    }
+
+    // MARK: - removeFrame: сносит один кадр из ленты + с диска
+
+    @Test func removeFrameDeletesTargetFrameAndSparesRest() async throws {
+        let env = try makeEnv()
+        try await insertCp(env, id: 100, number: 32, cost: 4)
+        let deleter = FrameDeleter()
+        let model = makeModel(env: env, sampleNow: fixedSample(), deleter: deleter)
+        await model.start()
+        await poll { !model.legend.isEmpty }
+        model.submit(number: 32)
+        await model.addFrame(jpegData: Data([0x01]))
+        await model.addFrame(jpegData: Data([0x02]))
+        await model.addFrame(jpegData: Data([0x03]))
+        let paths = model.frames
+        #expect(paths.count == 3)
+
+        model.removeFrame(at: 1)                            // средний
+        #expect(model.frames == [paths[0], paths[2]])
+        await poll { deleter.count == 1 }
+        #expect(deleter.deleted == [paths[1]])              // снесён только средний путь
+    }
+
+    @Test func removeFrameOutOfRangeIsNoOp() async throws {
+        let env = try makeEnv()
+        try await insertCp(env, id: 100, number: 32, cost: 4)
+        let deleter = FrameDeleter()
+        let model = makeModel(env: env, sampleNow: fixedSample(), deleter: deleter)
+        await model.start()
+        await poll { !model.legend.isEmpty }
+        model.submit(number: 32)
+        await model.addFrame(jpegData: Data([0x01]))
+        let paths = model.frames
+        #expect(paths.count == 1)
+
+        model.removeFrame(at: 5)                            // вне диапазона — без краша
+        model.removeFrame(at: -1)
+        #expect(model.frames == paths)                     // лента не тронута
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(deleter.count == 0)                        // deleter не звался
+    }
+
+    // MARK: - addFrame: битый кадр (writeFrame → nil) молча выброшен
+
+    @Test func addFrameCorruptFrameDroppedSilently() async throws {
+        let env = try makeEnv()
+        try await insertCp(env, id: 100, number: 32, cost: 4)
+        let model = PhotoModel(
+            raceId: 7, teamId: 42, rosterSize: 1,
+            checkpointStore: env.checkpointStore, markStore: env.markStore,
+            locationProvider: RecordingLocationProvider(fix: nil), sampleNow: fixedSample(),
+            writeFrame: { _, _ in nil },                   // всегда битый кадр
+            deleteFrame: { _ in },
+            newMarkId: { "photo-x" }
+        )
+        await model.start()
+        await poll { !model.legend.isEmpty }
+        model.submit(number: 32)
+
+        await model.addFrame(jpegData: Data([0xFF, 0xD8]))
+        #expect(model.frames.isEmpty)                      // ничего не добавлено, без краша
+    }
+
+    // MARK: - select(_:): тап по строке легенды минтит standalone-марку
+
+    @Test func selectRoutesToStandaloneCameraWithNewMark() async throws {
+        let env = try makeEnv()
+        try await insertCp(env, id: 100, number: 32, cost: 4)
+        let model = makeModel(env: env, rosterSize: 2, sampleNow: fixedSample(6000))
+        await model.start()
+        #expect(model.route == .picker)
+        await poll { !model.legend.isEmpty }
+        let cp = try #require(model.legend.first(where: { $0.number == 32 }))
+
+        model.select(cp)
+        #expect(model.route == .camera(attach: false))
+        #expect(model.cpNumber == 32)
+        #expect(model.pickerError == nil)
+
+        await model.addFrame(jpegData: Data([0xFF, 0xD8]))
+        model.commit()
+
+        await poll { (await self.fetch(env, "photo-1")) != nil }
+        let m = try #require(await fetch(env, "photo-1"))   // свежий UUID из newMarkId
+        #expect(m.method == "photo")
+        #expect(m.checkpointNumber == 32)
+        #expect(m.expectedCount == 2)
     }
 }

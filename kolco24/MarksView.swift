@@ -55,7 +55,7 @@ struct MarksView: View {
                 PhotoLightboxView(
                     photos: ctx.photos,
                     initialIndex: ctx.initialIndex,
-                    urlFor: { rel in model?.photoURL(rel) ?? nil }
+                    urlFor: { rel in model?.photoURL(rel) }
                 )
             }
     }
@@ -159,7 +159,7 @@ struct MarksView: View {
                             if tile.photoCount > 0 {
                                 PhotoTileView(
                                     tile: tile,
-                                    urlFor: { rel in model?.photoURL(rel) ?? nil },
+                                    urlFor: { rel in model?.photoURL(rel) },
                                     onTap: { openLightbox(tile: tile) }
                                 )
                             } else {
@@ -633,6 +633,13 @@ private struct PhotoFlowView: View {
     var body: some View {
         NavigationStack {
             switch model.route {
+            case .loading:
+                // start() ещё не решил attach-vs-picker — НЕинтерактивная заглушка (зеркалит Android,
+                // решающий маршрут до композиции оверлея). Никакого пикера до резолва.
+                ZStack {
+                    Color.paper.ignoresSafeArea()
+                    ProgressView().tint(Color.sub)
+                }
             case .picker:
                 PhotoNumberPickerView(model: model)
             case .camera(let attach):

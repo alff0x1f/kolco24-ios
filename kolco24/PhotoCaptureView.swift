@@ -35,6 +35,14 @@ struct PhotoCaptureView: View {
     @State private var thumbnails: [String: UIImage] = [:]
     @State private var permission: CameraPermission = PhotoCameraController.permission
     @State private var showDiscardConfirm = false
+    /// Держим «занят» через сохранение кадра: контроллер снимает `isCapturing` как только пришли байты
+    /// JPEG, но `model.addFrame` ещё пишет файл и дописывает путь в `frames`. Ставится синхронно в колбэке
+    /// (на main, до `Task`) и снимается после `addFrame` — так «Готово»/«изменить»/назад/затвор заблокированы
+    /// весь цикл сохранения (1:1 с Android `isCapturing`, который держится через `writeDownscaledJpeg`).
+    @State private var isSaving = false
+
+    /// Единый «занят»: захват в полёте ИЛИ сохранение кадра ещё идёт.
+    private var isBusy: Bool { camera.isCapturing || isSaving }
 
     var body: some View {
         ZStack {
@@ -104,7 +112,7 @@ struct PhotoCaptureView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .padding(.leading, 4)
-                .disabled(camera.isCapturing)
+                .disabled(isBusy)
             }
             Spacer()
             if permission == .authorized && !camera.isFrontCamera {
@@ -135,7 +143,7 @@ struct PhotoCaptureView: View {
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundStyle(.white)
                         }
-                        .disabled(camera.isCapturing)
+                        .disabled(isBusy)
                     }
                 }
                 .frame(width: 72, height: 72)
@@ -150,7 +158,7 @@ struct PhotoCaptureView: View {
                         .foregroundStyle(model.frameCount > 0 ? .white : .white.opacity(0.4))
                         .frame(width: 72)
                 }
-                .disabled(model.frameCount == 0 || camera.isCapturing)
+                .disabled(model.frameCount == 0 || isBusy)
             }
             .padding(.horizontal, 24)
         }
@@ -193,14 +201,14 @@ struct PhotoCaptureView: View {
         Button(action: capture) {
             ZStack {
                 Circle()
-                    .fill(camera.isCapturing ? Color.white.opacity(0.5) : Color.white)
+                    .fill(isBusy ? Color.white.opacity(0.5) : Color.white)
                     .frame(width: 68, height: 68)
                 Circle()
                     .strokeBorder(.white, lineWidth: 3)
                     .frame(width: 78, height: 78)
             }
         }
-        .disabled(camera.isCapturing)
+        .disabled(isBusy)
     }
 
     private var deniedPlaceholder: some View {
@@ -229,16 +237,22 @@ struct PhotoCaptureView: View {
     // MARK: - Действия
 
     /// Затвор: снимаем кадр → пишем через модель (диск вне main) → добавляем локальную миниатюру.
-    /// Гвард повторного захвата держит контроллер; битый кадр (`writeFrame`==nil) не попадает в ленту.
+    /// Колбэк приходит на main (контроллер уже снял `camera.isCapturing`); держим `isSaving` весь
+    /// цикл сохранения, чтобы «Готово»/«изменить»/назад/затвор не сработали пока `addFrame` пишет файл
+    /// и дописывает путь в `frames` (иначе поздняя дозапись выпадает из снимка `commit()` или из зачистки
+    /// `discard()`/`changeCheckpoint()` — файл течёт под живой директорией). Битый кадр (`writeFrame`==nil)
+    /// не попадает в ленту.
     private func capture() {
         camera.capturePhoto { data in
             guard let data else { return }
+            isSaving = true
             Task {
                 let before = model.frames.count
                 await model.addFrame(jpegData: data)
                 if model.frames.count > before, let path = model.frames.last {
                     thumbnails[path] = downscaledThumb(data)
                 }
+                isSaving = false
             }
         }
     }
@@ -255,7 +269,7 @@ struct PhotoCaptureView: View {
 
     /// Назад/крестик: без кадров — просто закрыть кавер; с кадрами — спросить «Удалить снимки?».
     private func handleBack() {
-        guard !camera.isCapturing else { return }
+        guard !isBusy else { return }
         if model.frames.isEmpty {
             dismiss()
         } else {
