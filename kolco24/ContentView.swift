@@ -64,5 +64,20 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, phase in
             appModel.scenePhaseChanged(isActive: phase == .active)
         }
+        // Этап 9: тема приложения. `system` → `nil` (следуем OS), `light`/`dark` — переопределение.
+        // Единственное место, где SwiftUI касается `ThemeMode` — `Core/` остаётся SwiftUI-free.
+        .preferredColorScheme(appModel.themeMode.colorScheme)
+    }
+}
+
+/// UI-маппер `ThemeMode → ColorScheme?` (этап 9). Живёт в UI-слое, не в `Core/`/`AppModel` —
+/// grep-инвариант «`Core/` и `App/`-модели свободны от SwiftUI».
+extension ThemeMode {
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
     }
 }

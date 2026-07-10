@@ -47,6 +47,19 @@ final class AppEnvironment {
     let legendRepository: LegendRepository
     let memberTagsRepository: MemberTagsRepository
 
+    // MARK: - Этап 9 (LAN-режим + настройки)
+    /// Единый держатель текущего `RaceLease` (LAN-пин): координатор пишет через `set(_:)`, пин-гарды
+    /// трёх репозиториев читают `value` синхронно (`isRacePinned`), UI подписывается на `updates`.
+    /// Сидится из `RaceLeaseStore` (прод — UserDefaults; `inMemory` — изолированный in-memory prefs).
+    let leaseHolder: LeaseHolder
+    /// Персистнутая настройка темы (`ThemeMode`). `AppModel.themeMode` проксирует её; корневая вьюха
+    /// маппит в `.preferredColorScheme`.
+    let themePreference: ThemePreference
+    /// Оркестратор LAN-режима: probe/enter/exit/refreshAll поверх 4 репозиториев + LAN-клиента.
+    /// Конструируется ПОСЛЕ блока репозиториев (захватывает их `refresh*` + `local.fetchSync`), тогда как
+    /// `leaseHolder` — ДО него (его читает `isRacePinned`).
+    let syncCoordinator: SyncCoordinator
+
     // MARK: - Этап 6 (выгрузка взятий)
     /// Идемпотентный дренаж взятий в обе цели (LAN + облако). Дёргается триггерами `AppModel`
     /// (таймер / смена команды / закрытие скан-оверлея). `cloud`/`local`-клиенты и `installId`
@@ -107,6 +120,8 @@ final class AppEnvironment {
         installId: String,
         cloudOrigin: String,
         localOrigin: String,
+        leaseStore: RaceLeaseStore,
+        themePreference: ThemePreference,
         trustedClock: TrustedClock,
         locationProvider: any CurrentLocationProvider,
         feedback: any ScanFeedbackPlaying,
@@ -133,24 +148,50 @@ final class AppEnvironment {
         self.hasLocationAccess = hasLocationAccess
         self.isReducedAccuracy = isReducedAccuracy
         self.requestLocationAuthorization = requestLocationAuthorization
+        self.themePreference = themePreference
         let writer = database.writer
 
-        raceStore = RaceStore(writer)
-        teamStore = TeamStore(writer)
-        selectedTeamStore = SelectedTeamStore(writer)
-        checkpointStore = CheckpointStore(writer)
-        markStore = MarkStore(writer)
-        legendMetaStore = LegendMetaStore(writer)
-        tagStore = TagStore(writer)
-        memberTagStore = MemberTagStore(writer)
-        memberChipBindingStore = MemberChipBindingStore(writer)
-        syncMetaStore = SyncMetaStore(writer)
-        trackStore = TrackStore(writer)
+        // Сторы — локальные константы (их захватывают замыкания координатора; ссылка на `self.<store>`
+        // до полной инициализации `self` = ошибка «self captured before all members initialized»).
+        let raceStore = RaceStore(writer)
+        let teamStore = TeamStore(writer)
+        let selectedTeamStore = SelectedTeamStore(writer)
+        let checkpointStore = CheckpointStore(writer)
+        let markStore = MarkStore(writer)
+        let legendMetaStore = LegendMetaStore(writer)
+        let tagStore = TagStore(writer)
+        let memberTagStore = MemberTagStore(writer)
+        let memberChipBindingStore = MemberChipBindingStore(writer)
+        let syncMetaStore = SyncMetaStore(writer)
+        let trackStore = TrackStore(writer)
+        self.raceStore = raceStore
+        self.teamStore = teamStore
+        self.selectedTeamStore = selectedTeamStore
+        self.checkpointStore = checkpointStore
+        self.markStore = markStore
+        self.legendMetaStore = legendMetaStore
+        self.tagStore = tagStore
+        self.memberTagStore = memberTagStore
+        self.memberChipBindingStore = memberChipBindingStore
+        self.syncMetaStore = syncMetaStore
+        self.trackStore = trackStore
 
-        // Этап 4: источник всегда cloud, гонки не пришпилены к LAN.
-        let notPinned: (Int) -> Bool = { _ in false }
+        // Этап 9: держатель lease конструируется ДО репозиториев — его синхронно читает `isRacePinned`
+        // (пин-гард трёх pin-guard-репозиториев). Сидится из стора; write-through — обратно в стор.
+        let leaseHolder = LeaseHolder(
+            initial: leaseStore.read(),
+            persist: { lease in
+                if let lease { leaseStore.write(lease) } else { leaseStore.clear() }
+            }
+        )
+        self.leaseHolder = leaseHolder
+        // Пин-гард: гонка [raceId] обслуживается с LAN, пока её lease жив. `nowMs` — wall clock (`Date()`),
+        // а не `TrustedClock` (нужен синхронно, actor-hop недопустим — deviation плана, документирован).
+        let leasePinned: (Int) -> Bool = { raceId in
+            isPinned(leaseHolder.value, raceId: raceId, nowMs: Int64(Date().timeIntervalSince1970 * 1000))
+        }
 
-        raceRepository = RaceRepository(
+        let raceRepository = RaceRepository(
             apiClient: cloud,
             raceStore: raceStore,
             syncMetaStore: syncMetaStore,
@@ -158,7 +199,7 @@ final class AppEnvironment {
             localApiClient: local,
             localOrigin: localOrigin
         )
-        teamRepository = TeamRepository(
+        let teamRepository = TeamRepository(
             apiClient: cloud,
             teamStore: teamStore,
             selectedTeamStore: selectedTeamStore,
@@ -166,9 +207,9 @@ final class AppEnvironment {
             origin: cloudOrigin,
             localApiClient: local,
             localOrigin: localOrigin,
-            isRacePinned: notPinned
+            isRacePinned: leasePinned
         )
-        legendRepository = LegendRepository(
+        let legendRepository = LegendRepository(
             apiClient: cloud,
             checkpointStore: checkpointStore,
             tagStore: tagStore,
@@ -177,17 +218,21 @@ final class AppEnvironment {
             origin: cloudOrigin,
             localApiClient: local,
             localOrigin: localOrigin,
-            isRacePinned: notPinned
+            isRacePinned: leasePinned
         )
-        memberTagsRepository = MemberTagsRepository(
+        let memberTagsRepository = MemberTagsRepository(
             apiClient: cloud,
             memberTagStore: memberTagStore,
             syncMetaStore: syncMetaStore,
             origin: cloudOrigin,
             localApiClient: local,
             localOrigin: localOrigin,
-            isRacePinned: notPinned
+            isRacePinned: leasePinned
         )
+        self.raceRepository = raceRepository
+        self.teamRepository = teamRepository
+        self.legendRepository = legendRepository
+        self.memberTagsRepository = memberTagsRepository
 
         // Этап 6: дренаж взятий поверх тех же cloud/local-клиентов + `installId` (провенанс устройства).
         markUploadRepository = MarkUploadRepository(
@@ -206,6 +251,32 @@ final class AppEnvironment {
             cloud: cloud,
             local: local,
             wallNow: wallNow
+        )
+
+        // Этап 9: координатор конструируется ПОСЛЕ репозиториев (захватывает их `refresh*` + LAN-клиент).
+        // Все зависимости — замыкания-seam; `fetchSync` разворачивает `FetchResult` в `SyncManifestDto?`
+        // (`.success` → DTO, иначе `nil`); `nowMs` — тот же wall clock, что `leasePinned`. `selectedRaceId`/
+        // `cachedRaces` читают первое значение observation (эмитируется немедленно, как Kotlin-Flow).
+        syncCoordinator = SyncCoordinator(
+            readLease: { leaseHolder.value },
+            writeLease: { leaseHolder.set($0) },
+            nowMs: { Int64(Date().timeIntervalSince1970 * 1000) },
+            fetchSync: { raceId in
+                if case let .success(data, _) = await local.fetchSync(raceId: raceId) { return data }
+                return nil
+            },
+            selectedRaceId: {
+                do { for try await sel in selectedTeamStore.observe() { return sel?.raceId } } catch {}
+                return nil
+            },
+            cachedRaces: {
+                do { for try await races in raceStore.observeRaces() { return races } } catch {}
+                return []
+            },
+            refreshRaces: { source in (try? await raceRepository.refreshRaces(source: source)) ?? .skipped },
+            refreshTeams: { raceId, source in (try? await teamRepository.refreshTeams(raceId, source: source)) ?? .skipped },
+            refreshLegend: { raceId, source in (try? await legendRepository.refreshLegend(raceId, source: source)) ?? .skipped },
+            refreshMemberTags: { raceId, source in (try? await memberTagsRepository.refreshMemberTags(raceId, source: source)) ?? .skipped }
         )
     }
 
@@ -234,6 +305,9 @@ final class AppEnvironment {
             installId: pair.cloud.installId,
             cloudOrigin: Secrets.apiBaseURL,
             localOrigin: Secrets.localAPIBaseURL,
+            // Этап 9: lease/тема персистятся в UserDefaults (тот же адаптер-идиома, что `ClockAnchorStore`).
+            leaseStore: RaceLeaseStore.fromUserDefaults(),
+            themePreference: ThemePreference.fromUserDefaults(),
             // Раньше `pair.clock` терялся; теперь общий якорь времени живёт в графе.
             trustedClock: pair.clock,
             // One-shot GPS-фикс на момент взятия (задача 6); прод аудио/тактильный фидбек (задача 7).
@@ -272,6 +346,17 @@ final class AppEnvironment {
         requestLocationAuthorization: @escaping @Sendable () -> Void = {}
     ) throws -> AppEnvironment {
         let database = try AppDatabase.makeInMemory()
+        // In-memory prefs (изолированы от `UserDefaults.standard` — тесты не пишут глобальное состояние
+        // и не видят чужой lease/тему). Свежий бокс на каждый `inMemory`-граф.
+        let prefs = InMemoryPrefs()
+        let leaseStore = RaceLeaseStore(
+            load: { prefs.get($0) },
+            save: { prefs.set($0, $1) }
+        )
+        let themePreference = ThemePreference(
+            load: { prefs.get(ThemePreference.keyThemeMode) },
+            save: { prefs.set(ThemePreference.keyThemeMode, $0) }
+        )
         return AppEnvironment(
             database: database,
             cloud: testClient(baseURL: cloudOrigin, transport: transport),
@@ -279,6 +364,8 @@ final class AppEnvironment {
             installId: "install-test",
             cloudOrigin: cloudOrigin,
             localOrigin: localOrigin,
+            leaseStore: leaseStore,
+            themePreference: themePreference,
             trustedClock: trustedClock,
             locationProvider: locationProvider,
             feedback: feedback,
@@ -337,6 +424,23 @@ struct NoLocationProvider: CurrentLocationProvider {
 struct SilentFeedback: ScanFeedbackPlaying {
     func play(_ kind: ScanFeedbackKind) {}
     func fanfare() {}
+}
+
+/// In-memory key-value backing для `inMemory`-графа (этап 9): подкладывается под `RaceLeaseStore`/
+/// `ThemePreference` вместо `UserDefaults.standard`, чтобы тесты не писали глобальное состояние.
+private final class InMemoryPrefs: @unchecked Sendable {
+    private let lock = NSLock()
+    private var store: [String: String] = [:]
+
+    func get(_ key: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return store[key]
+    }
+
+    func set(_ key: String, _ value: String?) {
+        lock.lock(); defer { lock.unlock() }
+        store[key] = value
+    }
 }
 
 /// No-op движок трека для `inMemory`-графа: стрим ОСТАЁТСЯ открытым (фиксов нет — реальный GPS только

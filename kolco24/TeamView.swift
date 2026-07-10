@@ -28,6 +28,10 @@ struct TeamView: View {
     @State private var unbindTarget: TeamMemberItem?
     /// Открыт ли шит «Загрузка данных».
     @State private var showUpload = false
+    /// Модель экрана «Настройки» — минтится при открытии шита (привязка к текущему скоупу выбора).
+    @State private var settingsModel: SettingsModel?
+    /// Открыт ли шит «Настройки».
+    @State private var showSettings = false
 
     var body: some View {
         content
@@ -43,6 +47,11 @@ struct TeamView: View {
             .sheet(isPresented: $showUpload) {
                 if let uploadModel {
                     UploadView(model: uploadModel)
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                if let settingsModel {
+                    SettingsView(model: settingsModel)
                 }
             }
             .sheet(isPresented: Binding(
@@ -163,6 +172,19 @@ struct TeamView: View {
                         .padding(.leading, DS.hPad + 30 + 12)
                     Button { showUpload = true } label: {
                         MiscRowView(systemImage: "arrow.up.circle.fill", iconBg: Color.good, label: "Загрузка данных", sub: uploadModel?.pendingLabel ?? "Пока нечего загружать")
+                            .padding(.horizontal, DS.hPad)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    Rectangle()
+                        .fill(Color.hairline)
+                        .frame(height: 0.5)
+                        .padding(.leading, DS.hPad + 30 + 12)
+                    Button {
+                        settingsModel = appModel.makeSettingsModel()
+                        showSettings = true
+                    } label: {
+                        MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: "Настройки", sub: "Тема, локальный сервер, запись трека")
                             .padding(.horizontal, DS.hPad)
                             .padding(.vertical, 8)
                     }
