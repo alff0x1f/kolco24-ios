@@ -7,9 +7,9 @@
 //  и ростер выбранной команды. Сама команда приходит из `AppModel.selectedTeamState`; привязки
 //  чипов — из `TeamModel` (наблюдение `member_chip_bindings` по `numberInTeam`).
 //
-//  «Привязать» — видимая заглушка до этапа 5 (алерт). Отвязка входит в скоуп: long-press на
-//  привязанном участнике → confirm-диалог → `TeamModel.unbind` (`deleteSlot`). «Сменить команду»
-//  открывает флоу выбора (`onChooseTeam`).
+//  «Привязать» открывает `BindChipSheet` (одноразовая NFC-сессия через `TeamModel.beginBind`).
+//  Отвязка: long-press на привязанном участнике → confirm-диалог → `TeamModel.unbind` (`deleteSlot`).
+//  «Сменить команду» открывает флоу выбора (`onChooseTeam`).
 //
 
 import SwiftUI
@@ -23,8 +23,6 @@ struct TeamView: View {
 
     /// Слот, для которого открыт confirm-диалог отвязки.
     @State private var unbindTarget: TeamMemberItem?
-    /// Заглушка «Привязать» (этап 5).
-    @State private var showBindStub = false
 
     var body: some View {
         content
@@ -35,10 +33,13 @@ struct TeamView: View {
                 if model == nil { model = appModel.makeTeamModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
             }
-            .alert("Привязка чипов", isPresented: $showBindStub) {
-                Button("Понятно", role: .cancel) {}
-            } message: {
-                Text("Привязка NFC-чипов появится в следующей версии.")
+            .sheet(isPresented: Binding(
+                get: { model?.bindMember != nil },
+                set: { if !$0 { model?.cancelBind() } }
+            )) {
+                if let model, let member = model.bindMember {
+                    BindChipSheet(model: model, member: member)
+                }
             }
             .confirmationDialog(
                 "Отвязать чип?",
@@ -99,7 +100,7 @@ struct TeamView: View {
                         MemberRowView(
                             member: m,
                             binding: model?.binding(for: m.numberInTeam),
-                            onBind: { showBindStub = true },
+                            onBind: { model?.beginBind(member: m) },
                             onUnbind: { unbindTarget = m }
                         )
                         .padding(.horizontal, DS.hPad)

@@ -44,6 +44,17 @@ final class AppEnvironment {
     let legendRepository: LegendRepository
     let memberTagsRepository: MemberTagsRepository
 
+    // MARK: - Этап 5 (скан-флоу)
+    /// Общие доверенные часы: прод — `pair.clock` из `ApiClients.makeDefaultPair()` (раньше терялся),
+    /// теперь `ScanModel` семплит его для времени взятия и монотонного окна (Technical Details §8).
+    let trustedClock: TrustedClock
+    /// One-shot GPS-провайдер анти-фрод-координаты. Прод-реализация (`CoreLocationProvider`) —
+    /// задача 6; до неё no-op-заглушка (`nil` → взятие без координаты).
+    let locationProvider: any CurrentLocationProvider
+    /// Аудио/тактильный фидбек скана. Прод-реализация (`ScanFeedbackPlayer`) — задача 7; до неё
+    /// no-op-заглушка (глотает всё).
+    let feedback: any ScanFeedbackPlaying
+
     /// - Parameters:
     ///   - cloudOrigin/localOrigin: base URL'ы — ключи-партиции ETag в `sync_meta`.
     private init(
@@ -51,9 +62,15 @@ final class AppEnvironment {
         cloud: ApiClient,
         local: ApiClient,
         cloudOrigin: String,
-        localOrigin: String
+        localOrigin: String,
+        trustedClock: TrustedClock,
+        locationProvider: any CurrentLocationProvider,
+        feedback: any ScanFeedbackPlaying
     ) {
         self.database = database
+        self.trustedClock = trustedClock
+        self.locationProvider = locationProvider
+        self.feedback = feedback
         let writer = database.writer
 
         raceStore = RaceStore(writer)
@@ -122,7 +139,12 @@ final class AppEnvironment {
             cloud: pair.cloud,
             local: pair.local,
             cloudOrigin: Secrets.apiBaseURL,
-            localOrigin: Secrets.localAPIBaseURL
+            localOrigin: Secrets.localAPIBaseURL,
+            // Раньше `pair.clock` терялся; теперь общий якорь времени живёт в графе.
+            trustedClock: pair.clock,
+            // One-shot GPS-фикс на момент взятия (задача 6); прод аудио/тактильный фидбек (задача 7).
+            locationProvider: CoreLocationProvider(),
+            feedback: ScanFeedbackPlayer()
         )
     }
 
@@ -132,7 +154,10 @@ final class AppEnvironment {
     static func inMemory(
         cloudOrigin: String = "https://cloud.test",
         localOrigin: String = "http://local.test",
-        transport: @escaping (URLRequest) async throws -> (Data, HTTPURLResponse)
+        transport: @escaping (URLRequest) async throws -> (Data, HTTPURLResponse),
+        trustedClock: TrustedClock = AppEnvironment.makeTestClock(),
+        locationProvider: any CurrentLocationProvider = NoLocationProvider(),
+        feedback: any ScanFeedbackPlaying = SilentFeedback()
     ) throws -> AppEnvironment {
         let database = try AppDatabase.makeInMemory()
         return AppEnvironment(
@@ -140,7 +165,20 @@ final class AppEnvironment {
             cloud: testClient(baseURL: cloudOrigin, transport: transport),
             local: testClient(baseURL: localOrigin, transport: transport),
             cloudOrigin: cloudOrigin,
-            localOrigin: localOrigin
+            localOrigin: localOrigin,
+            trustedClock: trustedClock,
+            locationProvider: locationProvider,
+            feedback: feedback
+        )
+    }
+
+    /// Дефолтные часы для `inMemory`: фейковые провайдеры (elapsed/wall = 0, boot = nil),
+    /// без персистенции. Тесты, которым важно управляемое время, инжектят собственный `TrustedClock`.
+    static func makeTestClock() -> TrustedClock {
+        TrustedClock(
+            elapsedProvider: { 0 },
+            wallProvider: { 0 },
+            bootCountProvider: { nil }
         )
     }
 
@@ -161,4 +199,21 @@ final class AppEnvironment {
             transport: transport
         )
     }
+}
+
+// MARK: - No-op заглушки платформенных швов этапа 5
+//
+// Держат граф собираемым с задачи 3 (чтобы `ScanModel` задачи 4 строился) до прихода
+// прод-реализаций в задачах 6–7. Обе стороны безопасны по контракту: провайдер локации
+// «никогда не бросает, `nil` допустим», фидбек — best-effort «любой сбой проглатывается».
+
+/// No-op провайдер локации: всегда `nil` (взятие без координаты). Прод — `CoreLocationProvider` (задача 6).
+struct NoLocationProvider: CurrentLocationProvider {
+    func current(timeoutMs: Int64) async -> RawFix? { nil }
+}
+
+/// No-op фидбек: проглатывает всё. Прод — `ScanFeedbackPlayer` (задача 7).
+struct SilentFeedback: ScanFeedbackPlaying {
+    func play(_ kind: ScanFeedbackKind) {}
+    func fanfare() {}
 }

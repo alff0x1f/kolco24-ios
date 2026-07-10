@@ -52,6 +52,9 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 - Пустые состояния («выбери команду», «привяжи чипы»).
 
 ### Этап 5. NFC-отметка на КП (ядро приложения)
+
+✅ выполнен — см. [детальный план](completed/20260709-android-port-stage5.md).
+
 - CoreNFC `NFCTagReaderSession` + `sendMiFareCommand` (FAST_READ/READ, GET_VERSION) — порт `MifareUltralightWriter` в read-части.
 - **Ключевое отличие платформы:** на iOS нет постоянного reader-mode — сессия запускается пользователем, живёт ~60 с и показывает системную шторку. UX скан-оверлея придётся адаптировать (кнопка «Сканировать» вместо «просто приложи»), 20-секундное окно `ScanSession` — внутри сессии.
 - Персист взятий (порт state machine `ScanTakeState` из MainActivity — самая сложная часть порта), one-shot GPS-фикс на момент взятия (анти-фрод), звук/вибро-фидбек (AVAudioPlayer + CoreHaptics, перенести WAV-ассеты).
