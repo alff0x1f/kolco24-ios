@@ -229,9 +229,9 @@
 
 ### Task 11: [Final] Документация
 
-- [ ] секция «Photo layer (этап 7)» в `CLAUDE.md` (что где живёт, ловушки: относительные пути, frameIdOf-идемпотентность, poison-frame 400/413, RotationCoordinator вместо акселерометра, ImageIO-ориентация)
-- [ ] обновить `docs/plans/android-port.md` (этап 7 — done) при наличии такой конвенции у прошлых этапов
-- [ ] move this plan to `docs/plans/completed/`
+- [x] секция «Photo layer (этап 7)» в `CLAUDE.md` (что где живёт, ловушки: относительные пути, frameIdOf-идемпотентность, poison-frame 400/413, RotationCoordinator вместо акселерометра, ImageIO-ориентация)
+- [x] обновить `docs/plans/android-port.md` (этап 7 — done) при наличии такой конвенции у прошлых этапов
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
