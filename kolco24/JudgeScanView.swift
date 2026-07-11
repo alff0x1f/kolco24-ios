@@ -69,10 +69,7 @@ struct JudgeScanView: View {
     }
 
     private func clockString(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "HH:mm:ss"
-        return f.string(from: date)
+        AdminClockFormat.clock(date)
     }
 
     // MARK: - Плейт «Синхронизируйте гонку»
@@ -200,10 +197,7 @@ private struct FeedRow: View {
     }
 
     private func timeString(_ wallMs: Int64) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "HH:mm:ss"
-        return f.string(from: Date(timeIntervalSince1970: Double(wallMs) / 1000))
+        AdminClockFormat.time(wallMs)
     }
 }
 

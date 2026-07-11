@@ -5,8 +5,9 @@
 //  Админ-флоу организатора (этап 10). Порт ПОВЕДЕНИЯ (не структуры) `ui/admin/AdminScreen.kt`:
 //  `fullScreenCover` со своим `NavigationStack` (прецедент `TeamPickerFlowView`), поднимается из
 //  ряда «Администратор» в `SettingsView`. Корень `AdminHomeView` ветвится по admin-сессии
-//  (подписка на `AppModel.adminSessionUpdates` — единственный потребитель одноконсумерного стрима
-//  держателя): `loggedOut` → форма входа (email/пароль, «Войти», спиннер, inline-ошибка из
+//  (подписка на `AppModel.adminSessionUpdates` — мультиконсумерный стрим держателя, свежий на
+//  каждую подписку и сидированный текущим значением): `loggedOut` → форма входа (email/пароль,
+//  «Войти», спиннер, inline-ошибка из
 //  `adminErrorMessage`); `loggedIn` → email + ряды действий.
 //
 //  Действия «Отметка старта»/«Отметка финиша» пушат `JudgeScanView` (этап 10, задача 9). Ряды
@@ -86,8 +87,8 @@ private struct AdminHomeView: View {
             }
         }
         .task {
-            // Сид синхронным снимком, затем ведём стримом (единственный потребитель одноконсумерного
-            // `AsyncStream` держателя — сабтайтл `SettingsModel` читает сессию синхронно).
+            // Сид синхронным снимком, затем ведём мультиконсумерным стримом держателя (свежий на
+            // каждую подписку, сидированный текущим значением).
             session = appModel.currentAdminSession
             for await next in appModel.adminSessionUpdates {
                 session = next
@@ -325,16 +326,7 @@ private struct JudgeScanHostView: View {
             if let model {
                 JudgeScanView(model: model)
             } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "person.3.sequence")
-                        .font(.system(size: 40))
-                        .foregroundStyle(Color.sub)
-                    Text("Сначала выберите команду")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.ink)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.paper)
+                AdminNoTeamPlaceholder()
             }
         }
         .task {

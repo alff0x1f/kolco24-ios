@@ -149,3 +149,26 @@ struct DarkHeroBackground: View {
         }
     }
 }
+
+// MARK: - Судейский форматтер времени
+
+/// Единый форматтер `HH:mm:ss` (`en_US_POSIX`) для админ/судейских экранов: живые часы
+/// хиро (`JudgeScanView`, ре-рендер ~1/сек) и время строк лент (`JudgeScanView`,
+/// `CheckChipView`, `CheckMemberChipView`). Один `static let` вместо конструирования
+/// `DateFormatter` на каждый рендер.
+enum AdminClockFormat {
+    static let hms: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
+
+    /// `HH:mm:ss` из `Date` (живые часы хиро).
+    static func clock(_ date: Date) -> String { hms.string(from: date) }
+
+    /// `HH:mm:ss` из wall-миллисекунд (время строки ленты).
+    static func time(_ wallMs: Int64) -> String {
+        hms.string(from: Date(timeIntervalSince1970: Double(wallMs) / 1000))
+    }
+}
