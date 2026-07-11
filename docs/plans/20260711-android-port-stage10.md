@@ -152,13 +152,13 @@
 - Modify: `kolco24/App/AppEnvironment.swift`
 - Create: `kolco24Tests/Data/Repositories/AdminAuthRepositoryTests.swift`
 
-- [ ] `struct AdminAuthRepository` (оперирует `PostResult` — прецедент stage-3; GRDB не нужен): deps — `login/logout`-замыкания к `ApiClient` (cloud), `store: AdminTokenStore`, `holder: AdminSessionHolder`, `nowUtcIso: () -> String`
-- [ ] `login(email:password:) async -> LoginOutcome`: маппинг `PostResult → LoginOutcome`; success → `store.write` + `holder.set(.loggedIn)`; неуспех сессию **не трогает**
-- [ ] `logout() async`: best-effort `apiClient.logout()`, но `store.clear()` + `holder.set(.loggedOut)` **всегда** (даже оффлайн/ошибка)
-- [ ] `onUnauthorized()`: `store.clear()` + `.loggedOut` (вызовет провижининг при 401)
-- [ ] `AppEnvironment`: `let adminSessionHolder` (сид из `AdminTokenStore.fromKeychain()`; `inMemory` — изолированный in-memory load/save, Keychain в тестах не трогается) — строится **до** `ApiClients.makeDefaultPair()`; оба клиента (cloud + LAN) получают `tokenProvider = { adminSessionHolder.token }`; `let adminAuthRepository` — после клиентов
-- [ ] зеркало `AdminAuthRepositoryTest.kt` → `AdminAuthRepositoryTests` (`FakeTransport`): login success персистит + обновляет holder; 401/429/offline не персистят и не трогают сессию; logout чистит локально при серверном успехе **и** при оффлайне; `onUnauthorized` чистит; сид с протухшим expiry → loggedOut + пустой стор
-- [ ] run tests - must pass before next task
+- [x] `struct AdminAuthRepository` (оперирует `PostResult` — прецедент stage-3; GRDB не нужен): deps — `apiLogin/apiLogout`-замыкания к `ApiClient` (cloud), `store: AdminTokenStore`, `holder: AdminSessionHolder` (`nowUtcIso` не нужен — сид переехал в holder; убран как мёртвый dep)
+- [x] `login(email:password:) async -> LoginOutcome`: маппинг `PostResult → LoginOutcome`; success → `store.write` + `holder.set(.loggedIn)`; неуспех сессию **не трогает**
+- [x] `logout() async`: best-effort `apiClient.logout()`, но `store.clear()` + `holder.set(.loggedOut)` **всегда** (даже оффлайн/ошибка)
+- [x] `onUnauthorized()`: `store.clear()` + `.loggedOut` (вызовет провижининг при 401)
+- [x] `AppEnvironment`: `let adminSessionHolder` (сид из `AdminTokenStore.fromKeychain()`; `inMemory` — изолированный in-memory load/save, Keychain в тестах не трогается) — строится **до** `ApiClients.makeDefaultPair()`; оба клиента (cloud + LAN) получают `tokenProvider = { adminSessionHolder.token }`; `let adminAuthRepository` — после клиентов
+- [x] зеркало `AdminAuthRepositoryTest.kt` → `AdminAuthRepositoryTests` (`FakeTransport`): login success персистит + обновляет holder; 401/429/offline не персистят и не трогают сессию; logout чистит локально при серверном успехе **и** при оффлайне; `onUnauthorized` чистит; сид с протухшим expiry → loggedOut + пустой стор
+- [x] run tests - must pass before next task
 
 ### Task 5: Nfc — обобщение сканера (per-tag обработчик)
 
