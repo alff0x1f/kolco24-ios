@@ -295,11 +295,11 @@
 
 ### Task 13: Верификация приёмки
 
-- [ ] пройтись по Overview: логин/логаут/протухание/401-разлогин; судейский скан пишет только recorded + дрейн по всем 4 триггерам; обе проверки оффлайн и read-only; провижининг двухтаповый со сверкой uid — всё реализовано
-- [ ] grep-инварианты: `import Security` только под `Keychain/`; `Core/Admin/` и `Core/Stores/` — Foundation-only; админ-модели `App/` — только `Observation`/`Foundation`; `import CoreNFC` только под `Nfc/`; `import GRDB` не появился вне `Data/`
-- [ ] edge cases: bearer не в canonical (подпись не зависит от токена); судейский скан при пустом синхронизированном пуле не показывает «синхронизируйте»; повторный тап 2 после write-fail работает; закрытие экранов не рвёт insert/bind (unstructured Task)
-- [ ] полный сьют: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
+- [x] пройтись по Overview: логин/логаут/протухание/401-разлогин; судейский скан пишет только recorded + дрейн по всем 4 триггерам; обе проверки оффлайн и read-only; провижининг двухтаповый со сверкой uid — всё реализовано
+- [x] grep-инварианты: `import Security` только под `Keychain/`; `Core/Admin/` и `Core/Stores/` — Foundation-only; админ-модели `App/` — только `Observation`/`Foundation`; `import CoreNFC` только под `Nfc/`; `import GRDB` не появился вне `Data/`
+- [x] edge cases: bearer не в canonical (подпись не зависит от токена); судейский скан при пустом синхронизированном пуле не показывает «синхронизируйте»; повторный тап 2 после write-fail работает; закрытие экранов не рвёт insert/bind (unstructured Task)
+- [x] полный сьют: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
+- [x] сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
 
 ### Task 14: [Final] Документация
 
