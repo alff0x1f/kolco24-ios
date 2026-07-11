@@ -26,10 +26,24 @@ import Foundation
 ///   подъёма чтения).
 /// - `sample`: снимок `TrustedClock.sample()`, взятый **до** чтения чипа
 ///   (Technical Details §8) — единый источник времени взятия и монотонного окна.
+/// - `writeResult`: итог записи чипа, когда сканер отработал pending-write ячейку
+///   провижининга (этап 10) — тап по чипу с совпавшим UID выполняет
+///   `writeRecord` + read-back и кладёт исход сюда. `nil` для обычного чтения (и
+///   для тапа по чужому UID при активной ячейке — модель тогда покажет «Приложите
+///   тот же чип»). Дефолт `nil` в `init` сохраняет существующие construction-sites
+///   (`FakeChipScanner`, `ScanModelTests`) без изменений.
 struct TagReading: Equatable {
     let code: Data?
     let uid: String
     let sample: TimeSample
+    let writeResult: ChipWriteResult?
+
+    init(code: Data?, uid: String, sample: TimeSample, writeResult: ChipWriteResult? = nil) {
+        self.code = code
+        self.uid = uid
+        self.sample = sample
+        self.writeResult = writeResult
+    }
 }
 
 /// Источник чтений чипов — платформенная граница NFC-сессии.

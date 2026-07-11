@@ -166,12 +166,12 @@
 - Modify: `kolco24/Nfc/NfcChipScanner.swift`
 - Modify: `kolco24/Core/Scan/ChipScanning.swift` (при необходимости — новые протокольные шовчики)
 
-- [ ] вынести шаг «что сделать с подключённым тегом» в инжектируемый обработчик `process: (NfcTransport, _ uid: String, _ sample: TimeSample) -> TagReading` (выполняется на `readQueue`); session-менеджмент (restart через `shouldRestart`, ~1.5 с debounce по UID, `setStatus`, `sampleNow` **до** чтения, deadlock-дисциплина) не меняется
-- [ ] дефолтный обработчик = текущее поведение (`readRecord` → `TagReading`); публичный интерфейс `ChipScanning` и все существующие вызовы (`ScanModel`, `TeamModel`) — без изменений
-- [ ] pending-write ячейка для провижининга: thread-safe (`NSLock`) `setPendingWrite(uid: String, record: Data)` / `clearPendingWrite()` — ячейка живёт в сканере, но читает её **только инжектированный обработчик** (один механизм, не два): при совпадении uid выполняет `writeRecord(transport, record:)` + read-back и отдаёт результат в стрим. `TagReading` расширяется полем `writeResult: ChipWriteResult?` **с дефолтом `nil` в init** — существующие construction-sites (`FakeChipScanner`, `ScanModelTests`) не меняются
-- [ ] несовпадающий uid при pending-write → обычное чтение + `writeResult = nil` (модель покажет «Приложите тот же чип»)
-- [ ] прогнать **существующие** `ScanModelTests`/`TeamModelTests` — рефакторинг не должен их менять; новые unit-тесты на адаптер не пишутся (device-only, прецедент этапа 5) — записывающая логика уже покрыта `writeRecord`-тестами этапа 1, поведение хоста покроют `ProvisioningModelTests` (Task 11)
-- [ ] run tests - must pass before next task
+- [x] вынести шаг «что сделать с подключённым тегом» в инжектируемый обработчик `process: (NfcTransport, _ uid: String, _ sample: TimeSample) -> TagReading` (выполняется на `readQueue`); session-менеджмент (restart через `shouldRestart`, ~1.5 с debounce по UID, `setStatus`, `sampleNow` **до** чтения, deadlock-дисциплина) не меняется
+- [x] дефолтный обработчик = текущее поведение (`readRecord` → `TagReading`); публичный интерфейс `ChipScanning` и все существующие вызовы (`ScanModel`, `TeamModel`) — без изменений
+- [x] pending-write ячейка для провижининга: thread-safe (`NSLock`) `setPendingWrite(uid: String, record: Data)` / `clearPendingWrite()` — ячейка живёт в сканере, но читает её **только инжектированный обработчик** (один механизм, не два): при совпадении uid выполняет `writeRecord(transport, record:)` + read-back и отдаёт результат в стрим. `TagReading` расширяется полем `writeResult: ChipWriteResult?` **с дефолтом `nil` в init** — существующие construction-sites (`FakeChipScanner`, `ScanModelTests`) не меняются
+- [x] несовпадающий uid при pending-write → обычное чтение + `writeResult = nil` (модель покажет «Приложите тот же чип»)
+- [x] прогнать **существующие** `ScanModelTests`/`TeamModelTests` — рефакторинг не должен их менять; новые unit-тесты на адаптер не пишутся (device-only, прецедент этапа 5) — записывающая логика уже покрыта `writeRecord`-тестами этапа 1, поведение хоста покроют `ProvisioningModelTests` (Task 11)
+- [x] run tests - must pass before next task
 
 ### Task 6: Core — JudgeScanLogic (классификатор + конструктор строки)
 
