@@ -138,12 +138,12 @@
 - Modify: `kolco24Tests/Net/SigningTests.swift` (или соседний ApiClient-тестфайл)
 - Modify: `kolco24Tests/Net/ApiClientTests.swift`
 
-- [ ] `LoginRequest{email, password}` (Encodable), `LoginResponse{token, expires_at → expiresAt}` (Decodable, unknown keys игнорируются)
-- [ ] `ApiClient.login(email:password:) async -> PostResult<LoginResponse>` — generic `post` (тело сериализуется один раз, те же байты в подпись и в сеть, **без ретраев**), путь `/app/login/`
-- [ ] `ApiClient.logout() async -> PostResult<Void>` — POST с пустым телом (`EMPTY_BODY_SHA256`), путь `/app/logout/`; bearer уйдёт из `tokenProvider`
-- [ ] зеркало `SigningTest.kt` bearer-кейсов: `tokenProvider` non-nil → заголовок `Authorization: Bearer tok-123` есть; nil → заголовка нет; canonical-строка **не меняется** от наличия токена
-- [ ] зеркало `ApiClientTest.kt`: login 200 парсит token/expires_at и постит credentials (по `FakeTransport`-логу); 401 → `.unauthorized`; 429 → `.rateLimited`; logout пустое тело → 200 `.success`
-- [ ] run tests - must pass before next task
+- [x] `LoginRequest{email, password}` (Encodable), `LoginResponse{token, expires_at → expiresAt}` (Decodable, unknown keys игнорируются)
+- [x] `ApiClient.login(email:password:) async -> PostResult<LoginResponse>` — generic `post` (тело сериализуется один раз, те же байты в подпись и в сеть, **без ретраев**), путь `/app/login/`
+- [x] `ApiClient.logout() async -> PostResult<Void>` — POST с пустым телом (`EMPTY_BODY_SHA256`), путь `/app/logout/`; bearer уйдёт из `tokenProvider`
+- [x] зеркало `SigningTest.kt` bearer-кейсов: `tokenProvider` non-nil → заголовок `Authorization: Bearer tok-123` есть; nil → заголовка нет; canonical-строка **не меняется** от наличия токена (добавлен `bearerDoesNotChangeSignature`; header-кейсы уже были)
+- [x] зеркало `ApiClientTest.kt`: login 200 парсит token/expires_at и постит credentials (по `FakeTransport`-логу); 401 → `.unauthorized`; 429 → `.rateLimited`; logout пустое тело → 200 `.success`
+- [x] run tests - must pass before next task
 
 ### Task 4: Data — AdminAuthRepository + композиция tokenProvider
 

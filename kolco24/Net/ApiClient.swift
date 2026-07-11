@@ -248,6 +248,35 @@ struct ApiClient {
         }
     }
 
+    // MARK: - Эндпоинты (админ-авторизация)
+
+    /// `POST /app/login/` с admin-`email`/`password`. Тело — `LoginRequest`, сериализуется в `Data`
+    /// **один раз** (те же байты хэшируются в подпись и отправляются — конвенция `post`). `200`/`201`
+    /// → `.success` с распарсенным `LoginResponse` (opaque bearer-токен + `expires_at`); `401` →
+    /// `.unauthorized` (плохие учётные данные); `429` → `.rateLimited` (5/мин/IP); прочие статусы —
+    /// по `post`. Вызывается на **cloud-клиенте** (админ-операции не ходят на LAN). **Не ретраится**
+    /// (гарантия `post`). Bearer в этот запрос ещё не подставляется (токена нет), но подпись от него
+    /// и так не зависит — токен не входит в канонику.
+    func login(email: String, password: String) async -> PostResult<LoginResponse> {
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(LoginRequest(email: email, password: password))
+        } catch {
+            return .error(code: nil)
+        }
+        return await post(url: endpoint("/app/login/"), body: body) {
+            try JSONDecoder().decode(LoginResponse.self, from: $0)
+        }
+    }
+
+    /// `POST /app/logout/` с **пустым** телом (всё равно хэшируется как `EMPTY_BODY_SHA256`). Парсер
+    /// на ветке ошибки не вызывается и (пустое) тело успеха отбрасывает, так что `200` без payload →
+    /// `.success(())`. Bearer уходит из `tokenProvider` (текущий токен), что и завершает серверную
+    /// сессию. **Не ретраится** (гарантия `post`).
+    func logout() async -> PostResult<Void> {
+        await post(url: endpoint("/app/logout/"), body: Data()) { _ in () }
+    }
+
     /// URL эндпоинта из `baseURL` (без хвостового `/`) + `path` (с завершающим слэшем — он входит в
     /// подписанную канонику).
     private func endpoint(_ path: String) -> URL {

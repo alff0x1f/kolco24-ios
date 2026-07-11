@@ -147,6 +147,30 @@ struct ApiClientTests {
         #expect(transport.last?.value(forHTTPHeaderField: "Authorization") == nil)
     }
 
+    @Test func bearerDoesNotChangeSignature() async throws {
+        // Зеркало `interceptor_bearerDoesNotAffectCanonical`: токен в подпись НЕ входит — при
+        // одинаковом `ts`/пути/теле `X-App-Sig` совпадает с расчётом без токена.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: "{}")
+        let client = fixedTsClient(transport: transport, tokenProvider: { "tok-123" })
+
+        _ = try await client.send(
+            method: "GET", url: url("/app/races/"), body: nil, contentType: nil, ifNoneMatch: nil
+        )
+
+        let recorded = try #require(transport.last)
+        let sentTs = try #require(recorded.value(forHTTPHeaderField: "X-App-Ts"))
+        // Каноника посчитана БЕЗ какого-либо участия токена — подпись обязана совпасть.
+        let expectedSig = sign(
+            secret: secret,
+            canonical: buildCanonical(
+                method: "GET", fullPath: "/app/races/", ts: sentTs, bodyHash: EMPTY_BODY_SHA256
+            )
+        )
+        #expect(recorded.value(forHTTPHeaderField: "X-App-Sig") == expectedSig)
+        #expect(recorded.value(forHTTPHeaderField: "Authorization") == "Bearer tok-123")
+    }
+
     // MARK: - Хэш тела POST (байт-в-байт)
 
     @Test func post_bodyHashSignsBodyBytes() async {
@@ -417,10 +441,99 @@ struct ApiClientTests {
         else { Issue.record("ожидался .error(nil), получено \(result)") }
     }
 
+    // MARK: - Админ-авторизация: login / logout (Зеркало `ApiClientTest.kt` login/logout-группа)
+
+    @Test func login_200_parsesTokenAndExpiresAt_andPostsCredentials() async {
+        // Зеркало `login_200_parsesTokenAndExpiresAt_andPostsCredentials`.
+        let transport = FakeTransport()
+        transport.enqueue(
+            statusCode: 200,
+            bodyString: #"{"token":"tok-abc","expires_at":"2026-07-21T14:03:00Z"}"#
+        )
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.login(email: "admin@example.test", password: "s3cret")
+
+        guard case .success(let response) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(response.token == "tok-abc")
+        #expect(response.expiresAt == "2026-07-21T14:03:00Z")
+
+        let recorded = transport.last!
+        #expect(recorded.httpMethod == "POST")
+        #expect(fullPath(recorded.url!) == "/app/login/")
+        #expect(recorded.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        // Тело — те же байты, что подписаны; проверяем, что credentials ушли.
+        let sent = try! JSONDecoder().decode(SentLogin.self, from: recorded.httpBody!)
+        #expect(sent.email == "admin@example.test")
+        #expect(sent.password == "s3cret")
+    }
+
+    @Test func login_401_returnsUnauthorized() async {
+        // Зеркало `login_401_returnsUnauthorized`: сервер не различает «нет юзера» и «не тот пароль».
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 401)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.login(email: "a@b.c", password: "x")
+        if case .unauthorized = result {} else { Issue.record("ожидался .unauthorized, получено \(result)") }
+    }
+
+    @Test func login_429_returnsRateLimited() async {
+        // Зеркало `login_429_returnsRateLimited`: 5/мин/IP.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 429)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.login(email: "a@b.c", password: "x")
+        if case .rateLimited = result {} else { Issue.record("ожидался .rateLimited, получено \(result)") }
+    }
+
+    @Test func login_connectionDrop_returnsOffline() async {
+        // POST → URLError → .offline (асимметрия с GET).
+        let transport = FakeTransport()
+        transport.enqueueError(URLError(.networkConnectionLost))
+        let client = fixedTsClient(transport: transport)
+        let result = await client.login(email: "a@b.c", password: "x")
+        if case .offline = result {} else { Issue.record("ожидался .offline, получено \(result)") }
+    }
+
+    @Test func logout_emptyBody_returnsSuccess_andSignsEmptyBody() async {
+        // Зеркало `logout_emptyBody_returnsSuccess`: пустое тело → EMPTY_BODY_SHA256 → 200 .success.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.logout()
+
+        if case .success = result {} else { Issue.record("ожидался .success, получено \(result)") }
+
+        let recorded = transport.last!
+        #expect(recorded.httpMethod == "POST")
+        #expect(fullPath(recorded.url!) == "/app/logout/")
+        // Пустое тело → подпись по EMPTY_BODY_SHA256.
+        let sentTs = recorded.value(forHTTPHeaderField: "X-App-Ts")!
+        let expected = sign(
+            secret: secret,
+            canonical: buildCanonical(
+                method: "POST", fullPath: "/app/logout/", ts: sentTs, bodyHash: EMPTY_BODY_SHA256
+            )
+        )
+        #expect(recorded.value(forHTTPHeaderField: "X-App-Sig") == expected)
+        #expect((recorded.httpBody ?? Data()).isEmpty)
+    }
+
+    @Test func logout_sendsBearerFromTokenProvider() async {
+        // logout завершает сессию: bearer текущего токена уходит в заголовке (из tokenProvider).
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200)
+        let client = fixedTsClient(transport: transport, tokenProvider: { "tok-live" })
+        _ = await client.logout()
+        #expect(transport.last?.value(forHTTPHeaderField: "Authorization") == "Bearer tok-live")
+    }
+
     // MARK: - Часть 2: эндпоинты и условные GET (Зеркало `ApiClientTest.kt` fetch-группа)
     //
-    // login/logout/bindTag (типизированные POST-методы `ApiClientTest.kt`) — контракт загрузки,
-    // этап 6; здесь не зеркалируются. Generic `post` — часть 1 выше.
+    // bindTag (типизированный POST-метод `ApiClientTest.kt`) — Task 11. Generic `post` — часть 1 выше.
 
     private let racesJson = """
         {
@@ -912,6 +1025,12 @@ private final class TsSequence {
         defer { index += 1 }
         return values[Swift.min(index, values.count - 1)]
     }
+}
+
+/// Декодер отправленного тела `login` (проверка, что credentials ушли в POST-теле).
+private struct SentLogin: Decodable {
+    let email: String
+    let password: String
 }
 
 /// Сборщик принятых `ServerTimeSample` (проверка вызовов `onServerTime`).
