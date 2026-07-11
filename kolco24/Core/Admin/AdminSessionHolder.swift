@@ -53,9 +53,13 @@ final class AdminSessionHolder: @unchecked Sendable {
             nextContinuationId += 1
             continuations[id] = cont
             let seed = _session
-            lock.unlock()
-
+            // Сид отдаётся ПОД замком, до его снятия: конкурентный `set(_:)` не может вклиниться
+            // между регистрацией континуэйшн и yield'ом сида и доставить более новую сессию раньше
+            // (иначе в `.bufferingNewest(1)`-буфере осталась бы протухшая сессия). Безопасно: yield в
+            // буферизующий `AsyncStream` не входит синхронно в `onTermination`, а `onTermination`
+            // берёт тот же замок только позже (на finish/cancel), не внутри yield — самоблокировки нет.
             cont.yield(seed)
+            lock.unlock()
 
             cont.onTermination = { [weak self] _ in
                 guard let self else { return }

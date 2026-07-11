@@ -54,7 +54,16 @@ extension AdminTokenStore {
             SecItemDelete(baseQuery(service: service) as CFDictionary)
             return
         }
-        let attributes: [String: Any] = [kSecValueData as String: data]
+        // Токен админа не попадает в бэкапы и не восстанавливается на другое устройство:
+        // ...WhenUnlockedThisDeviceOnly вместо дефолтного ...WhenUnlocked. Атрибут доступности
+        // ставится и в add-, и в update-атрибутах (`SecItemUpdate` умеет менять `kSecAttrAccessible`),
+        // чтобы любая перезапись нормализовала уже существующий item к ThisDeviceOnly — иначе item,
+        // созданный до появления этого атрибута, сохранил бы старый backup-eligible класс. В
+        // match-запросе load/update `kSecAttrAccessible` НЕ участвует.
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]
         let status = SecItemUpdate(
             baseQuery(service: service) as CFDictionary,
             attributes as CFDictionary
@@ -62,9 +71,6 @@ extension AdminTokenStore {
         if status == errSecItemNotFound {
             var addQuery = baseQuery(service: service)
             addQuery[kSecValueData as String] = data
-            // Токен админа не попадает в бэкапы и не восстанавливается на другое устройство:
-            // ...WhenUnlockedThisDeviceOnly вместо дефолтного ...WhenUnlocked. Атрибут доступности
-            // ставится ТОЛЬКО в add-атрибутах (не в match-запросе load/update).
             addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
             SecItemAdd(addQuery as CFDictionary, nil)
         }

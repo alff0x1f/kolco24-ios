@@ -314,7 +314,10 @@ final class ProvisioningModel: Identifiable {
     /// Запись прошла + подтверждена read-back'ом: пометить чип свежим, `success(number)`, разоружить
     /// сканер, фидбек + фанфары, запланировать автопереход к следующему КП.
     private func completeWrite(uid: String) {
-        if let cp = selectedCheckpoint {
+        if let cp = selectedCheckpoint, !(freshUids[cp.id] ?? []).contains(uid) {
+            // Дедуп per-КП (порт `if (uid !in existing)` из ProvisioningScreen.kt): повторная запись
+            // ТОГО ЖЕ чипа в одной сессии не должна задваивать свежий pill и пере-вычитать «Уже
+            // привязано: N» (max/subtract-математика полагается на уникальные uid).
             freshUids[cp.id, default: []].append(uid)
         }
         let number = pendingWriteNumber ?? selectedCheckpoint?.number ?? 0

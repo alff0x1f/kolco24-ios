@@ -282,6 +282,43 @@ struct ProvisioningModelTests {
         #expect(model.freshLabels(cp).count == 1)
     }
 
+    // MARK: - Повторная запись того же чипа не задваивает свежую пилюлю
+
+    @Test func freshPill_noDoubleCount_afterRepeatSameChip() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5)])
+        // Стартовый кэш: 1 привязанный тег на КП.
+        try await env.tagStore.replaceAllForRace(raceId: race, tags: [
+            kolco24.Tag(raceId: race, bid: "old", checkpointId: 1, checkMethod: "nfc")
+        ])
+        let model = makeModel(env: env, bind: BindStub(okResponse(code: goodCodeHex)))
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { !model.checkpoints.isEmpty }
+        let cp = model.checkpoints[0]
+        await waitUntil { model.alreadyBound(cp) == 1 }
+
+        // Первая запись U1 (тап1 → тап2 success): свежая пилюля одна, alreadyBound 1 → 0.
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { if case .waitingForWrite = model.provisionState { return true }; return false }
+        scanner.emit(reading(uid: "U1", writeResult: .success))
+        await waitUntil { if case .success = model.provisionState { return true }; return false }
+        #expect(model.freshLabels(cp).count == 1)
+        #expect(model.alreadyBound(cp) == 0)
+
+        // Сброс состояния чипа (аналог авто-перехода на последнем КП) — freshUids сохраняется.
+        model.selectCheckpoint(index: 0)
+        await waitUntil { if case .waitingForChip = model.provisionState { return true }; return false }
+
+        // Повторная запись ТОГО ЖЕ чипа U1: свежая пилюля НЕ задваивается, alreadyBound не пере-вычитается.
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { if case .waitingForWrite = model.provisionState { return true }; return false }
+        scanner.emit(reading(uid: "U1", writeResult: .success))
+        await waitUntil { if case .success = model.provisionState { return true }; return false }
+        #expect(model.freshLabels(cp).count == 1) // всё ещё одна, не две
+        #expect(model.alreadyBound(cp) == 0)      // max(0, 1 - 1), не max(0, 1 - 2)
+    }
+
     // MARK: - Смена КП сбрасывает pending-write
 
     @Test func selectCheckpoint_resetsPendingWriteAndState() async throws {
