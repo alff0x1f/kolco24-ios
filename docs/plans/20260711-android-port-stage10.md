@@ -107,11 +107,11 @@
 - Create: `kolco24/Keychain/AdminTokenStoreKeychain.swift`
 - Create: `kolco24Tests/Core/AdminTokenStoreTests.swift`
 
-- [ ] `struct StoredAdminSession: Equatable, Codable { token, email, expiresAt: String }`; ядро `AdminTokenStore` на замыканиях `load: () -> Data?` / `save: (Data?) -> Void`; `read() -> StoredAdminSession?` (nil при отсутствии/битом JSON/пустом любом поле), `write(_:)`, `clear()` — `Core/Stores/` остаётся Foundation-only
-- [ ] прод-адаптер `AdminTokenStore.fromKeychain()` в **новой платформенной папке `Keychain/`** (прецедент `Nfc/`/`Location/`/`Audio/`) — `kSecClassGenericPassword`, service `kolco24.admin`, add/update/delete через `SecItem*`; **единственное** место `import Security` (grep-инвариант); папка авто-джойнится в таргет (synchronized group)
-- [ ] зеркало `AdminTokenStoreTest.kt` → `AdminTokenStoreTests` на in-memory load/save (round-trip write/read/clear; nil при отсутствии любого поля; pre-seeded store читается)
-- [ ] свежие кейсы: битый JSON → nil; `write` поверх старого item заменяет целиком
-- [ ] run tests - must pass before next task
+- [x] `struct StoredAdminSession: Equatable, Codable { token, email, expiresAt: String }`; ядро `AdminTokenStore` на замыканиях `load: () -> Data?` / `save: (Data?) -> Void`; `read() -> StoredAdminSession?` (nil при отсутствии/битом JSON/пустом любом поле), `write(_:)`, `clear()` — `Core/Stores/` остаётся Foundation-only
+- [x] прод-адаптер `AdminTokenStore.fromKeychain()` в **новой платформенной папке `Keychain/`** (прецедент `Nfc/`/`Location/`/`Audio/`) — `kSecClassGenericPassword`, service `kolco24.admin`, add/update/delete через `SecItem*`; **единственное** место `import Security` (grep-инвариант); папка авто-джойнится в таргет (synchronized group)
+- [x] зеркало `AdminTokenStoreTest.kt` → `AdminTokenStoreTests` на in-memory load/save (round-trip write/read/clear; nil при отсутствии любого поля; pre-seeded store читается)
+- [x] свежие кейсы: битый JSON → nil; `write` поверх старого item заменяет целиком
+- [x] run tests - must pass before next task
 
 ### Task 2: Core — AdminSession + AdminSessionHolder
 
