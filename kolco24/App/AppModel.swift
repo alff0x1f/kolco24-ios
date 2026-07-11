@@ -131,12 +131,15 @@ final class AppModel {
         uploadLoopTask?.cancel()
         let repo = env.markUploadRepository
         let trackRepo = env.trackUploadRepository
+        let judgeRepo = env.judgeScanUploadRepository
         let intervalMs = uploadRetryIntervalMs
         uploadLoopTask = Task {
             while !Task.isCancelled {
                 await repo.uploadAllPending()
                 // Этап 8: тем же таймером досылаем и точки трека (обе цели, self-heal).
                 await trackRepo.uploadAllPending()
+                // Этап 10: и судейские пики старта/финиша (обе цели, self-heal).
+                await judgeRepo.uploadAllPending()
                 do {
                     try await Task.sleep(for: .milliseconds(intervalMs))
                 } catch {
@@ -204,6 +207,9 @@ final class AppModel {
         // Этап 8: смена команды (и первая эмиссия) — заодно оппортунистический дренаж точек трека.
         let trackRepo = env.trackUploadRepository
         Task { await trackRepo.uploadAllPending() }
+        // Этап 10: и судейских пиков (застрявших под прежней гонкой) — тем же оппортунистическим дренажом.
+        let judgeRepo = env.judgeScanUploadRepository
+        Task { await judgeRepo.uploadAllPending() }
 
         // Launch B: реактивный refresh при смене гонки (teams/legend/member_tags), ошибка → тост.
         if selection.raceId != lastReactiveRaceId {
@@ -357,6 +363,33 @@ final class AppModel {
         // (§8) синхронным мостом к актору-часам (вызов на выделенной NFC-очереди, не на кооперативном
         // пуле — блокировка безопасна); `shouldRestart` читает потокобезопасный `liveness` (не @MainActor
         // `closeRequested` с чужой очереди — то была бы гонка данных, Finding-3), §60-с рестарт.
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
+    /// Фабрика хост-редьюсера судейского экрана «Отметка старта/финиша» (этап 10). `raceId` — гонка
+    /// ВЫБРАННОЙ команды (судейская станция сканит все команды одной гонки); возвращает `nil`, когда
+    /// команда не выбрана (гонка неизвестна). Держит `env` инкапсулированным. Прод-сканер `NfcChipScanner`
+    /// (из `Nfc/`) инстанцируется здесь (App-слой в одном модуле — CoreNFC не импортируется); семпл
+    /// доверенного времени берётся ДО чтения чипа синхронным мостом к актору-часам, `shouldRestart`
+    /// читает потокобезопасный `liveness` (§60-с рестарт, как у скан/bind-флоу).
+    func makeJudgeScanModel(eventType: String) -> JudgeScanModel? {
+        guard let raceId = selectedRaceId else { return nil }
+        let model = JudgeScanModel(
+            raceId: raceId,
+            eventType: eventType,
+            judgeScanStore: env.judgeScanStore,
+            repository: env.judgeScanUploadRepository,
+            memberTagsRepository: env.memberTagsRepository,
+            feedback: env.feedback,
+            installId: env.installId
+        )
+        let clock = env.trustedClock
         let liveness = model.liveness
         let scanner = NfcChipScanner(
             sampleNow: { AppModel.syncSample(clock) },

@@ -25,6 +25,10 @@ final class AppEnvironment {
 
     let database: AppDatabase
 
+    /// UUID устройства (тот же, что заголовок `X-Install-Id`): `source_install_id` тела судейского
+    /// пика (этап 10, `JudgeScanModel`) и провенанс дренажей выгрузки.
+    let installId: String
+
     // MARK: - Сторы (этап 2)
     let raceStore: RaceStore
     let teamStore: TeamStore
@@ -40,6 +44,9 @@ final class AppEnvironment {
     /// Точки GPS-трека (этап 8): наблюдение/дренаж выгрузки. Питает `TrackUploadRepository` (и
     /// `TrackRecorder` задачи 6).
     let trackStore: TrackStore
+    /// Судейские пики старта/финиша (этап 10): наблюдение/дренаж выгрузки. Питает
+    /// `JudgeScanUploadRepository` (и `JudgeScanModel` задачи 8).
+    let judgeScanStore: JudgeScanStore
 
     // MARK: - Репозитории (этап 3)
     let raceRepository: RaceRepository
@@ -80,6 +87,13 @@ final class AppEnvironment {
     /// `AppModel`, что и marks (5-мин таймер / смена команды), плюс live-upload из `TrackRecorder`
     /// (задача 6). Структурный клон `markUploadRepository` без frame-цикла/version-guard.
     let trackUploadRepository: TrackUploadRepository
+
+    // MARK: - Этап 10 (выгрузка судейских пиков)
+    /// Идемпотентный дренаж судейских пиков в обе цели (LAN + облако). Дёргается теми же триггерами
+    /// `AppModel`, что marks/track (5-мин таймер / смена команды), плюс fire-and-forget после каждой
+    /// записанной строки и выделенный 60-с цикл из `JudgeScanModel` (задача 8). Структурный клон
+    /// `trackUploadRepository` с ключом `raceId`.
+    let judgeScanUploadRepository: JudgeScanUploadRepository
 
     // MARK: - Этап 5 (скан-флоу)
     /// Общие доверенные часы: прод — `pair.clock` из `ApiClients.makeDefaultPair()` (раньше терялся),
@@ -148,6 +162,7 @@ final class AppEnvironment {
         wallNow: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.database = database
+        self.installId = installId
         self.trustedClock = trustedClock
         self.locationProvider = locationProvider
         self.feedback = feedback
@@ -176,6 +191,7 @@ final class AppEnvironment {
         let memberChipBindingStore = MemberChipBindingStore(writer)
         let syncMetaStore = SyncMetaStore(writer)
         let trackStore = TrackStore(writer)
+        let judgeScanStore = JudgeScanStore(writer)
         self.raceStore = raceStore
         self.teamStore = teamStore
         self.selectedTeamStore = selectedTeamStore
@@ -187,6 +203,7 @@ final class AppEnvironment {
         self.memberChipBindingStore = memberChipBindingStore
         self.syncMetaStore = syncMetaStore
         self.trackStore = trackStore
+        self.judgeScanStore = judgeScanStore
 
         // Этап 9: держатель lease конструируется ДО репозиториев — его синхронно читает `isRacePinned`
         // (пин-гард трёх pin-guard-репозиториев). Сидится из стора; write-through — обратно в стор.
@@ -272,6 +289,16 @@ final class AppEnvironment {
             trackStore: trackStore,
             cloud: cloud,
             local: local,
+            wallNow: wallNow
+        )
+
+        // Этап 10: дренаж судейских пиков поверх тех же cloud/local-клиентов + `installId`
+        // (`source_install_id` тела запроса, без `team_id`). Структурный клон track-дренажа с ключом `raceId`.
+        judgeScanUploadRepository = JudgeScanUploadRepository(
+            judgeScanStore: judgeScanStore,
+            cloud: cloud,
+            local: local,
+            installId: installId,
             wallNow: wallNow
         )
 

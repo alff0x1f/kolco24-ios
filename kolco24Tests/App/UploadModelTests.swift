@@ -72,6 +72,18 @@ struct UploadModelTests {
         )
     }
 
+    /// Судейский пик гонки с раздельными флагами доставки `uploadedLocal/Cloud`.
+    private func judgeScan(
+        id: String, raceId: Int = 7,
+        uploadedLocal: Bool = false, uploadedCloud: Bool = false
+    ) -> JudgeScan {
+        JudgeScan(
+            id: id, raceId: raceId, eventType: "start", participantNumber: 12, nfcUid: "AA",
+            takenAt: 1000, elapsedRealtimeAt: 1000, sourceInstallId: "install-test",
+            uploadedLocal: uploadedLocal, uploadedCloud: uploadedCloud
+        )
+    }
+
     private func waitUntil(
         timeout: Duration = .seconds(3),
         _ condition: () async -> Bool
@@ -414,6 +426,65 @@ struct UploadModelTests {
         #expect(model.pendingLabel == "4 не отправлено")
     }
 
+    // MARK: - Секция «Судейские отметки» (судейские пики гонки)
+
+    /// Судейские пики pending → секция «Судейские отметки» видна с корректными счётчиками per-target.
+    @Test func judgeSection_visibleWithCounts() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        // 3 пика: один доехал до cloud, один до local, один ни туда ни сюда.
+        try await env.judgeScanStore.insert(judgeScan(id: "j1", uploadedCloud: true))
+        try await env.judgeScanStore.insert(judgeScan(id: "j2", uploadedLocal: true))
+        try await env.judgeScanStore.insert(judgeScan(id: "j3"))
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.judgeCounts?.total == 3 }
+        #expect(model.hasJudge)
+        #expect(model.judgeCounts?.total == 3)
+        #expect(model.judgeCounts?.local == 1)
+        #expect(model.judgeCounts?.cloud == 1)
+        // «Интернет» секции виден всегда (когда секция видима), не done (1/3).
+        #expect(model.judgeCloudLine.label == "Интернет")
+        #expect(model.judgeCloudLine.uploaded == 1)
+        #expect(model.judgeCloudLine.total == 3)
+        #expect(model.judgeCloudLine.done == false)
+        // «Финиш» показан, т.к. uploaded > 0.
+        #expect(model.judgeFinishLine?.uploaded == 1)
+    }
+
+    /// Ноль пиков → секция «Судейские отметки» скрыта (правило секции «Трек»).
+    @Test func judgeSection_hiddenWhenNoScans() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.markStore.upsert(mark(id: "a")) // только взятие, судейских пиков нет
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.judgeCounts != nil }
+        #expect(model.judgeCounts?.total == 0)
+        #expect(model.hasJudge == false)
+        #expect(model.judgeFinishLine == nil)
+    }
+
+    /// `pendingLabel` учитывает незалитые судейские пики (в сумме с отметками/точками).
+    @Test func pendingLabel_countsJudgeRows() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        // 1 взятие pending + 2 судейских пика pending → 3 не отправлено.
+        try await env.markStore.upsert(mark(id: "a"))
+        try await env.judgeScanStore.insert(judgeScan(id: "j1"))
+        try await env.judgeScanStore.insert(judgeScan(id: "j2"))
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+
+        await waitUntil { model.counts?.total == 1 && model.judgeCounts?.total == 2 }
+        #expect(model.pendingLabel == "3 не отправлено")
+    }
+
     // MARK: - rebind при смене команды чистит состояние
 
     @Test func rebind_clearsStateOnTeamChange() async throws {
@@ -432,8 +503,10 @@ struct UploadModelTests {
         #expect(model.metadataCounts == nil)
         #expect(model.photoCounts == nil)
         #expect(model.trackCounts == nil)
+        #expect(model.judgeCounts == nil)
         #expect(model.outcomes.isEmpty)
         #expect(model.trackOutcomes.isEmpty)
+        #expect(model.judgeOutcomes.isEmpty)
 
         await waitUntil { model.counts?.total == 0 }
         #expect(model.counts?.total == 0)

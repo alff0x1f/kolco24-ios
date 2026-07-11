@@ -212,14 +212,14 @@
 - Create: `kolco24Tests/App/JudgeScanModelTests.swift`
 - Modify: `kolco24Tests/App/UploadModelTests.swift`
 
-- [ ] `AppEnvironment`: `let judgeScanUploadRepository` (после клиентов); `AppModel.makeJudgeScanModel(eventType:)` — nil без выбранной команды (raceId = гонка команды); расширить 5-мин цикл и team-change flush на `judgeScanUploadRepository.uploadAllPending()`
-- [ ] `@Observable @MainActor JudgeScanModel` (только `Observation`/`Foundation`): `for await` по стриму сканера; пул `member_tags` (подписка `memberTagStore.observeForRace`) + `hasBeenSynced`-гейт — синхронизированный-но-пустой ≠ «не синхронизирован»; при пустом несинхронизированном — inline `refreshMemberTags` (идиома bind-флоу этапа 5, «Синхронизируйте гонку» при неуспехе); сканы игнорируются до первой эмиссии пула (null-sentinel)
-- [ ] обработка reading: `classifyJudgeScan` → `.recorded` → `makeJudgeScan` → `judgeScanStore.insert` в unstructured `Task` с захватом **стора** (§6) + fire-and-forget `uploadPending(raceId)` в том же Task; фидбек `ScanFeedbackPlaying` (success для recorded, failure для kpChip/unknown); лента последних 20 (`[JudgeScanResult]` со временем)
-- [ ] 60-сек drain-цикл, пока экран открыт: `Task` с `Task.sleep`, стартует в `start()`, отменяется в `stop()`; `stop()` также финальный flush (fire-and-forget, захват репозитория) + `scanner.stop()`
-- [ ] `UploadModel`: подписка `judgeScanStore.uploadCounts(raceId:)` + seed/стрим `judgeScanUploadRepository.outcomeUpdates` → счётчики/receipt-строки секции «Судейские отметки» (правила как у «Трек»: «Интернет» всегда при ненуле, «Финиш» при outcome/uploaded>0; секция скрыта при нуле); `pendingLabel` учитывает судейские строки
-- [ ] свежие `JudgeScanModelTests` (in-memory БД + `FakeChipScanner` + `FakeTransport`): recorded пишет строку с полями сэмпла и триггерит upload (по логу транспорта); kpChip/unknown не пишут; poolNotReady при пустом несинхронизированном пуле + inline refresh по логу; лента капится 20; stop отменяет цикл
-- [ ] дополнение `UploadModelTests`: счётчики/скрытие секции при нуле
-- [ ] run tests - must pass before next task
+- [x] `AppEnvironment`: `let judgeScanUploadRepository` (после клиентов); `AppModel.makeJudgeScanModel(eventType:)` — nil без выбранной команды (raceId = гонка команды); расширить 5-мин цикл и team-change flush на `judgeScanUploadRepository.uploadAllPending()`
+- [x] `@Observable @MainActor JudgeScanModel` (только `Observation`/`Foundation`): `for await` по стриму сканера; пул `member_tags` (подписка `memberTagStore.observeForRace`) + `hasBeenSynced`-гейт — синхронизированный-но-пустой ≠ «не синхронизирован»; при пустом несинхронизированном — inline `refreshMemberTags` (идиома bind-флоу этапа 5, «Синхронизируйте гонку» при неуспехе); сканы игнорируются до первой эмиссии пула (null-sentinel)
+- [x] обработка reading: `classifyJudgeScan` → `.recorded` → `makeJudgeScan` → `judgeScanStore.insert` в unstructured `Task` с захватом **стора** (§6) + fire-and-forget `uploadPending(raceId)` в том же Task; фидбек `ScanFeedbackPlaying` (success для recorded, failure для kpChip/unknown); лента последних 20 (`[JudgeScanResult]` со временем)
+- [x] 60-сек drain-цикл, пока экран открыт: `Task` с `Task.sleep`, стартует в `start()`, отменяется в `stop()`; `stop()` также финальный flush (fire-and-forget, захват репозитория) + `scanner.stop()`
+- [x] `UploadModel`: подписка `judgeScanStore.uploadCounts(raceId:)` + seed/стрим `judgeScanUploadRepository.outcomeUpdates` → счётчики/receipt-строки секции «Судейские отметки» (правила как у «Трек»: «Интернет» всегда при ненуле, «Финиш» при outcome/uploaded>0; секция скрыта при нуле); `pendingLabel` учитывает судейские строки
+- [x] свежие `JudgeScanModelTests` (in-memory БД + `FakeChipScanner` + `FakeTransport`): recorded пишет строку с полями сэмпла и триггерит upload (по логу транспорта); kpChip/unknown не пишут; poolNotReady при пустом несинхронизированном пуле + inline refresh по логу; лента капится 20; stop отменяет цикл
+- [x] дополнение `UploadModelTests`: счётчики/скрытие секции при нуле
+- [x] run tests - must pass before next task
 
 ### Task 9: UI — AdminFlowView (вход, логин, меню) + JudgeScanView
 
