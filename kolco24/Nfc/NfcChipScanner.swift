@@ -32,7 +32,7 @@ import Foundation
 /// Источник чтений чипов поверх `NFCTagReaderSession`. Держит изменяемое состояние сессии, поэтому
 /// финальный класс; состояние трогается с двух очередей (делегатной CoreNFC и `readQueue`) — защищено
 /// `lock`.
-final class NfcChipScanner: NSObject, ChipScanning {
+final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
 
     /// Снимок доверенного времени, берётся ДО блокирующего чтения чипа (§8).
     private let sampleNow: () -> TimeSample

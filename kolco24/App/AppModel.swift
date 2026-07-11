@@ -441,6 +441,32 @@ final class AppModel {
         return model
     }
 
+    /// Фабрика хост-редьюсера провижининга «Привязка чипов» (этап 10). `raceId` — гонка ВЫБРАННОЙ
+    /// команды; возвращает `nil`, когда команда не выбрана (легенда/гонка неизвестна). `bindTag` бьёт
+    /// cloud-клиент (замыкание графа); `onUnauthorized` при 401 роняет admin-сессию (форма логина).
+    /// Прод-сканер `NfcChipScanner` инстанцируется здесь (App-слой в одном модуле — CoreNFC не
+    /// импортируется) и умеет pending-write (реализует `ProvisioningScanning`).
+    func makeProvisioningModel() -> ProvisioningModel? {
+        guard let raceId = selectedRaceId else { return nil }
+        let repo = env.adminAuthRepository
+        let model = ProvisioningModel(
+            raceId: raceId,
+            checkpointStore: env.checkpointStore,
+            tagStore: env.tagStore,
+            bindTag: env.bindTag,
+            onUnauthorized: { repo.onUnauthorized() },
+            feedback: env.feedback
+        )
+        let clock = env.trustedClock
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
     /// Фабрика хост-редьюсера фото-отметки (этап 7). Собирается из графа (`checkpointStore`, `markStore`,
     /// `trustedClock.sample` для времени/окна, `locationProvider`, дисковые замыкания `writeFrame`/
     /// `deleteFrame`) + размер ростера выбранной команды. Возвращает `nil`, когда команда не выбрана

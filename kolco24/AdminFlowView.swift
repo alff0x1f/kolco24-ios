@@ -24,6 +24,7 @@ private enum AdminRoute: Hashable {
     case judge(eventType: String)
     case checkChip
     case checkMemberChip
+    case provisioning
 }
 
 struct AdminFlowView: View {
@@ -41,6 +42,8 @@ struct AdminFlowView: View {
                         CheckChipHostView()
                     case .checkMemberChip:
                         CheckMemberChipHostView()
+                    case .provisioning:
+                        ProvisioningHostView()
                     }
                 }
         }
@@ -199,9 +202,11 @@ private struct AdminHomeView: View {
                 }
             } else {
                 Section {
-                    // Провижининг — задача 12; сейчас видим, но задизейблен.
-                    AdminActionRow(systemImage: "link.badge.plus", iconBg: Color.charcoal,
-                                   label: "Привязать чип к КП", sub: "Скоро", enabled: false)
+                    NavigationLink(value: AdminRoute.provisioning) {
+                        AdminActionRow(systemImage: "link.badge.plus", iconBg: Color.charcoal,
+                                       label: "Привязать чип к КП", sub: "Запись кода на чип", enabled: true)
+                    }
+                    .listRowBackground(Color.card)
                     NavigationLink(value: AdminRoute.checkChip) {
                         AdminActionRow(systemImage: "magnifyingglass", iconBg: Color.charcoal,
                                        label: "Проверить чип КП", sub: "Оффлайн-проверка привязки", enabled: true)
@@ -369,6 +374,28 @@ private struct CheckMemberChipHostView: View {
             }
         }
         .task { if model == nil { model = appModel.makeMemberChipCheckModel() } }
+    }
+}
+
+/// Строит `ProvisioningModel` из графа (`AppModel.makeProvisioningModel`) и держит его, пока экран
+/// на стеке. На 401 (`closeRequested`) — авто-возврат в форму логина (сессия уже отозвана).
+private struct ProvisioningHostView: View {
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var model: ProvisioningModel?
+
+    var body: some View {
+        Group {
+            if let model {
+                ProvisioningView(model: model)
+                    .onChange(of: model.closeRequested) { _, requested in
+                        if requested { dismiss() }
+                    }
+            } else {
+                AdminNoTeamPlaceholder()
+            }
+        }
+        .task { if model == nil { model = appModel.makeProvisioningModel() } }
     }
 }
 

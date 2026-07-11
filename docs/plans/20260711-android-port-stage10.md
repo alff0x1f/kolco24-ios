@@ -286,12 +286,12 @@
 - Modify: `kolco24/App/AppModel.swift` (фабрика)
 - Create: `kolco24Tests/App/ProvisioningModelTests.swift`
 
-- [ ] `@Observable @MainActor ProvisioningModel`: список КП гонки (подписка `checkpointStore`) + счётчики «уже привязано» из `tagStore` + свежие за сессию (per-КП uid-множества; max/subtract-логика против двойного счёта после mid-session legend refresh); выбранный КП (автопереход к следующему после success)
-- [ ] флоу: тап 1 (reading при `waitingForChip`) → `binding(uid)` → `bindTag(raceId, cp.id, uid)` в unstructured Task (§6); success → `chipCodeFromHex(code)` (битый hex → `failed("Неверный код от сервера")`) → `buildChipRecord` → `scanner.setPendingWrite(uid:record:)` → `waitingForWrite` «Приложите чип ещё раз»; 401 → `adminAuthRepository.onUnauthorized()` + закрытие в логин; прочие ошибки → `failed(provisionErrorMessage)`
-- [ ] тап 2: reading с `writeResult` → success → `success(number)` + фидбек/fanfare-мотив + автопереход; `failed`/read-back mismatch → «Не удалось записать, приложите снова» (остаёмся `waitingForWrite`, pending-write сохранён — повтор безопасен, header-last); чужой uid → подсказка «Приложите тот же чип», без записи
-- [ ] `ProvisioningView` («Привязка чипов»): список/степпер КП (моно-номер + стоимость + цветовая полоса + «Уже привязано: N» + зелёные пилюли свежих `chipTokenLabel`), hero выбранного КП, зона сканирования со статусом `ProvisionState`; смена КП сбрасывает pending-write
-- [ ] свежие `ProvisioningModelTests` (in-memory БД + `FakeChipScanner` + `FakeTransport`): happy path тап1→bind→pending-write→тап2→success; 409/404/403 → failed с верной строкой; 401 → onUnauthorized (holder → loggedOut); битый hex → «Неверный код от сервера»; write-fail оставляет waitingForWrite; свежая пилюля не даёт двойного счёта после рефреша легенды
-- [ ] run tests - must pass before next task
+- [x] `@Observable @MainActor ProvisioningModel`: список КП гонки (подписка `checkpointStore`) + счётчики «уже привязано» из `tagStore` + свежие за сессию (per-КП uid-множества; max/subtract-логика против двойного счёта после mid-session legend refresh); выбранный КП (автопереход к следующему после success)
+- [x] флоу: тап 1 (reading при `waitingForChip`) → `binding(uid)` → `bindTag(raceId, cp.id, uid)` в unstructured Task (§6); success → `chipCodeFromHex(code)` (битый hex → `failed("Неверный код от сервера")`) → `buildChipRecord` → `scanner.setPendingWrite(uid:record:)` → `waitingForWrite` «Приложите чип ещё раз»; 401 → `adminAuthRepository.onUnauthorized()` + закрытие в логин; прочие ошибки → `failed(provisionErrorMessage)`
+- [x] тап 2: reading с `writeResult` → success → `success(number)` + фидбек/fanfare-мотив + автопереход; `failed`/read-back mismatch → «Не удалось записать, приложите снова» (остаёмся `waitingForWrite`, pending-write сохранён — повтор безопасен, header-last); чужой uid → подсказка «Приложите тот же чип», без записи
+- [x] `ProvisioningView` («Привязка чипов»): список/степпер КП (моно-номер + стоимость + цветовая полоса + «Уже привязано: N» + зелёные пилюли свежих `chipTokenLabel`), hero выбранного КП, зона сканирования со статусом `ProvisionState`; смена КП сбрасывает pending-write
+- [x] свежие `ProvisioningModelTests` (in-memory БД + `FakeChipScanner` + `FakeTransport`): happy path тап1→bind→pending-write→тап2→success; 409/404/403 → failed с верной строкой; 401 → onUnauthorized (holder → loggedOut); битый hex → «Неверный код от сервера»; write-fail оставляет waitingForWrite; свежая пилюля не даёт двойного счёта после рефреша легенды
+- [x] run tests - must pass before next task
 
 ### Task 13: Верификация приёмки
 

@@ -62,6 +62,10 @@ final class AppEnvironment {
     /// Переходы сессии (login/logout/onUnauthorized) поверх cloud-клиента + `adminTokenStore` +
     /// `adminSessionHolder`. Строится **после** клиентов.
     let adminAuthRepository: AdminAuthRepository
+    /// `POST /app/race/<id>/tags/` (привязка чипа к КП) на **cloud-клиенте** (админ-операции не ходят
+    /// на LAN, как login/logout). Замыкание — `ProvisioningModel` не видит `ApiClient` напрямую (граф
+    /// инкапсулирован фабрикой `AppModel.makeProvisioningModel`).
+    let bindTag: (Int, Int, String) async -> PostResult<TagBindResponse>
 
     // MARK: - Этап 9 (LAN-режим + настройки)
     /// Единый держатель текущего `RaceLease` (LAN-пин): координатор пишет через `set(_:)`, пин-гарды
@@ -272,6 +276,10 @@ final class AppEnvironment {
             store: adminTokenStore,
             holder: adminSessionHolder
         )
+        // Этап 10: провижининг — bind чипа к КП на cloud-клиенте (как login/logout).
+        bindTag = { raceId, checkpointId, nfcUid in
+            await cloud.bindTag(raceId: raceId, checkpointId: checkpointId, nfcUid: nfcUid)
+        }
 
         // Этап 6: дренаж взятий поверх тех же cloud/local-клиентов + `installId` (провенанс устройства).
         markUploadRepository = MarkUploadRepository(
