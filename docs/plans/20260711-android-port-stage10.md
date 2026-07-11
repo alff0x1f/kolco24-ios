@@ -179,11 +179,11 @@
 - Create: `kolco24/Core/Admin/JudgeScanLogic.swift`
 - Create: `kolco24Tests/Core/JudgeScanLogicTests.swift`
 
-- [ ] `enum JudgeScanResult: Equatable { poolNotReady, recorded(uid: String, number: Int), kpChip, unknownChip(uid: String) }`
-- [ ] `classifyJudgeScan(uid:memberNumber:hasKpCode:poolReady:) -> JudgeScanResult` — порядок веток 1:1: `!poolReady` → `.poolNotReady`; матч в пуле → `.recorded`; `hasKpCode` → `.kpChip`; иначе `.unknownChip`. **Только `.recorded` пишет строку**
-- [ ] `makeJudgeScan(id:raceId:eventType:participantNumber:nfcUid:sample:sourceInstallId:) -> JudgeScan` — идиома `makeKpTakeMark` (UUID и `TimeSample` параметрами): `takenAt = sample.wallMs`, `trustedTakenAt`/`elapsedRealtimeAt`/`bootCount` из сэмпла, флаги false
-- [ ] зеркало `JudgeScanModelTest.kt` → `JudgeScanLogicTests` (5 кейсов: poolNotReady короткое замыкание даже при матче / даже при KP-коде; матч → recorded; матч побеждает KP-код; not-in-pool + KP → kpChip; not-in-pool + noCode → unknownChip) + свежие на `makeJudgeScan`-маппинг полей (вкл. nil trusted/boot)
-- [ ] run tests - must pass before next task
+- [x] `enum JudgeScanResult: Equatable { poolNotReady, recorded(uid: String, number: Int), kpChip, unknownChip(uid: String) }`
+- [x] `classifyJudgeScan(uid:memberNumber:hasKpCode:poolReady:) -> JudgeScanResult` — порядок веток 1:1: `!poolReady` → `.poolNotReady`; матч в пуле → `.recorded`; `hasKpCode` → `.kpChip`; иначе `.unknownChip`. **Только `.recorded` пишет строку**
+- [x] `makeJudgeScan(id:raceId:eventType:participantNumber:nfcUid:sample:sourceInstallId:) -> JudgeScan` — идиома `makeKpTakeMark` (UUID и `TimeSample` параметрами): `takenAt = sample.wallMs`, `trustedTakenAt`/`elapsedRealtimeAt`/`bootCount` из сэмпла, флаги false
+- [x] зеркало `JudgeScanModelTest.kt` → `JudgeScanLogicTests` (5 кейсов: poolNotReady короткое замыкание даже при матче / даже при KP-коде; матч → recorded; матч побеждает KP-код; not-in-pool + KP → kpChip; not-in-pool + noCode → unknownChip) + свежие на `makeJudgeScan`-маппинг полей (вкл. nil trusted/boot)
+- [x] run tests - must pass before next task
 
 ### Task 7: Net+Data — judge_scans DTO, эндпоинт, дрейн-репозиторий
 
