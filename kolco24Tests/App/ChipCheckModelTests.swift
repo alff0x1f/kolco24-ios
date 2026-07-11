@@ -91,10 +91,12 @@ struct ChipCheckModelTests {
         let scanner = FakeChipScanner()
         model.start(scanner: scanner)
         await waitUntil { model.loaded }
-        try? await Task.sleep(for: .milliseconds(30)) // дать осесть подписке КП
 
-        scanner.emit(reading(code: code, uid: "0411223344AABB"))
+        // КП-подписка — отдельный observation, который мог ещё не осесть к моменту `loaded` (его
+        // выставляет только tag-подписка). Модель переклассифицирует на каждом чтении, поэтому шлём чип
+        // повторно, пока не получим `.ok` — детерминированно, без фиксированного sleep.
         await waitUntil {
+            scanner.emit(reading(code: code, uid: "0411223344AABB"))
             if case .ok = model.lastResult { return true }; return false
         }
         guard case let .ok(uid, number, cost, color, resultBid, checkMethod, chipsOnKp) = model.lastResult else {
@@ -120,9 +122,11 @@ struct ChipCheckModelTests {
 
         for i in 0..<25 { scanner.emit(reading(code: nil, uid: "U\(i)")) }
 
-        await waitUntil { model.feed.count == ChipCheckModel.feedCap }
-        #expect(model.feed.count == ChipCheckModel.feedCap) // 20
+        // Ждём терминальный признак (последний скан наверху ленты), а не только счётчик: при ожидании
+        // по `count` предикат мог бы стать истинным на 20-м скане, пока U20..U24 ещё в буфере (флейки).
+        await waitUntil { model.feed.first?.result.uid == "U24" }
         #expect(model.feed.first?.result.uid == "U24") // новые сверху
+        #expect(model.feed.count == ChipCheckModel.feedCap) // 20
     }
 
     // MARK: - MemberChipCheckModel
@@ -173,8 +177,9 @@ struct ChipCheckModelTests {
 
         for i in 0..<25 { scanner.emit(reading(code: nil, uid: "U\(i)")) }
 
-        await waitUntil { model.feed.count == MemberChipCheckModel.feedCap }
-        #expect(model.feed.count == MemberChipCheckModel.feedCap)
+        // Терминальный признак (последний скан наверху), не только счётчик — иначе флейки под нагрузкой.
+        await waitUntil { model.feed.first?.result.uid == "U24" }
         #expect(model.feed.first?.result.uid == "U24")
+        #expect(model.feed.count == MemberChipCheckModel.feedCap)
     }
 }

@@ -237,7 +237,12 @@ struct JudgeScanModelTests {
             scanner.emit(reading(code: nil, uid: "U\(i)"))
         }
 
-        await waitUntil { model.feed.count == JudgeScanModel.feedCap }
+        // Ждём терминальный признак (последний скан U24 наверху ленты), а не только счётчик: при ожидании
+        // по `count` предикат стал бы истинным на 20-м скане, пока U20..U24 ещё в буфере (флейки).
+        await waitUntil {
+            if case let .unknownChip(uid) = model.feed.first?.result { return uid == "U24" }
+            return false
+        }
         #expect(model.feed.count == JudgeScanModel.feedCap) // 20
         // Новые сверху: первый в ленте — последний просканированный (U24).
         if case let .unknownChip(uid) = model.feed.first?.result {

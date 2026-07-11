@@ -62,6 +62,10 @@ extension AdminTokenStore {
         if status == errSecItemNotFound {
             var addQuery = baseQuery(service: service)
             addQuery[kSecValueData as String] = data
+            // Токен админа не попадает в бэкапы и не восстанавливается на другое устройство:
+            // ...WhenUnlockedThisDeviceOnly вместо дефолтного ...WhenUnlocked. Атрибут доступности
+            // ставится ТОЛЬКО в add-атрибутах (не в match-запросе load/update).
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
             SecItemAdd(addQuery as CFDictionary, nil)
         }
     }

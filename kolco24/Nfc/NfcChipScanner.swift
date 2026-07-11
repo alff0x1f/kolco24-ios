@@ -40,11 +40,6 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
     /// ЭТОЙ делегатной очереди, не с MainActor) на 60-с системном таймауте, чтобы тихо пересоздать сессию,
     /// пока не истекло 20-с окно.
     private let shouldRestart: () -> Bool
-    /// Инжектируемый per-tag обработчик «что сделать с подключённым тегом» — выполняется на `readQueue`
-    /// (дедлок-дисциплина не меняется). `nil` → дефолтный обработчик (`defaultProcess`), который
-    /// воспроизводит текущее поведение (`readRecord` → `TagReading`) и, при активной pending-write ячейке
-    /// с совпавшим UID, вместо чтения делает `writeRecord` + read-back (этап 10, провижининг).
-    private let process: ((NfcTransport, String, TimeSample) -> TagReading)?
 
     /// Выделенная очередь для делегатных колбэков сессии (НЕ main).
     private let delegateQueue = DispatchQueue(label: "ru.kolco24.nfc.session")
@@ -72,12 +67,10 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
 
     init(
         sampleNow: @escaping () -> TimeSample,
-        shouldRestart: @escaping () -> Bool = { false },
-        process: ((NfcTransport, String, TimeSample) -> TagReading)? = nil
+        shouldRestart: @escaping () -> Bool = { false }
     ) {
         self.sampleNow = sampleNow
         self.shouldRestart = shouldRestart
-        self.process = process
         super.init()
     }
 
@@ -141,10 +134,10 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         lock.unlock()
     }
 
-    /// Дефолтный per-tag обработчик (используется, когда `process == nil`): воспроизводит текущее поведение
-    /// (`readRecord` → `TagReading`), а при вооружённой pending-write ячейке с совпавшим UID вместо чтения
-    /// делает `writeRecord` (header-last + read-back внутри) и кладёт исход в `writeResult`. Один механизм:
-    /// несовпадающий UID при активной ячейке → обычное чтение, `writeResult == nil`. Выполняется на `readQueue`.
+    /// Per-tag обработчик: воспроизводит чтение (`readRecord` → `TagReading`), а при вооружённой
+    /// pending-write ячейке с совпавшим UID вместо чтения делает `writeRecord` (header-last + read-back
+    /// внутри) и кладёт исход в `writeResult`. Один механизм: несовпадающий UID при активной ячейке →
+    /// обычное чтение, `writeResult == nil`. Выполняется на `readQueue`.
     private func defaultProcess(_ transport: NfcTransport, _ uid: String, _ sample: TimeSample) -> TagReading {
         lock.lock()
         let pendingUid = pendingWriteUid
@@ -255,12 +248,11 @@ extension NfcChipScanner: NFCTagReaderSessionDelegate {
                 return
             }
             // Блокирующее чтение/запись — на readQueue, НЕ на делегатной очереди сессии (дедлок-ловушка).
-            // Per-tag шаг вынесен в обработчик: инжектированный `process` или дефолтный (`readRecord`, а при
-            // вооружённой pending-write ячейке — `writeRecord`). Session-менеджмент ниже не меняется.
+            // Per-tag шаг: `defaultProcess` (`readRecord`, а при вооружённой pending-write ячейке —
+            // `writeRecord`). Session-менеджмент ниже не меняется.
             self.readQueue.async {
                 let transport = MiFareTransport(tag: miFare)
-                let reading = self.process?(transport, uid, sample)
-                    ?? self.defaultProcess(transport, uid, sample)
+                let reading = self.defaultProcess(transport, uid, sample)
 
                 self.lock.lock()
                 self.lastUid = uid
