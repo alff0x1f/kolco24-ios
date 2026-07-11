@@ -22,6 +22,8 @@ import SwiftUI
 /// Пункт навигации админ-флоу. `judge` несёт `eventType` (`start`/`finish`) для `JudgeScanView`.
 private enum AdminRoute: Hashable {
     case judge(eventType: String)
+    case checkChip
+    case checkMemberChip
 }
 
 struct AdminFlowView: View {
@@ -35,6 +37,10 @@ struct AdminFlowView: View {
                     switch route {
                     case let .judge(eventType):
                         JudgeScanHostView(eventType: eventType)
+                    case .checkChip:
+                        CheckChipHostView()
+                    case .checkMemberChip:
+                        CheckMemberChipHostView()
                     }
                 }
         }
@@ -193,13 +199,19 @@ private struct AdminHomeView: View {
                 }
             } else {
                 Section {
-                    // Провижининг + проверки чипов — задачи 11–12 / 10; сейчас видимы, но задизейблены.
+                    // Провижининг — задача 12; сейчас видим, но задизейблен.
                     AdminActionRow(systemImage: "link.badge.plus", iconBg: Color.charcoal,
                                    label: "Привязать чип к КП", sub: "Скоро", enabled: false)
-                    AdminActionRow(systemImage: "magnifyingglass", iconBg: Color.charcoal,
-                                   label: "Проверить чип КП", sub: "Скоро", enabled: false)
-                    AdminActionRow(systemImage: "person.crop.circle.badge.questionmark", iconBg: Color.charcoal,
-                                   label: "Проверить чип участника", sub: "Скоро", enabled: false)
+                    NavigationLink(value: AdminRoute.checkChip) {
+                        AdminActionRow(systemImage: "magnifyingglass", iconBg: Color.charcoal,
+                                       label: "Проверить чип КП", sub: "Оффлайн-проверка привязки", enabled: true)
+                    }
+                    .listRowBackground(Color.card)
+                    NavigationLink(value: AdminRoute.checkMemberChip) {
+                        AdminActionRow(systemImage: "person.crop.circle.badge.questionmark", iconBg: Color.charcoal,
+                                       label: "Проверить чип участника", sub: "Оффлайн-проверка браслета", enabled: true)
+                    }
+                    .listRowBackground(Color.card)
                 } header: {
                     Text("Чипы")
                 }
@@ -323,6 +335,56 @@ private struct JudgeScanHostView: View {
         .task {
             if model == nil { model = appModel.makeJudgeScanModel(eventType: eventType) }
         }
+    }
+}
+
+/// Строит `ChipCheckModel` из графа (`AppModel.makeChipCheckModel`) и держит его, пока экран на стеке.
+private struct CheckChipHostView: View {
+    @Environment(AppModel.self) private var appModel
+    @State private var model: ChipCheckModel?
+
+    var body: some View {
+        Group {
+            if let model {
+                CheckChipView(model: model)
+            } else {
+                AdminNoTeamPlaceholder()
+            }
+        }
+        .task { if model == nil { model = appModel.makeChipCheckModel() } }
+    }
+}
+
+/// Строит `MemberChipCheckModel` из графа (`AppModel.makeMemberChipCheckModel`) и держит его.
+private struct CheckMemberChipHostView: View {
+    @Environment(AppModel.self) private var appModel
+    @State private var model: MemberChipCheckModel?
+
+    var body: some View {
+        Group {
+            if let model {
+                CheckMemberChipView(model: model)
+            } else {
+                AdminNoTeamPlaceholder()
+            }
+        }
+        .task { if model == nil { model = appModel.makeMemberChipCheckModel() } }
+    }
+}
+
+/// Защитная подсказка «нет выбранной команды» (в меню такой ряд недоступен — гонка неизвестна).
+private struct AdminNoTeamPlaceholder: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.3.sequence")
+                .font(.system(size: 40))
+                .foregroundStyle(Color.sub)
+            Text("Сначала выберите команду")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.ink)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.paper)
     }
 }
 

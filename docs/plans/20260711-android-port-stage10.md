@@ -252,14 +252,14 @@
 - Create: `kolco24Tests/Core/MemberChipCheckLogicTests.swift`
 - Create: `kolco24Tests/App/ChipCheckModelTests.swift`
 
-- [ ] `classifyChipCheck(uid:bid:tag:checkpoint:chipsOnKp:) -> ChipCheckResult` (`noCode(uid)` / `unknownChip(uid,bid)` / `inconsistent(uid,bid,checkpointId)` / `ok(uid,number,cost,color,bid,checkMethod,chipsOnKp)`) — порядок веток 1:1; полностью оффлайн, `bid = LegendCrypto.bid(code)`, **без** дешифровки и без `reveal`-сайд-эффекта
-- [ ] `classifyMemberChipCheck(uid:memberNumber:hasKpCode:) -> MemberChipCheckResult` (`ok(uid,number)` / `kpChip(uid)` / `unknown(uid)`) — UID-only матч, код — лишь диагностика
-- [ ] `changedNibbles(uid:previous:) -> Set<Int>` — позиции отличий от предыдущего скана (пусто без базы)
-- [ ] `ChipCheckModel` (подписки `tagStore`/`checkpointStore` для гонки, null-sentinel «игнор до первой эмиссии», счётчик «чипов на этом КП» из `tags`) и `MemberChipCheckModel` (подписка `memberTagStore`, размер пула для idle-строки) — оба transient (без персиста), лента 20, тот же K24-стрим сканера; фабрики `AppModel.makeChipCheckModel()`/`makeMemberChipCheckModel()`
-- [ ] `CheckChipView` («Проверка чипов КП»): hero — номер КП + стоимость (`pointsWord`) + цветовая полоса + `bid · checkMethod` + «На этом КП ещё N чипов» + UID с diff-подсветкой (`changedNibbles`); amber/red герои для noCode/unknown/inconsistent. `CheckMemberChipView` («Проверка браслетов»): `№N` + зелёная галка / amber «Это чип КП» / красный «Неизвестный чип»; idle-строка с размером пула (0 — признак «не синхронизирован»)
-- [ ] зеркала `ChipCheckModelTest.kt`/`MemberChipCheckModelTest.kt` → `ChipCheckLogicTests`/`MemberChipCheckLogicTests` (ok при tag+cp; nullBid → noCode; нет тега → unknownChip; тег без чекпойнта → inconsistent; незнакомый цвет → nil; locked → ok с nil cost; changedNibbles-варианты; браслет: пул побеждает KP-код, kpChip, unknown)
-- [ ] свежие `ChipCheckModelTests` (обе модели: сканы до эмиссии пула игнорируются; лента капится)
-- [ ] run tests - must pass before next task
+- [x] `classifyChipCheck(uid:bid:tag:checkpoint:chipsOnKp:) -> ChipCheckResult` (`noCode(uid)` / `unknownChip(uid,bid)` / `inconsistent(uid,bid,checkpointId)` / `ok(uid,number,cost,color,bid,checkMethod,chipsOnKp)`) — порядок веток 1:1; полностью оффлайн, `bid = LegendCrypto.bid(code)`, **без** дешифровки и без `reveal`-сайд-эффекта
+- [x] `classifyMemberChipCheck(uid:memberNumber:hasKpCode:) -> MemberChipCheckResult` (`ok(uid,number)` / `kpChip(uid)` / `unknown(uid)`) — UID-only матч, код — лишь диагностика
+- [x] `changedNibbles(uid:previous:) -> Set<Int>` — позиции отличий от предыдущего скана (пусто без базы)
+- [x] `ChipCheckModel` (подписки `tagStore`/`checkpointStore` для гонки, null-sentinel «игнор до первой эмиссии», счётчик «чипов на этом КП» из `tags`) и `MemberChipCheckModel` (подписка `memberTagStore`, размер пула для idle-строки) — оба transient (без персиста), лента 20, тот же K24-стрим сканера; фабрики `AppModel.makeChipCheckModel()`/`makeMemberChipCheckModel()`
+- [x] `CheckChipView` («Проверка чипов КП»): hero — номер КП + стоимость (`pluralRu` баллы) + цветовая полоса + `bid · checkMethod` + «На этом КП ещё N чипов» + UID с diff-подсветкой (`changedNibbles`); amber/red герои для noCode/unknown/inconsistent. `CheckMemberChipView` («Проверка браслетов»): `№N` + зелёная галка / amber «Это чип КП» / красный «Неизвестный чип»; idle-строка с размером пула (0 — признак «не синхронизирован»)
+- [x] зеркала `ChipCheckModelTest.kt`/`MemberChipCheckModelTest.kt` → `ChipCheckLogicTests`/`MemberChipCheckLogicTests` (ok при tag+cp; nullBid → noCode; нет тега → unknownChip; тег без чекпойнта → inconsistent; незнакомый цвет → nil; locked → ok с nil cost; changedNibbles-варианты; браслет: пул побеждает KP-код, kpChip, unknown)
+- [x] свежие `ChipCheckModelTests` (обе модели: сканы до эмиссии пула игнорируются; лента капится)
+- [x] run tests - must pass before next task
 
 ### Task 11: Net+Core — bindTag + ProvisioningLogic
 

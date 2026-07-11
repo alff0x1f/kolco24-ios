@@ -399,6 +399,48 @@ final class AppModel {
         return model
     }
 
+    /// Фабрика хост-редьюсера read-only проверки КП-чипов «Проверка чипов КП» (этап 10). `raceId` —
+    /// гонка ВЫБРАННОЙ команды; возвращает `nil`, когда команда не выбрана (легенда неизвестна).
+    /// Полностью оффлайн (легенда из сторов, без сети). Прод-сканер `NfcChipScanner` инстанцируется
+    /// здесь (App-слой в одном модуле — CoreNFC не импортируется), как у скан/судейского флоу.
+    func makeChipCheckModel() -> ChipCheckModel? {
+        guard let raceId = selectedRaceId else { return nil }
+        let model = ChipCheckModel(
+            raceId: raceId,
+            tagStore: env.tagStore,
+            checkpointStore: env.checkpointStore,
+            feedback: env.feedback
+        )
+        let clock = env.trustedClock
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
+    /// Фабрика хост-редьюсера read-only проверки браслетов «Проверка браслетов» (этап 10). `raceId` —
+    /// гонка ВЫБРАННОЙ команды; возвращает `nil`, когда команда не выбрана (пул неизвестен). Полностью
+    /// оффлайн (пул `member_tags` из стора, без сети). Прод-сканер инстанцируется здесь.
+    func makeMemberChipCheckModel() -> MemberChipCheckModel? {
+        guard let raceId = selectedRaceId else { return nil }
+        let model = MemberChipCheckModel(
+            raceId: raceId,
+            memberTagStore: env.memberTagStore,
+            feedback: env.feedback
+        )
+        let clock = env.trustedClock
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
     /// Фабрика хост-редьюсера фото-отметки (этап 7). Собирается из графа (`checkpointStore`, `markStore`,
     /// `trustedClock.sample` для времени/окна, `locationProvider`, дисковые замыкания `writeFrame`/
     /// `deleteFrame`) + размер ростера выбранной команды. Возвращает `nil`, когда команда не выбрана
