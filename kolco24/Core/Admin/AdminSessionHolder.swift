@@ -15,6 +15,15 @@
 //  Поток `updates` следует `TrustedClock.statusUpdates`/`LeaseHolder`: `AsyncStream` с
 //  `.bufferingNewest(1)`, ручной дедуп равных, seed текущим значением (первый кадр уже в буфере).
 //
+//  Deviation от `LeaseHolder`: здесь **мульти-консумер** реестр континуэйшнов, а не единственный
+//  стрим. `updates` — вычисляемое свойство: каждое обращение чеканит **свежий** `AsyncStream`,
+//  засеянный текущим значением и зарегистрированный в реестре под замком. Причина — потребитель
+//  (`AdminHomeView` во `fullScreenCover`) итерирует стрим из `.task`, который отменяется при закрытии
+//  ковера; одиночный `let`-стрим после этого мёртв для всех будущих подписчиков (второе открытие ковера
+//  в рамках одного запуска перестаёт реагировать на login/logout/401). Свежий стрим на подписку это
+//  чинит; `onTermination` снимает свою континуэйшн из реестра (берёт `NSLock` — колбэк приходит на
+//  произвольном executor, без обратных вызовов в async-контекст).
+//
 
 import Foundation
 
@@ -23,20 +32,38 @@ final class AdminSessionHolder: @unchecked Sendable {
     private let lock = NSLock()
     private var _session: AdminSession
 
-    /// Поток обновлений сессии (замена `StateFlow`; равные значения дедупятся). Потребитель —
-    /// `AdminHomeView`, ветвящийся между формой входа и меню.
-    nonisolated let updates: AsyncStream<AdminSession>
-    private let continuation: AsyncStream<AdminSession>.Continuation
+    /// Реестр активных континуэйшнов подписчиков (мульти-консумер fan-out). Ключ — монотонный id,
+    /// чтобы `onTermination` мог снять именно свою запись.
+    private var continuations: [Int: AsyncStream<AdminSession>.Continuation] = [:]
+    private var nextContinuationId = 0
 
-    /// - Parameter initial: засеянное значение (обычно `AdminSessionHolder.seed(...)`); сразу кладётся
-    ///   в буфер стрима.
+    /// - Parameter initial: засеянное значение (обычно `AdminSessionHolder.seed(...)`).
     init(initial: AdminSession) {
         self._session = initial
+    }
 
-        var cont: AsyncStream<AdminSession>.Continuation!
-        self.updates = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont = $0 }
-        self.continuation = cont
-        cont.yield(initial)
+    /// Поток обновлений сессии (замена `StateFlow`; равные значения дедупятся). Потребитель —
+    /// `AdminHomeView`, ветвящийся между формой входа и меню. **Вычисляемое** свойство: каждое обращение
+    /// чеканит свежий стрим, засеянный текущим значением, — так повторная подписка (второе открытие
+    /// ковера) снова живая.
+    nonisolated var updates: AsyncStream<AdminSession> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont in
+            lock.lock()
+            let id = nextContinuationId
+            nextContinuationId += 1
+            continuations[id] = cont
+            let seed = _session
+            lock.unlock()
+
+            cont.yield(seed)
+
+            cont.onTermination = { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock()
+                self.continuations[id] = nil
+                self.lock.unlock()
+            }
+        }
     }
 
     /// Текущая сессия (синхронное чтение под замком).
@@ -55,7 +82,7 @@ final class AdminSessionHolder: @unchecked Sendable {
         return nil
     }
 
-    /// Устанавливает сессию: дедуп равных (полный no-op), иначе публикация в стрим.
+    /// Устанавливает сессию: дедуп равных (полный no-op), иначе публикация во все активные стримы.
     func set(_ session: AdminSession) {
         lock.lock()
         guard session != _session else {
@@ -63,9 +90,12 @@ final class AdminSessionHolder: @unchecked Sendable {
             return
         }
         _session = session
+        let targets = Array(continuations.values)
         lock.unlock()
 
-        continuation.yield(session)
+        for cont in targets {
+            cont.yield(session)
+        }
     }
 
     /// Считает начальную сессию из [store] на момент [nowUtcIso]: сохранённая, но протухшая →

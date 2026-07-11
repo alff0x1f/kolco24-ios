@@ -69,4 +69,48 @@ struct AdminSessionHolderTests {
         let next = await iter.next()
         #expect((next ?? nil) == loggedIn2)
     }
+
+    // MARK: multi-subscriber fan-out
+
+    /// Два независимых подписчика: каждый получает seed и последующие `set`.
+    @Test
+    func stream_twoSubscribers_eachReceiveSeedAndChanges() async {
+        let holder = AdminSessionHolder(initial: .loggedOut)
+        var iter1 = holder.updates.makeAsyncIterator()
+        var iter2 = holder.updates.makeAsyncIterator()
+
+        #expect((await iter1.next() ?? nil) == .loggedOut) // seed
+        #expect((await iter2.next() ?? nil) == .loggedOut) // seed
+
+        holder.set(loggedIn)
+        #expect((await iter1.next() ?? nil) == loggedIn)
+        #expect((await iter2.next() ?? nil) == loggedIn)
+
+        holder.set(loggedIn2)
+        #expect((await iter1.next() ?? nil) == loggedIn2)
+        #expect((await iter2.next() ?? nil) == loggedIn2)
+    }
+
+    /// Регрессия: новый подписчик, взятый **после** завершения предыдущего стрима (закрытие ковера
+    /// отменяет `.task`), всё ещё получает seed текущим значением и живые обновления. Со старым
+    /// одноконсумерным `let`-стримом этот кейс ломался (мёртвый стрим на второе открытие).
+    @Test
+    func stream_newSubscriberAfterPriorTerminated_receivesSeedAndUpdates() async {
+        let holder = AdminSessionHolder(initial: .loggedOut)
+
+        // Первый подписчик итерирует и завершается — стрим/итератор освобождается (onTermination).
+        do {
+            var iter = holder.updates.makeAsyncIterator()
+            _ = await iter.next()
+        }
+
+        holder.set(loggedIn) // смена, пока живых подписчиков нет
+
+        // Новый подписчик после завершения предыдущего — снова живой.
+        var iter2 = holder.updates.makeAsyncIterator()
+        #expect((await iter2.next() ?? nil) == loggedIn) // seed = текущее значение
+
+        holder.set(loggedIn2)
+        #expect((await iter2.next() ?? nil) == loggedIn2)
+    }
 }
