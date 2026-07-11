@@ -303,9 +303,9 @@
 
 ### Task 14: [Final] Документация
 
-- [ ] обновить `CLAUDE.md`: новый раздел «Admin layer» (Keychain-стор, sessia/holder, bearer-wiring, судейский дрейн, NFC-обобщение, двухтаповый провижининг, deviations, grep-инварианты, known fact про judge_scans-эндпоинт)
-- [ ] обновить `docs/plans/android-port.md`: этап 10 → ✅ со ссылкой на этот план; «Инфо о чипе» (GET_VERSION) помечено «не портируется» (решение при планировании)
-- [ ] переместить этот план в `docs/plans/completed/`
+- [x] обновить `CLAUDE.md`: новый раздел «Admin layer» (Keychain-стор, sessia/holder, bearer-wiring, судейский дрейн, NFC-обобщение, двухтаповый провижининг, deviations, grep-инварианты, known fact про judge_scans-эндпоинт)
+- [x] обновить `docs/plans/android-port.md`: этап 10 → ✅ со ссылкой на этот план; «Инфо о чипе» (GET_VERSION) помечено «не портируется» (решение при планировании)
+- [x] переместить этот план в `docs/plans/completed/`
 
 ## Post-Completion
 
