@@ -20,6 +20,10 @@ struct SettingsView: View {
     /// Наследуется из окружения корня — канал тостов для 10-тап разблокировки отладки.
     @Environment(AppModel.self) private var appModel
     let model: SettingsModel
+    /// Открыть админ-флоу: хост (`TeamView`) закрывает шит настроек и презентует `fullScreenCover`
+    /// с `AdminFlowView` (шит и полноэкранный оверлей нельзя показывать одновременно — оверлей
+    /// поднимается после закрытия шита через `onDismiss`).
+    var onOpenAdmin: () -> Void = {}
 
     /// Секция «Отладка» видна сразу в debug-сборке, иначе — после 10 тапов по «Версия».
     /// Per-composition: сбрасывается при закрытии шита (state вью).
@@ -46,6 +50,7 @@ struct SettingsView: View {
                 if debugUnlocked {
                     debugSection
                 }
+                adminSection
                 aboutSection
             }
             .listStyle(.insetGrouped)
@@ -193,6 +198,31 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Администратор (этап 10)
+
+    /// Ряд «Администратор» (всегда видимый, как на Android). Сабтайтл — email активной сессии или «Войти».
+    /// Тап: закрыть шит настроек, затем хост поднимет `fullScreenCover` с `AdminFlowView`.
+    private var adminSection: some View {
+        Section {
+            Button {
+                dismiss()
+                onOpenAdmin()
+            } label: {
+                SettingsRow(
+                    systemImage: "person.badge.key.fill",
+                    iconBg: Color.charcoal,
+                    label: "Администратор",
+                    sub: model.adminSubtitle,
+                    showChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(Color.card)
+        } header: {
+            Text("Организатор")
+        }
+    }
+
     // MARK: - О приложении
 
     private var aboutSection: some View {
@@ -259,6 +289,8 @@ private struct SettingsRow: View {
     let label: String
     let sub: String
     var tint: Color = Color.ink
+    /// Показать шеврон-дисклоужер справа (ряды-переходы, напр. «Администратор»).
+    var showChevron: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -280,6 +312,11 @@ private struct SettingsRow: View {
                     .foregroundStyle(Color.sub)
             }
             Spacer(minLength: 8)
+            if showChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.sub.opacity(0.45))
+            }
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())

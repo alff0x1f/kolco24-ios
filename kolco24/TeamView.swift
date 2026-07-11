@@ -32,6 +32,11 @@ struct TeamView: View {
     @State private var settingsModel: SettingsModel?
     /// Открыт ли шит «Настройки».
     @State private var showSettings = false
+    /// Запрошен ли админ-флоу из шита настроек: тап по ряду закрывает шит, а `fullScreenCover`
+    /// поднимается в `onDismiss` (шит и полноэкранный оверлей нельзя показывать одновременно).
+    @State private var pendingAdmin = false
+    /// Открыт ли `fullScreenCover` с `AdminFlowView`.
+    @State private var showAdmin = false
 
     var body: some View {
         content
@@ -49,10 +54,19 @@ struct TeamView: View {
                     UploadView(model: uploadModel)
                 }
             }
-            .sheet(isPresented: $showSettings) {
-                if let settingsModel {
-                    SettingsView(model: settingsModel)
+            .sheet(isPresented: $showSettings, onDismiss: {
+                // Админ-флоу поднимаем после закрытия шита настроек (взаимоисключающие презентации).
+                if pendingAdmin {
+                    pendingAdmin = false
+                    showAdmin = true
                 }
+            }) {
+                if let settingsModel {
+                    SettingsView(model: settingsModel, onOpenAdmin: { pendingAdmin = true })
+                }
+            }
+            .fullScreenCover(isPresented: $showAdmin) {
+                AdminFlowView(onClose: { showAdmin = false })
             }
             .sheet(isPresented: Binding(
                 get: { model?.bindMember != nil },

@@ -230,13 +230,13 @@
 - Modify: `kolco24/App/SettingsModel.swift` (сабтайтл ряда)
 - Modify: `kolco24/UploadView.swift`
 
-- [ ] ряд «Администратор» в `SettingsView` (секция над «О приложении», всегда видимый; сабтайтл «Войти» / email из `AdminSessionHolder`-стрима через `SettingsModel`) → закрыть шит → `fullScreenCover` с `AdminFlowView` (прецедент `TeamPickerFlowView`)
-- [ ] `AdminFlowView`: `NavigationStack`; корень `AdminHomeView` ветвится по сессии (подписка на `adminSessionHolder.updates`): `loggedOut` → форма (email/пароль, «Войти», спиннер, inline-ошибка из `adminErrorMessage`; submit → `adminAuthRepository.login` в unstructured Task); `loggedIn` → email + ряды «Привязать чип к КП» / «Проверить чип КП» / «Проверить чип участника» / «Отметка старта» / «Отметка финиша» / «Выйти» (logout в unstructured Task); без выбранной команды — подсказка вместо рядов (raceId неизвестен)
-- [ ] `JudgeScanView(model:)`: заголовок «Отметка старта»/«Отметка финиша», крупные живые часы (локальная TZ, `Font.mono`), статус последнего скана (зелёный `№N` / amber «Это чип КП» / красный «Неизвестный чип» + uid), лента недавних (до 20), плейт «Синхронизируйте гонку» при несинхронизированном пуле; `.task` — `start()` (сканер + permission-хуки не нужны, NFC-шторка системная); `onDisappear`/dismiss → `stop()`
-- [ ] `UploadView`: секция «Судейские отметки» по `UploadModel` (стиль/правила секции «Трек»)
-- [ ] дизайн-токены/компоненты проекта (`Color.card`, `SectionHeader`, `MiscRowView`-паттерн, `Font.mono`); превью на `FakeChipScanner`
-- [ ] прогон полного сьюта + сборка (UI-задача — hard gate не ослабляется)
-- [ ] run tests - must pass before next task
+- [x] ряд «Администратор» в `SettingsView` (секция над «О приложении», всегда видимый; сабтайтл «Войти» / email из `AdminSessionHolder`-стрима через `SettingsModel`) → закрыть шит → `fullScreenCover` с `AdminFlowView` (прецедент `TeamPickerFlowView`)
+- [x] `AdminFlowView`: `NavigationStack`; корень `AdminHomeView` ветвится по сессии (подписка на `adminSessionHolder.updates`): `loggedOut` → форма (email/пароль, «Войти», спиннер, inline-ошибка из `adminErrorMessage`; submit → `adminAuthRepository.login` в unstructured Task); `loggedIn` → email + ряды «Привязать чип к КП» / «Проверить чип КП» / «Проверить чип участника» / «Отметка старта» / «Отметка финиша» / «Выйти» (logout в unstructured Task); без выбранной команды — подсказка вместо рядов (raceId неизвестен)
+- [x] `JudgeScanView(model:)`: заголовок «Отметка старта»/«Отметка финиша», крупные живые часы (локальная TZ, `Font.mono`), статус последнего скана (зелёный `№N` / amber «Это чип КП» / красный «Неизвестный чип» + uid), лента недавних (до 20), плейт «Синхронизируйте гонку» при несинхронизированном пуле; `.task` — `start()` (сканер + permission-хуки не нужны, NFC-шторка системная); `onDisappear`/dismiss → `stop()`
+- [x] `UploadView`: секция «Судейские отметки» по `UploadModel` (стиль/правила секции «Трек»)
+- [x] дизайн-токены/компоненты проекта (`Color.card`, `SectionHeader`, `MiscRowView`-паттерн, `Font.mono`); превью на `FakeChipScanner`
+- [x] прогон полного сьюта + сборка (UI-задача — hard gate не ослабляется)
+- [x] run tests - must pass before next task
 
 ### Task 10: Core+App+UI — проверки чипов (КП и браслет, read-only)
 

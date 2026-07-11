@@ -113,6 +113,14 @@ final class SettingsModel {
         }
     }
 
+    // MARK: - Администратор (этап 10)
+
+    /// Сабтайтл ряда «Администратор»: email при активной сессии, иначе «Войти». Сессия читается
+    /// синхронно из держателя на момент создания модели — шит настроек и `fullScreenCover` админа
+    /// взаимоисключающи (сессия не меняется, пока открыт шит), а `AsyncStream` держателя одноконсумерный
+    /// (единственный потребитель — `AdminHomeView`). Свежая модель на каждое открытие читает актуальное.
+    let adminSubtitle: String
+
     // MARK: - Версия
 
     /// Лейбл «версия (билд)» — из инжектированных значений (тестируемость; прод берёт из `Bundle.main`).
@@ -147,6 +155,12 @@ final class SettingsModel {
         self.teamId = teamId
         self.nowMs = nowMs
         self.versionLabel = "\(versionName) (\(versionCode))"
+        // Сабтайтл ряда «Администратор»: email активной сессии, иначе «Войти» (синхронный снимок).
+        if case let .loggedIn(email, _, _) = appModel.currentAdminSession {
+            self.adminSubtitle = email
+        } else {
+            self.adminSubtitle = "Войти"
+        }
         // Сид тумблера синхронно из держателя (стрим догонит асинхронно — без вспышки «выкл» на открытии).
         self.currentLease = env.leaseHolder.value
 

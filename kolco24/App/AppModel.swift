@@ -422,6 +422,28 @@ final class AppModel {
         )
     }
 
+    // MARK: - Админ-сессия (этап 10)
+
+    /// Текущая admin-сессия (синхронное чтение держателя) — для сида ветвления `AdminHomeView`
+    /// и сабтайтла ряда «Администратор». Держит `env` инкапсулированным.
+    var currentAdminSession: AdminSession { env.adminSessionHolder.session }
+
+    /// Поток обновлений admin-сессии — единственный потребитель `AdminHomeView` (ветвление форма/меню
+    /// + реакция на 401-разлогин). `AsyncStream` одноконсумерный, поэтому сабтайтл ряда в `SettingsModel`
+    /// читает сессию синхронно (шит настроек и `fullScreenCover` админа взаимоисключающи — сессия не
+    /// меняется, пока открыт шит настроек).
+    var adminSessionUpdates: AsyncStream<AdminSession> { env.adminSessionHolder.updates }
+
+    /// Вход организатора: делегирует `AdminAuthRepository.login` (persist + публикация сессии на успехе).
+    func adminLogin(email: String, password: String) async -> LoginOutcome {
+        await env.adminAuthRepository.login(email: email, password: password)
+    }
+
+    /// Выход организатора: `AdminAuthRepository.logout` (best-effort сеть, локальная сессия чистится всегда).
+    func adminLogout() async {
+        await env.adminAuthRepository.logout()
+    }
+
     /// Синхронный мост к актору `TrustedClock` для `NfcChipScanner.sampleNow` (§8). Вызывается на
     /// выделенной NFC-делегатной очереди (не на кооперативном пуле Swift Concurrency), поэтому
     /// короткое семафорное ожидание не роняет рантайм — та же санкционированная кодовой базой техника,
