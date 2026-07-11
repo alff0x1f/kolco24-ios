@@ -121,14 +121,14 @@
 - Create: `kolco24Tests/Core/AdminSessionTests.swift`
 - Create: `kolco24Tests/Core/AdminSessionHolderTests.swift`
 
-- [ ] `enum AdminSession: Equatable { case loggedOut, loggedIn(email: String, token: String, expiresAt: String) }`
-- [ ] `isExpired(expiresAt: String, nowUtcIso: String) -> Bool` — лексикографическое `nowUtcIso >= expiresAt` (граница = истёк); хелпер `nowUtcIso(_ date:)` — форматирование `yyyy-MM-dd'T'HH:mm:ss'Z'` UTC
-- [ ] `enum LoginOutcome: Equatable { success, invalidCredentials, rateLimited, offline, error }` + `loginOutcome(_ result: PostResult<...>)`-маппинг живёт в репозитории (Task 4 — `Core/` не видит `Net/`); в Core — `adminErrorMessage(_ outcome:) -> String?` (русские строки, success → nil)
-- [ ] `AdminSessionHolder` — идиома `LeaseHolder`: `final class @unchecked Sendable`, `NSLock`; sync `var session: AdminSession` + sync `var token: String?` (nil при loggedOut — читает `tokenProvider`); `set(_:)` — дедуп равных + публикация; `nonisolated let updates: AsyncStream<AdminSession>` (`.bufferingNewest(1)`, seed текущим значением)
-- [ ] сид-логика `seed(store:nowUtcIso:)`: сохранённая сессия с протухшим `expiresAt` → `store.clear()` + `.loggedOut`; живая → `.loggedIn` (deviation: в Android `seedSession` живёт в репозитории — на iOS сид переезжает в holder, чтобы `AppEnvironment` мог посидировать сессию **до** создания клиентов/репозитория)
-- [ ] зеркало `AdminAuthRepositoryTest.kt` (**только** часть isExpired/seed/errorMessage — остальные кейсы этого файла зеркалятся в Task 4) → `AdminSessionTests` (past/future/**boundary=expired**; seed протухшей → loggedOut + clear; живой → loggedIn; пустой стор → loggedOut) + `adminErrorMessage`-маппинг
-- [ ] свежие `AdminSessionHolderTests` (sync token при loggedIn/loggedOut; стрим публикует изменения, дедупит равные, seed первым кадром)
-- [ ] run tests - must pass before next task
+- [x] `enum AdminSession: Equatable { case loggedOut, loggedIn(email: String, token: String, expiresAt: String) }`
+- [x] `isExpired(expiresAt: String, nowUtcIso: String) -> Bool` — лексикографическое `nowUtcIso >= expiresAt` (граница = истёк); хелпер `nowUtcIso(_ date:)` — форматирование `yyyy-MM-dd'T'HH:mm:ss'Z'` UTC
+- [x] `enum LoginOutcome: Equatable { success, invalidCredentials, rateLimited, offline, error }` + `loginOutcome(_ result: PostResult<...>)`-маппинг живёт в репозитории (Task 4 — `Core/` не видит `Net/`); в Core — `adminErrorMessage(_ outcome:) -> String?` (русские строки, success → nil)
+- [x] `AdminSessionHolder` — идиома `LeaseHolder`: `final class @unchecked Sendable`, `NSLock`; sync `var session: AdminSession` + sync `var token: String?` (nil при loggedOut — читает `tokenProvider`); `set(_:)` — дедуп равных + публикация; `nonisolated let updates: AsyncStream<AdminSession>` (`.bufferingNewest(1)`, seed текущим значением)
+- [x] сид-логика `seed(store:nowUtcIso:)`: сохранённая сессия с протухшим `expiresAt` → `store.clear()` + `.loggedOut`; живая → `.loggedIn` (deviation: в Android `seedSession` живёт в репозитории — на iOS сид переезжает в holder, чтобы `AppEnvironment` мог посидировать сессию **до** создания клиентов/репозитория)
+- [x] зеркало `AdminAuthRepositoryTest.kt` (**только** часть isExpired/seed/errorMessage — остальные кейсы этого файла зеркалятся в Task 4) → `AdminSessionTests` (past/future/**boundary=expired**; seed протухшей → loggedOut + clear; живой → loggedIn; пустой стор → loggedOut) + `adminErrorMessage`-маппинг
+- [x] свежие `AdminSessionHolderTests` (sync token при loggedIn/loggedOut; стрим публикует изменения, дедупит равные, seed первым кадром)
+- [x] run tests - must pass before next task
 
 ### Task 3: Net — AuthDtos + ApiClient.login/logout + bearer
 
