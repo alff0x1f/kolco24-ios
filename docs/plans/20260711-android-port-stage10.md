@@ -195,12 +195,12 @@
 - Modify: `kolco24Tests/Net/ApiClientTests.swift`
 - Create: `kolco24Tests/Data/Repositories/JudgeScanUploadRepositoryTests.swift`
 
-- [ ] `JudgeScanUploadRequest{source_install_id, scans}` (**без `team_id`**), `JudgeScanDto` с ренеймами `wall_ms←takenAt`/`trusted_ms←trustedTakenAt`/`elapsed_at←elapsedRealtimeAt` и ручным `encode(to:)` (nullable-правило этапа 6: `trusted_ms`/`boot_count` — явный `null`), `init(from scan: JudgeScan)`; `JudgeScanUploadResponse{accepted}`
-- [ ] `ApiClient.uploadJudgeScans(raceId:sourceInstallId:scans:) async -> PostResult<JudgeScanUploadResponse>` — generic `post`, trailing-slash путь `/app/race/<id>/judge_scans/`, **без ретраев**
-- [ ] `actor JudgeScanUploadRepository` — структурный клон `TrackUploadRepository`: `inFlight`-tryLock, `uploadPending(raceId:)`, `uploadAllPending()` по `pendingUploadRaces()`, `flushRace` = Local → Cloud независимо через общий `drainUploadLoop` (fetch = `unuploadedLocal/Cloud(raceId:limit: uploadBatch)`, mark = `markUploadedLocal/Cloud(ids:)` — **без** version-guard, write-once); ключ outcomes — `raceId: Int`; `outcomes` + `nonisolated outcomeUpdates` (`.bufferingNewest(1)`); `wallNow` инжектируется
-- [ ] зеркало `JudgeScanDtoTest.kt` → `JudgeScanDtoTests` (маппинг всех полей; null trusted/boot проходят явным null; snake_case ключи в JSON; парсинг `accepted`); дополнение `ApiClientTests` (uploadJudgeScans: путь/тело по `FakeTransport`-логу, статус-маппинг)
-- [ ] зеркало `JudgeScanRepositoryTest.kt` → `JudgeScanUploadRepositoryTests` (in-memory БД + `FakeTransport`): accepted-subset маркирует только принятые; offline/error оставляет pending; дуал-таргет независимость (Local падает — Cloud дренится); no-progress → `.error`; reentrant при held-lock — no-op; `uploadAllPending` обходит все pending-гонки; outcome-callback не срабатывает, когда нечего слать
-- [ ] run tests - must pass before next task
+- [x] `JudgeScanUploadRequest{source_install_id, scans}` (**без `team_id`**), `JudgeScanDto` с ренеймами `wall_ms←takenAt`/`trusted_ms←trustedTakenAt`/`elapsed_at←elapsedRealtimeAt` и ручным `encode(to:)` (nullable-правило этапа 6: `trusted_ms`/`boot_count` — явный `null`), `init(from scan: JudgeScan)`; `JudgeScanUploadResponse{accepted}`
+- [x] `ApiClient.uploadJudgeScans(raceId:sourceInstallId:scans:) async -> PostResult<JudgeScanUploadResponse>` — generic `post`, trailing-slash путь `/app/race/<id>/judge_scans/`, **без ретраев**
+- [x] `actor JudgeScanUploadRepository` — структурный клон `TrackUploadRepository`: `inFlight`-tryLock, `uploadPending(raceId:)`, `uploadAllPending()` по `pendingUploadRaces()`, `flushRace` = Local → Cloud независимо через общий `drainUploadLoop` (fetch = `unuploadedLocal/Cloud(raceId:limit: uploadBatch)`, mark = `markUploadedLocal/Cloud(ids:)` — **без** version-guard, write-once); ключ outcomes — `raceId: Int`; `outcomes` + `nonisolated outcomeUpdates` (`.bufferingNewest(1)`); `wallNow` инжектируется
+- [x] зеркало `JudgeScanDtoTest.kt` → `JudgeScanDtoTests` (маппинг всех полей; null trusted/boot проходят явным null; snake_case ключи в JSON; парсинг `accepted`); дополнение `ApiClientTests` (uploadJudgeScans: путь/тело по `FakeTransport`-логу, статус-маппинг)
+- [x] зеркало `JudgeScanRepositoryTest.kt` → `JudgeScanUploadRepositoryTests` (in-memory БД + `FakeTransport`): accepted-subset маркирует только принятые; offline/error оставляет pending; дуал-таргет независимость (Local падает — Cloud дренится); no-progress → `.error`; reentrant при held-lock — no-op; `uploadAllPending` обходит все pending-гонки; outcome-callback не срабатывает, когда нечего слать
+- [x] run tests - must pass before next task
 
 ### Task 8: App — JudgeScanModel + триггеры дрейна + UploadModel-секция
 

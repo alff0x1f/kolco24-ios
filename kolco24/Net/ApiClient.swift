@@ -248,6 +248,33 @@ struct ApiClient {
         }
     }
 
+    /// `POST /app/race/<raceId>/judge_scans/` — выгрузка батча судейских пиков [scans] гонки. Тело —
+    /// `JudgeScanUploadRequest(source_install_id, scans)` (**без** `team_id` — судейская станция
+    /// сканит все команды гонки, скоуп — только `raceId` в URL), сериализуется в `Data` **один раз**
+    /// (те же байты хэшируются в подпись и отправляются — конвенция `post`). `200`/`201` →
+    /// `.success` с распарсенным `JudgeScanUploadResponse` (принятые клиентские `id` для
+    /// идемпотентного upsert); прочие статусы маппятся по `post`. Один и тот же метод обслуживает обе
+    /// цели (cloud / local LAN) — цель выбирается экземпляром `ApiClient`. **Не ретраится** (гарантия
+    /// `post`: 403 auth-vs-skew неразличим, replay небезопасен). Путь — с завершающим слэшем (как
+    /// `/marks/`). Серверный эндпоинт ещё не задеплоен — до деплоя строки остаются pending (self-heal).
+    func uploadJudgeScans(
+        raceId: Int,
+        sourceInstallId: String,
+        scans: [JudgeScanDto]
+    ) async -> PostResult<JudgeScanUploadResponse> {
+        let request = JudgeScanUploadRequest(sourceInstallId: sourceInstallId, scans: scans)
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(request)
+        } catch {
+            // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
+            return .error(code: nil)
+        }
+        return await post(url: endpoint("/app/race/\(raceId)/judge_scans/"), body: body) {
+            try JSONDecoder().decode(JudgeScanUploadResponse.self, from: $0)
+        }
+    }
+
     // MARK: - Эндпоинты (админ-авторизация)
 
     /// `POST /app/login/` с admin-`email`/`password`. Тело — `LoginRequest`, сериализуется в `Data`

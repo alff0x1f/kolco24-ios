@@ -531,6 +531,80 @@ struct ApiClientTests {
         #expect(transport.last?.value(forHTTPHeaderField: "Authorization") == "Bearer tok-live")
     }
 
+    // MARK: - Судейские сканы: uploadJudgeScans (Зеркало `ApiClientTest.kt` uploadJudgeScans-группа)
+
+    private func judgeScan(id: String) -> JudgeScan {
+        JudgeScan(
+            id: id,
+            raceId: 8,
+            eventType: "start",
+            participantNumber: 101,
+            nfcUid: "04A2B3C4D5E680",
+            takenAt: 1_718_900_000_000,
+            trustedTakenAt: 1_718_900_000_123,
+            elapsedRealtimeAt: 9_876_543,
+            bootCount: 7,
+            sourceInstallId: "install-abc"
+        )
+    }
+
+    @Test func uploadJudgeScans_200_parsesAccepted_andPostsBodyToTrailingSlashPath() async throws {
+        // Зеркало `uploadJudgeScans_200_parsesAccepted...`: путь с trailing slash, тело с
+        // source_install_id и БЕЗ team_id, распарсенный accepted.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: #"{"accepted":["scan-1"]}"#)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.uploadJudgeScans(
+            raceId: 8, sourceInstallId: "install-abc", scans: [JudgeScanDto(from: judgeScan(id: "scan-1"))]
+        )
+
+        guard case .success(let response) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(response.accepted == ["scan-1"])
+
+        let recorded = transport.last!
+        #expect(recorded.httpMethod == "POST")
+        #expect(fullPath(recorded.url!) == "/app/race/8/judge_scans/")
+        #expect(recorded.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        let body = try #require(recorded.httpBody)
+        let obj = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(obj["source_install_id"] as? String == "install-abc")
+        #expect(obj["team_id"] == nil) // судейский контракт — без team_id
+        let scans = try #require(obj["scans"] as? [[String: Any]])
+        #expect(scans.count == 1)
+        #expect(scans[0]["id"] as? String == "scan-1")
+        #expect(scans[0]["event_type"] as? String == "start")
+    }
+
+    @Test func uploadJudgeScans_403_returnsForbidden() async {
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 403)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.uploadJudgeScans(raceId: 8, sourceInstallId: "i", scans: [])
+        if case .forbidden = result {} else { Issue.record("ожидался .forbidden, получено \(result)") }
+    }
+
+    @Test func uploadJudgeScans_404_returnsErrorWithCode() async {
+        // Эндпоинт ещё не задеплоен → 404 → .error(404), строки остаются pending (self-heal).
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 404)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.uploadJudgeScans(raceId: 8, sourceInstallId: "i", scans: [])
+        if case .error(let code) = result { #expect(code == 404) }
+        else { Issue.record("ожидался .error(404), получено \(result)") }
+    }
+
+    @Test func uploadJudgeScans_connectionDrop_returnsOffline() async {
+        // POST → URLError → .offline (асимметрия с GET).
+        let transport = FakeTransport()
+        transport.enqueueError(URLError(.networkConnectionLost))
+        let client = fixedTsClient(transport: transport)
+        let result = await client.uploadJudgeScans(raceId: 8, sourceInstallId: "i", scans: [])
+        if case .offline = result {} else { Issue.record("ожидался .offline, получено \(result)") }
+    }
+
     // MARK: - Часть 2: эндпоинты и условные GET (Зеркало `ApiClientTest.kt` fetch-группа)
     //
     // bindTag (типизированный POST-метод `ApiClientTest.kt`) — Task 11. Generic `post` — часть 1 выше.
