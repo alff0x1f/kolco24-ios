@@ -26,10 +26,24 @@ import Foundation
 ///   подъёма чтения).
 /// - `sample`: снимок `TrustedClock.sample()`, взятый **до** чтения чипа
 ///   (Technical Details §8) — единый источник времени взятия и монотонного окна.
+/// - `writeResult`: итог записи чипа, когда сканер отработал pending-write ячейку
+///   провижининга (этап 10) — тап по чипу с совпавшим UID выполняет
+///   `writeRecord` + read-back и кладёт исход сюда. `nil` для обычного чтения (и
+///   для тапа по чужому UID при активной ячейке — модель тогда покажет «Приложите
+///   тот же чип»). Дефолт `nil` в `init` сохраняет существующие construction-sites
+///   (`FakeChipScanner`, `ScanModelTests`) без изменений.
 struct TagReading: Equatable {
     let code: Data?
     let uid: String
     let sample: TimeSample
+    let writeResult: ChipWriteResult?
+
+    init(code: Data?, uid: String, sample: TimeSample, writeResult: ChipWriteResult? = nil) {
+        self.code = code
+        self.uid = uid
+        self.sample = sample
+        self.writeResult = writeResult
+    }
 }
 
 /// Источник чтений чипов — платформенная граница NFC-сессии.
@@ -59,6 +73,21 @@ protocol ChipScanning: AnyObject {
 extension ChipScanning {
     /// По умолчанию — no-op: фейкам/превью нечего показывать (нет системной NFC-шторки).
     func setStatus(_ text: String) {}
+}
+
+/// Расширение `ChipScanning` для провижининга (этап 10): pending-write ячейка. Хост
+/// (`ProvisioningModel`) вооружает сканер записью на следующий тап (`setPendingWrite`) и
+/// разоружает её при смене КП / успешной записи / закрытии экрана (`clearPendingWrite`). Ячейку
+/// читает ТОЛЬКО инжектированный обработчик сканера на `readQueue` (один механизм, не два — см.
+/// `NfcChipScanner.defaultProcess`): при совпадении UID он делает `writeRecord` + read-back и кладёт
+/// исход в `TagReading.writeResult`; несовпадающий UID → обычное чтение (`writeResult == nil`).
+/// Реализуется `NfcChipScanner` (Nfc/) и тестовым фейком; обычный скан/судейский/чек-флоу его не
+/// требуют (потому это отдельный протокол, а не расширение `ChipScanning` — этап 5 не трогается).
+protocol ProvisioningScanning: ChipScanning {
+    /// Вооружить сканер записью [record] для следующего тапа по чипу с совпавшим [uid].
+    func setPendingWrite(uid: String, record: Data)
+    /// Разоружить сканер (смена КП / успешная запись / закрытие экрана). Идемпотентно.
+    func clearPendingWrite()
 }
 
 /// Проигрыватель аудио/тактильного фидбека скана — платформенная граница

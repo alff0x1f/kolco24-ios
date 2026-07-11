@@ -82,6 +82,21 @@ struct UploadView: View {
                     Text("Трек")
                 }
             }
+
+            // Секция «Судейские отметки» — только когда есть судейские пики (скрыта при нуле, правило
+            // секции «Трек»). Скоуп — гонка (судейская станция сканит все команды).
+            if model.hasJudge {
+                Section {
+                    ReceiptRow(line: model.judgeCloudLine)
+                        .listRowBackground(Color.card)
+                    if let finish = model.judgeFinishLine {
+                        ReceiptRow(line: finish)
+                            .listRowBackground(Color.card)
+                    }
+                } header: {
+                    Text("Судейские отметки")
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)

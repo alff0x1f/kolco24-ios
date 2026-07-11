@@ -131,12 +131,15 @@ final class AppModel {
         uploadLoopTask?.cancel()
         let repo = env.markUploadRepository
         let trackRepo = env.trackUploadRepository
+        let judgeRepo = env.judgeScanUploadRepository
         let intervalMs = uploadRetryIntervalMs
         uploadLoopTask = Task {
             while !Task.isCancelled {
                 await repo.uploadAllPending()
                 // Этап 8: тем же таймером досылаем и точки трека (обе цели, self-heal).
                 await trackRepo.uploadAllPending()
+                // Этап 10: и судейские пики старта/финиша (обе цели, self-heal).
+                await judgeRepo.uploadAllPending()
                 do {
                     try await Task.sleep(for: .milliseconds(intervalMs))
                 } catch {
@@ -204,6 +207,9 @@ final class AppModel {
         // Этап 8: смена команды (и первая эмиссия) — заодно оппортунистический дренаж точек трека.
         let trackRepo = env.trackUploadRepository
         Task { await trackRepo.uploadAllPending() }
+        // Этап 10: и судейских пиков (застрявших под прежней гонкой) — тем же оппортунистическим дренажом.
+        let judgeRepo = env.judgeScanUploadRepository
+        Task { await judgeRepo.uploadAllPending() }
 
         // Launch B: реактивный refresh при смене гонки (teams/legend/member_tags), ошибка → тост.
         if selection.raceId != lastReactiveRaceId {
@@ -366,6 +372,101 @@ final class AppModel {
         return model
     }
 
+    /// Фабрика хост-редьюсера судейского экрана «Отметка старта/финиша» (этап 10). `raceId` — гонка
+    /// ВЫБРАННОЙ команды (судейская станция сканит все команды одной гонки); возвращает `nil`, когда
+    /// команда не выбрана (гонка неизвестна). Держит `env` инкапсулированным. Прод-сканер `NfcChipScanner`
+    /// (из `Nfc/`) инстанцируется здесь (App-слой в одном модуле — CoreNFC не импортируется); семпл
+    /// доверенного времени берётся ДО чтения чипа синхронным мостом к актору-часам, `shouldRestart`
+    /// читает потокобезопасный `liveness` (§60-с рестарт, как у скан/bind-флоу).
+    func makeJudgeScanModel(eventType: String) -> JudgeScanModel? {
+        guard let raceId = selectedRaceId else { return nil }
+        let model = JudgeScanModel(
+            raceId: raceId,
+            eventType: eventType,
+            judgeScanStore: env.judgeScanStore,
+            repository: env.judgeScanUploadRepository,
+            memberTagsRepository: env.memberTagsRepository,
+            feedback: env.feedback,
+            installId: env.installId
+        )
+        let clock = env.trustedClock
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
+    /// Фабрика хост-редьюсера read-only проверки КП-чипов «Проверка чипов КП» (этап 10). `raceId` —
+    /// гонка ВЫБРАННОЙ команды; возвращает `nil`, когда команда не выбрана (легенда неизвестна).
+    /// Полностью оффлайн (легенда из сторов, без сети). Прод-сканер `NfcChipScanner` инстанцируется
+    /// здесь (App-слой в одном модуле — CoreNFC не импортируется), как у скан/судейского флоу.
+    func makeChipCheckModel() -> ChipCheckModel? {
+        guard let raceId = selectedRaceId else { return nil }
+        let model = ChipCheckModel(
+            raceId: raceId,
+            tagStore: env.tagStore,
+            checkpointStore: env.checkpointStore,
+            feedback: env.feedback
+        )
+        let clock = env.trustedClock
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
+    /// Фабрика хост-редьюсера read-only проверки браслетов «Проверка браслетов» (этап 10). `raceId` —
+    /// гонка ВЫБРАННОЙ команды; возвращает `nil`, когда команда не выбрана (пул неизвестен). Полностью
+    /// оффлайн (пул `member_tags` из стора, без сети). Прод-сканер инстанцируется здесь.
+    func makeMemberChipCheckModel() -> MemberChipCheckModel? {
+        guard let raceId = selectedRaceId else { return nil }
+        let model = MemberChipCheckModel(
+            raceId: raceId,
+            memberTagStore: env.memberTagStore,
+            feedback: env.feedback
+        )
+        let clock = env.trustedClock
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
+    /// Фабрика хост-редьюсера провижининга «Привязка чипов» (этап 10). `raceId` — гонка ВЫБРАННОЙ
+    /// команды; возвращает `nil`, когда команда не выбрана (легенда/гонка неизвестна). `bindTag` бьёт
+    /// cloud-клиент (замыкание графа); `onUnauthorized` при 401 роняет admin-сессию (форма логина).
+    /// Прод-сканер `NfcChipScanner` инстанцируется здесь (App-слой в одном модуле — CoreNFC не
+    /// импортируется) и умеет pending-write (реализует `ProvisioningScanning`).
+    func makeProvisioningModel() -> ProvisioningModel? {
+        guard let raceId = selectedRaceId else { return nil }
+        let repo = env.adminAuthRepository
+        let model = ProvisioningModel(
+            raceId: raceId,
+            checkpointStore: env.checkpointStore,
+            tagStore: env.tagStore,
+            bindTag: env.bindTag,
+            onUnauthorized: { repo.onUnauthorized() },
+            feedback: env.feedback
+        )
+        let clock = env.trustedClock
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
     /// Фабрика хост-редьюсера фото-отметки (этап 7). Собирается из графа (`checkpointStore`, `markStore`,
     /// `trustedClock.sample` для времени/окна, `locationProvider`, дисковые замыкания `writeFrame`/
     /// `deleteFrame`) + размер ростера выбранной команды. Возвращает `nil`, когда команда не выбрана
@@ -387,6 +488,29 @@ final class AppModel {
             writeFrame: env.writeFrame,
             deleteFrame: env.deleteFrame
         )
+    }
+
+    // MARK: - Админ-сессия (этап 10)
+
+    /// Текущая admin-сессия (синхронное чтение держателя) — для сида ветвления `AdminHomeView`
+    /// и сабтайтла ряда «Администратор». Держит `env` инкапсулированным.
+    var currentAdminSession: AdminSession { env.adminSessionHolder.session }
+
+    /// Поток обновлений admin-сессии для `AdminHomeView` (ветвление форма/меню + реакция на
+    /// 401-разлогин). `AsyncStream` держателя мультиконсумерный (свежий стрим на каждую подписку,
+    /// сидированный текущим значением). Сабтайтл ряда в `SettingsModel` тем не менее читает сессию
+    /// синхронно — не из-за одноконсумерности, а потому что шит настроек и `fullScreenCover` админа
+    /// взаимоисключающи: сессия не меняется, пока ряд «Администратор» на экране.
+    var adminSessionUpdates: AsyncStream<AdminSession> { env.adminSessionHolder.updates }
+
+    /// Вход организатора: делегирует `AdminAuthRepository.login` (persist + публикация сессии на успехе).
+    func adminLogin(email: String, password: String) async -> LoginOutcome {
+        await env.adminAuthRepository.login(email: email, password: password)
+    }
+
+    /// Выход организатора: `AdminAuthRepository.logout` (best-effort сеть, локальная сессия чистится всегда).
+    func adminLogout() async {
+        await env.adminAuthRepository.logout()
     }
 
     /// Синхронный мост к актору `TrustedClock` для `NfcChipScanner.sampleNow` (§8). Вызывается на

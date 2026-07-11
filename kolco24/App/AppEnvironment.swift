@@ -25,6 +25,10 @@ final class AppEnvironment {
 
     let database: AppDatabase
 
+    /// UUID устройства (тот же, что заголовок `X-Install-Id`): `source_install_id` тела судейского
+    /// пика (этап 10, `JudgeScanModel`) и провенанс дренажей выгрузки.
+    let installId: String
+
     // MARK: - Сторы (этап 2)
     let raceStore: RaceStore
     let teamStore: TeamStore
@@ -40,12 +44,28 @@ final class AppEnvironment {
     /// Точки GPS-трека (этап 8): наблюдение/дренаж выгрузки. Питает `TrackUploadRepository` (и
     /// `TrackRecorder` задачи 6).
     let trackStore: TrackStore
+    /// Судейские пики старта/финиша (этап 10): наблюдение/дренаж выгрузки. Питает
+    /// `JudgeScanUploadRepository` (и `JudgeScanModel` задачи 8).
+    let judgeScanStore: JudgeScanStore
 
     // MARK: - Репозитории (этап 3)
     let raceRepository: RaceRepository
     let teamRepository: TeamRepository
     let legendRepository: LegendRepository
     let memberTagsRepository: MemberTagsRepository
+
+    // MARK: - Этап 10 (админ-режим)
+    /// Единый держатель `AdminSession`: строится **до** пары клиентов (оба берут синхронный bearer
+    /// `tokenProvider = { adminSessionHolder.token }`), сидится из `adminTokenStore` (прод — Keychain;
+    /// `inMemory` — изолированный in-memory load/save). UI подписывается на `updates`.
+    let adminSessionHolder: AdminSessionHolder
+    /// Переходы сессии (login/logout/onUnauthorized) поверх cloud-клиента + `adminTokenStore` +
+    /// `adminSessionHolder`. Строится **после** клиентов.
+    let adminAuthRepository: AdminAuthRepository
+    /// `POST /app/race/<id>/tags/` (привязка чипа к КП) на **cloud-клиенте** (админ-операции не ходят
+    /// на LAN, как login/logout). Замыкание — `ProvisioningModel` не видит `ApiClient` напрямую (граф
+    /// инкапсулирован фабрикой `AppModel.makeProvisioningModel`).
+    let bindTag: (Int, Int, String) async -> PostResult<TagBindResponse>
 
     // MARK: - Этап 9 (LAN-режим + настройки)
     /// Единый держатель текущего `RaceLease` (LAN-пин): координатор пишет через `set(_:)`, пин-гарды
@@ -71,6 +91,13 @@ final class AppEnvironment {
     /// `AppModel`, что и marks (5-мин таймер / смена команды), плюс live-upload из `TrackRecorder`
     /// (задача 6). Структурный клон `markUploadRepository` без frame-цикла/version-guard.
     let trackUploadRepository: TrackUploadRepository
+
+    // MARK: - Этап 10 (выгрузка судейских пиков)
+    /// Идемпотентный дренаж судейских пиков в обе цели (LAN + облако). Дёргается теми же триггерами
+    /// `AppModel`, что marks/track (5-мин таймер / смена команды), плюс fire-and-forget после каждой
+    /// записанной строки и выделенный 60-с цикл из `JudgeScanModel` (задача 8). Структурный клон
+    /// `trackUploadRepository` с ключом `raceId`.
+    let judgeScanUploadRepository: JudgeScanUploadRepository
 
     // MARK: - Этап 5 (скан-флоу)
     /// Общие доверенные часы: прод — `pair.clock` из `ApiClients.makeDefaultPair()` (раньше терялся),
@@ -122,6 +149,8 @@ final class AppEnvironment {
         localOrigin: String,
         leaseStore: RaceLeaseStore,
         themePreference: ThemePreference,
+        adminTokenStore: AdminTokenStore,
+        adminSessionHolder: AdminSessionHolder,
         trustedClock: TrustedClock,
         locationProvider: any CurrentLocationProvider,
         feedback: any ScanFeedbackPlaying,
@@ -137,6 +166,7 @@ final class AppEnvironment {
         wallNow: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.database = database
+        self.installId = installId
         self.trustedClock = trustedClock
         self.locationProvider = locationProvider
         self.feedback = feedback
@@ -149,6 +179,7 @@ final class AppEnvironment {
         self.isReducedAccuracy = isReducedAccuracy
         self.requestLocationAuthorization = requestLocationAuthorization
         self.themePreference = themePreference
+        self.adminSessionHolder = adminSessionHolder
         let writer = database.writer
 
         // Сторы — локальные константы (их захватывают замыкания координатора; ссылка на `self.<store>`
@@ -164,6 +195,7 @@ final class AppEnvironment {
         let memberChipBindingStore = MemberChipBindingStore(writer)
         let syncMetaStore = SyncMetaStore(writer)
         let trackStore = TrackStore(writer)
+        let judgeScanStore = JudgeScanStore(writer)
         self.raceStore = raceStore
         self.teamStore = teamStore
         self.selectedTeamStore = selectedTeamStore
@@ -175,6 +207,7 @@ final class AppEnvironment {
         self.memberChipBindingStore = memberChipBindingStore
         self.syncMetaStore = syncMetaStore
         self.trackStore = trackStore
+        self.judgeScanStore = judgeScanStore
 
         // Этап 9: держатель lease конструируется ДО репозиториев — его синхронно читает `isRacePinned`
         // (пин-гард трёх pin-guard-репозиториев). Сидится из стора; write-through — обратно в стор.
@@ -234,6 +267,20 @@ final class AppEnvironment {
         self.legendRepository = legendRepository
         self.memberTagsRepository = memberTagsRepository
 
+        // Этап 10: репозиторий admin-сессии — ПОСЛЕ клиентов (login/logout бьют cloud-клиент). Сессию
+        // уже посидировал holder (передан в init ДО клиентов, чтобы оба взяли `tokenProvider`); здесь
+        // репозиторий лишь двигает её на login/logout/onUnauthorized и персистит в `adminTokenStore`.
+        adminAuthRepository = AdminAuthRepository(
+            apiLogin: { email, password in await cloud.login(email: email, password: password) },
+            apiLogout: { await cloud.logout() },
+            store: adminTokenStore,
+            holder: adminSessionHolder
+        )
+        // Этап 10: провижининг — bind чипа к КП на cloud-клиенте (как login/logout).
+        bindTag = { raceId, checkpointId, nfcUid in
+            await cloud.bindTag(raceId: raceId, checkpointId: checkpointId, nfcUid: nfcUid)
+        }
+
         // Этап 6: дренаж взятий поверх тех же cloud/local-клиентов + `installId` (провенанс устройства).
         markUploadRepository = MarkUploadRepository(
             markStore: markStore,
@@ -250,6 +297,16 @@ final class AppEnvironment {
             trackStore: trackStore,
             cloud: cloud,
             local: local,
+            wallNow: wallNow
+        )
+
+        // Этап 10: дренаж судейских пиков поверх тех же cloud/local-клиентов + `installId`
+        // (`source_install_id` тела запроса, без `team_id`). Структурный клон track-дренажа с ключом `raceId`.
+        judgeScanUploadRepository = JudgeScanUploadRepository(
+            judgeScanStore: judgeScanStore,
+            cloud: cloud,
+            local: local,
+            installId: installId,
             wallNow: wallNow
         )
 
@@ -286,7 +343,13 @@ final class AppEnvironment {
     /// `TrustedClock`/`InstallId` (`ApiClients.makeDefaultPair`). Origins = base URL'ы из `Secrets`.
     static func makeShared() throws -> AppEnvironment {
         let database = try AppDatabase.makeShared()
-        let pair = ApiClients.makeDefaultPair()
+        // Этап 10: admin-сессия сидится из Keychain и держатель строится ДО пары клиентов, чтобы оба
+        // (cloud + LAN) получили синхронный bearer `tokenProvider = { holder.token }` поверх подписи.
+        let adminTokenStore = AdminTokenStore.fromKeychain()
+        let adminSessionHolder = AdminSessionHolder(
+            initial: AdminSessionHolder.seed(store: adminTokenStore, nowUtcIso: nowUtcIso())
+        )
+        let pair = ApiClients.makeDefaultPair(tokenProvider: { adminSessionHolder.token })
         // Прод-чтение кадров с диска для frame-дренажа: `PhotoStorage` под `Application Support`
         // (тот же корень, что `kolco24.db`). `PhotoPaths.decode` уже отфильтровал небезопасные пути
         // до вызова reader'а, так что `absoluteURL` получает только `marks/<id>/<uuid>.jpg`.
@@ -308,6 +371,8 @@ final class AppEnvironment {
             // Этап 9: lease/тема персистятся в UserDefaults (тот же адаптер-идиома, что `ClockAnchorStore`).
             leaseStore: RaceLeaseStore.fromUserDefaults(),
             themePreference: ThemePreference.fromUserDefaults(),
+            adminTokenStore: adminTokenStore,
+            adminSessionHolder: adminSessionHolder,
             // Раньше `pair.clock` терялся; теперь общий якорь времени живёт в графе.
             trustedClock: pair.clock,
             // One-shot GPS-фикс на момент взятия (задача 6); прод аудио/тактильный фидбек (задача 7).
@@ -343,7 +408,8 @@ final class AppEnvironment {
         makeEngine: @escaping @Sendable () -> any TrackEngine = { NoTrackEngine() },
         hasLocationAccess: @escaping @Sendable () -> Bool = { true },
         isReducedAccuracy: @escaping @Sendable () -> Bool = { false },
-        requestLocationAuthorization: @escaping @Sendable () -> Void = {}
+        requestLocationAuthorization: @escaping @Sendable () -> Void = {},
+        adminTokenStore: AdminTokenStore? = nil
     ) throws -> AppEnvironment {
         let database = try AppDatabase.makeInMemory()
         // In-memory prefs (изолированы от `UserDefaults.standard` — тесты не пишут глобальное состояние
@@ -357,15 +423,30 @@ final class AppEnvironment {
             load: { prefs.get(ThemePreference.keyThemeMode) },
             save: { prefs.set(ThemePreference.keyThemeMode, $0) }
         )
+        // Этап 10: admin-стор — инъецируемый (тесты передают свой, чтобы посидировать/проверять его),
+        // иначе изолированный in-memory (Keychain в тестах НЕ трогается). Держатель строится ДО клиентов,
+        // оба берут его bearer.
+        let tokenStore = adminTokenStore ?? Self.makeInMemoryAdminStore()
+        let adminSessionHolder = AdminSessionHolder(
+            initial: AdminSessionHolder.seed(store: tokenStore, nowUtcIso: nowUtcIso())
+        )
         return AppEnvironment(
             database: database,
-            cloud: testClient(baseURL: cloudOrigin, transport: transport),
-            local: testClient(baseURL: localOrigin, transport: transport),
+            cloud: testClient(
+                baseURL: cloudOrigin, transport: transport,
+                tokenProvider: { adminSessionHolder.token }
+            ),
+            local: testClient(
+                baseURL: localOrigin, transport: transport,
+                tokenProvider: { adminSessionHolder.token }
+            ),
             installId: "install-test",
             cloudOrigin: cloudOrigin,
             localOrigin: localOrigin,
             leaseStore: leaseStore,
             themePreference: themePreference,
+            adminTokenStore: tokenStore,
+            adminSessionHolder: adminSessionHolder,
             trustedClock: trustedClock,
             locationProvider: locationProvider,
             feedback: feedback,
@@ -382,6 +463,14 @@ final class AppEnvironment {
 
     /// Дефолтные часы для `inMemory`: фейковые провайдеры (elapsed/wall = 0, boot = nil),
     /// без персистенции. Тесты, которым важно управляемое время, инжектят собственный `TrustedClock`.
+    /// Изолированный in-memory `AdminTokenStore` для `inMemory`-графа (этап 10): не трогает Keychain,
+    /// свежий бокс на каждый граф (тесты не видят чужую сессию). Тесты, которым нужно ассертить/сидировать
+    /// стор, передают собственный через параметр `adminTokenStore:`.
+    private static func makeInMemoryAdminStore() -> AdminTokenStore {
+        let box = InMemoryDataBox()
+        return AdminTokenStore(load: { box.value }, save: { box.value = $0 })
+    }
+
     static func makeTestClock() -> TrustedClock {
         TrustedClock(
             elapsedProvider: { 0 },
@@ -392,7 +481,8 @@ final class AppEnvironment {
 
     private static func testClient(
         baseURL: String,
-        transport: @escaping (URLRequest) async throws -> (Data, HTTPURLResponse)
+        transport: @escaping (URLRequest) async throws -> (Data, HTTPURLResponse),
+        tokenProvider: @escaping () -> String? = { nil }
     ) -> ApiClient {
         ApiClient(
             baseURL: baseURL,
@@ -403,7 +493,7 @@ final class AppEnvironment {
             nowSeconds: { 0 },
             elapsedNowMs: { 0 },
             onServerTime: nil,
-            tokenProvider: { nil },
+            tokenProvider: tokenProvider,
             transport: transport
         )
     }
@@ -440,6 +530,18 @@ private final class InMemoryPrefs: @unchecked Sendable {
     func set(_ key: String, _ value: String?) {
         lock.lock(); defer { lock.unlock() }
         store[key] = value
+    }
+}
+
+/// In-memory `Data?`-бокс для дефолтного admin-стора `inMemory`-графа (этап 10): подкладывается под
+/// `AdminTokenStore` вместо Keychain, чтобы тесты не писали в системный Keychain.
+private final class InMemoryDataBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value: Data?
+
+    var value: Data? {
+        get { lock.lock(); defer { lock.unlock() }; return _value }
+        set { lock.lock(); defer { lock.unlock() }; _value = newValue }
     }
 }
 

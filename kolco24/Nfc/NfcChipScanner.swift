@@ -32,7 +32,7 @@ import Foundation
 /// Источник чтений чипов поверх `NFCTagReaderSession`. Держит изменяемое состояние сессии, поэтому
 /// финальный класс; состояние трогается с двух очередей (делегатной CoreNFC и `readQueue`) — защищено
 /// `lock`.
-final class NfcChipScanner: NSObject, ChipScanning {
+final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
 
     /// Снимок доверенного времени, берётся ДО блокирующего чтения чипа (§8).
     private let sampleNow: () -> TimeSample
@@ -58,6 +58,12 @@ final class NfcChipScanner: NSObject, ChipScanning {
 
     /// Текущая строка системной шторки (обновляет хост по мере взятия; переприменяется после каждого чтения).
     private var alertMessage = "Приложите чип КП"
+
+    /// pending-write ячейка провижининга (этап 10): UID+запись, ожидающие следующего тапа. Защищена `lock`;
+    /// читается ТОЛЬКО обработчиком (`defaultProcess`) на `readQueue` — один механизм, не два. При совпадении
+    /// UID обработчик пишет запись; несовпадающий UID → обычное чтение (`writeResult == nil`).
+    private var pendingWriteUid: String?
+    private var pendingWriteRecord: Data?
 
     init(
         sampleNow: @escaping () -> TimeSample,
@@ -106,6 +112,43 @@ final class NfcChipScanner: NSObject, ChipScanning {
         let s = session
         lock.unlock()
         s?.alertMessage = text
+    }
+
+    // MARK: - Провижининг (pending-write ячейка, этап 10)
+
+    /// Вооружить сканер записью: следующий тап по чипу с совпавшим [uid] выполнит `writeRecord` + read-back
+    /// (вместо чтения) и вернёт исход в `writeResult` стрима. Чужой UID → обычное чтение, `writeResult == nil`.
+    /// Ячейку читает только обработчик на `readQueue`; хост чистит её `clearPendingWrite()` при смене КП/успехе.
+    func setPendingWrite(uid: String, record: Data) {
+        lock.lock()
+        pendingWriteUid = uid
+        pendingWriteRecord = record
+        lock.unlock()
+    }
+
+    /// Разоружить сканер (смена КП / успешная запись / закрытие экрана провижининга). Идемпотентно.
+    func clearPendingWrite() {
+        lock.lock()
+        pendingWriteUid = nil
+        pendingWriteRecord = nil
+        lock.unlock()
+    }
+
+    /// Per-tag обработчик: воспроизводит чтение (`readRecord` → `TagReading`), а при вооружённой
+    /// pending-write ячейке с совпавшим UID вместо чтения делает `writeRecord` (header-last + read-back
+    /// внутри) и кладёт исход в `writeResult`. Один механизм: несовпадающий UID при активной ячейке →
+    /// обычное чтение, `writeResult == nil`. Выполняется на `readQueue`.
+    private func defaultProcess(_ transport: NfcTransport, _ uid: String, _ sample: TimeSample) -> TagReading {
+        lock.lock()
+        let pendingUid = pendingWriteUid
+        let pendingRecord = pendingWriteRecord
+        lock.unlock()
+        if let pendingUid, let pendingRecord, pendingUid == uid {
+            let result = writeRecord(transport, record: pendingRecord)
+            return TagReading(code: nil, uid: uid, sample: sample, writeResult: result)
+        }
+        let code = readRecord(transport)
+        return TagReading(code: code, uid: uid, sample: sample)
     }
 
     // MARK: - Сессия
@@ -204,10 +247,12 @@ extension NfcChipScanner: NFCTagReaderSessionDelegate {
                 session.restartPolling()
                 return
             }
-            // Блокирующее чтение — на readQueue, НЕ на делегатной очереди сессии (дедлок-ловушка).
+            // Блокирующее чтение/запись — на readQueue, НЕ на делегатной очереди сессии (дедлок-ловушка).
+            // Per-tag шаг: `defaultProcess` (`readRecord`, а при вооружённой pending-write ячейке —
+            // `writeRecord`). Session-менеджмент ниже не меняется.
             self.readQueue.async {
-                let code = readRecord(MiFareTransport(tag: miFare))
-                let reading = TagReading(code: code, uid: uid, sample: sample)
+                let transport = MiFareTransport(tag: miFare)
+                let reading = self.defaultProcess(transport, uid, sample)
 
                 self.lock.lock()
                 self.lastUid = uid

@@ -248,6 +248,88 @@ struct ApiClient {
         }
     }
 
+    /// `POST /app/race/<raceId>/judge_scans/` — выгрузка батча судейских пиков [scans] гонки. Тело —
+    /// `JudgeScanUploadRequest(source_install_id, scans)` (**без** `team_id` — судейская станция
+    /// сканит все команды гонки, скоуп — только `raceId` в URL), сериализуется в `Data` **один раз**
+    /// (те же байты хэшируются в подпись и отправляются — конвенция `post`). `200`/`201` →
+    /// `.success` с распарсенным `JudgeScanUploadResponse` (принятые клиентские `id` для
+    /// идемпотентного upsert); прочие статусы маппятся по `post`. Один и тот же метод обслуживает обе
+    /// цели (cloud / local LAN) — цель выбирается экземпляром `ApiClient`. **Не ретраится** (гарантия
+    /// `post`: 403 auth-vs-skew неразличим, replay небезопасен). Путь — с завершающим слэшем (как
+    /// `/marks/`). Серверный эндпоинт ещё не задеплоен — до деплоя строки остаются pending (self-heal).
+    func uploadJudgeScans(
+        raceId: Int,
+        sourceInstallId: String,
+        scans: [JudgeScanDto]
+    ) async -> PostResult<JudgeScanUploadResponse> {
+        let request = JudgeScanUploadRequest(sourceInstallId: sourceInstallId, scans: scans)
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(request)
+        } catch {
+            // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
+            return .error(code: nil)
+        }
+        return await post(url: endpoint("/app/race/\(raceId)/judge_scans/"), body: body) {
+            try JSONDecoder().decode(JudgeScanUploadResponse.self, from: $0)
+        }
+    }
+
+    /// `POST /app/race/<raceId>/tags/` — привязать чип [nfcUid] к КП [checkpointId] (стабильный
+    /// `Checkpoint.id`, не человеко-читаемый номер). Тело — `TagBindRequest(checkpoint_id, nfc_uid)`,
+    /// сериализуется в `Data` **один раз** (те же байты хэшируются в подпись и отправляются —
+    /// конвенция `post`). `201` при свежем bind / `200` при идемпотентном повторе того же КП →
+    /// `.success` с распарсенным `TagBindResponse` (несёт hex-`code` для записи на чип); `409` →
+    /// `.conflict` (чип уже привязан к **другому** КП — авто-ребинда нет); `404` → `.error(404)` (КП
+    /// нет или тип hidden); прочие статусы — по `post`. Вызывается на **cloud-клиенте** (админ-
+    /// операции не ходят на LAN, как login/logout). **Не ретраится** (гарантия `post`: 403 auth-vs-
+    /// skew неразличим, replay небезопасен). Путь — с завершающим слэшем (он в подписанной канонике).
+    func bindTag(
+        raceId: Int,
+        checkpointId: Int,
+        nfcUid: String
+    ) async -> PostResult<TagBindResponse> {
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(TagBindRequest(checkpointId: checkpointId, nfcUid: nfcUid))
+        } catch {
+            // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
+            return .error(code: nil)
+        }
+        return await post(url: endpoint("/app/race/\(raceId)/tags/"), body: body) {
+            try JSONDecoder().decode(TagBindResponse.self, from: $0)
+        }
+    }
+
+    // MARK: - Эндпоинты (админ-авторизация)
+
+    /// `POST /app/login/` с admin-`email`/`password`. Тело — `LoginRequest`, сериализуется в `Data`
+    /// **один раз** (те же байты хэшируются в подпись и отправляются — конвенция `post`). `200`/`201`
+    /// → `.success` с распарсенным `LoginResponse` (opaque bearer-токен + `expires_at`); `401` →
+    /// `.unauthorized` (плохие учётные данные); `429` → `.rateLimited` (5/мин/IP); прочие статусы —
+    /// по `post`. Вызывается на **cloud-клиенте** (админ-операции не ходят на LAN). **Не ретраится**
+    /// (гарантия `post`). Bearer в этот запрос ещё не подставляется (токена нет), но подпись от него
+    /// и так не зависит — токен не входит в канонику.
+    func login(email: String, password: String) async -> PostResult<LoginResponse> {
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(LoginRequest(email: email, password: password))
+        } catch {
+            return .error(code: nil)
+        }
+        return await post(url: endpoint("/app/login/"), body: body) {
+            try JSONDecoder().decode(LoginResponse.self, from: $0)
+        }
+    }
+
+    /// `POST /app/logout/` с **пустым** телом (всё равно хэшируется как `EMPTY_BODY_SHA256`). Парсер
+    /// на ветке ошибки не вызывается и (пустое) тело успеха отбрасывает, так что `200` без payload →
+    /// `.success(())`. Bearer уходит из `tokenProvider` (текущий токен), что и завершает серверную
+    /// сессию. **Не ретраится** (гарантия `post`).
+    func logout() async -> PostResult<Void> {
+        await post(url: endpoint("/app/logout/"), body: Data()) { _ in () }
+    }
+
     /// URL эндпоинта из `baseURL` (без хвостового `/`) + `path` (с завершающим слэшем — он входит в
     /// подписанную канонику).
     private func endpoint(_ path: String) -> URL {

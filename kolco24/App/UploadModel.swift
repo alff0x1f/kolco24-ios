@@ -60,10 +60,16 @@ final class UploadModel {
     private(set) var photoCounts: UploadCounts?
     /// Прогресс точек GPS-трека (`track_points`) — счётчики секции «Трек». `total == 0` → секция скрыта.
     private(set) var trackCounts: UploadCounts?
+    /// Прогресс судейских пиков (`judge_scans`) гонки — счётчики секции «Судейские отметки». Скоуп —
+    /// `raceId` только (судейская станция сканит все команды). `total == 0` → секция скрыта.
+    private(set) var judgeCounts: UploadCounts?
     /// Транзиентные исходы последнего дренажа отметок по целям текущего скоупа; пусто до первого отчёта.
     private(set) var outcomes: [UploadTarget: TargetUploadOutcome] = [:]
     /// Транзиентные исходы последнего дренажа трека по целям текущего скоупа; свой поток (`TrackUploadRepository`).
     private(set) var trackOutcomes: [UploadTarget: TargetUploadOutcome] = [:]
+    /// Транзиентные исходы последнего дренажа судейских пиков по целям гонки; свой поток
+    /// (`JudgeScanUploadRepository`, ключ — `raceId`).
+    private(set) var judgeOutcomes: [UploadTarget: TargetUploadOutcome] = [:]
 
     @ObservationIgnored private let env: AppEnvironment
     /// Инжектированные стенные часы «сейчас» (для относительного времени второй строки) — управляемое
@@ -75,8 +81,10 @@ final class UploadModel {
     @ObservationIgnored private var metadataTask: Task<Void, Never>?
     @ObservationIgnored private var photoTask: Task<Void, Never>?
     @ObservationIgnored private var trackTask: Task<Void, Never>?
+    @ObservationIgnored private var judgeTask: Task<Void, Never>?
     @ObservationIgnored private var outcomesTask: Task<Void, Never>?
     @ObservationIgnored private var trackOutcomesTask: Task<Void, Never>?
+    @ObservationIgnored private var judgeOutcomesTask: Task<Void, Never>?
     /// Команда/гонка активных подписок — для идемпотентности `rebind` на той же паре.
     @ObservationIgnored private var boundTeamId: Int?
     @ObservationIgnored private var boundRaceId: Int?
@@ -94,8 +102,10 @@ final class UploadModel {
         metadataTask?.cancel()
         photoTask?.cancel()
         trackTask?.cancel()
+        judgeTask?.cancel()
         outcomesTask?.cancel()
         trackOutcomesTask?.cancel()
+        judgeOutcomesTask?.cancel()
     }
 
     // MARK: - Жизненный цикл
@@ -107,21 +117,26 @@ final class UploadModel {
     func rebind(teamId: Int?, raceId: Int?) {
         if teamId == boundTeamId, raceId == boundRaceId,
            countsTask != nil || metadataTask != nil || photoTask != nil
-               || trackTask != nil || outcomesTask != nil || trackOutcomesTask != nil {
+               || trackTask != nil || judgeTask != nil
+               || outcomesTask != nil || trackOutcomesTask != nil || judgeOutcomesTask != nil {
             return
         }
         countsTask?.cancel()
         metadataTask?.cancel()
         photoTask?.cancel()
         trackTask?.cancel()
+        judgeTask?.cancel()
         outcomesTask?.cancel()
         trackOutcomesTask?.cancel()
+        judgeOutcomesTask?.cancel()
         counts = nil
         metadataCounts = nil
         photoCounts = nil
         trackCounts = nil
+        judgeCounts = nil
         outcomes = [:]
         trackOutcomes = [:]
+        judgeOutcomes = [:]
         boundTeamId = teamId
         boundRaceId = raceId
 
@@ -192,6 +207,29 @@ final class UploadModel {
                 self.trackOutcomes = snapshot[scope] ?? [:]
             }
         }
+
+        // «Судейские отметки»: счётчики пиков гонки (`judge_scans`, скоуп `raceId`) + свой поток исходов
+        // из `JudgeScanUploadRepository` (ключ — `raceId`, не `TrackScope`).
+        let judgeObservation = env.judgeScanStore.uploadCounts(raceId: raceId)
+        judgeTask = Task { [weak self] in
+            do {
+                for try await value in judgeObservation {
+                    guard let self, !Task.isCancelled else { return }
+                    self.judgeCounts = value
+                }
+            } catch {}
+        }
+
+        let judgeRepo = env.judgeScanUploadRepository
+        let judgeUpdates = judgeRepo.outcomeUpdates
+        judgeOutcomesTask = Task { [weak self] in
+            let seed = await judgeRepo.outcomes[raceId] ?? [:]
+            if let self, !Task.isCancelled { self.judgeOutcomes = seed }
+            for await snapshot in judgeUpdates {
+                guard let self, !Task.isCancelled else { return }
+                self.judgeOutcomes = snapshot[raceId] ?? [:]
+            }
+        }
     }
 
     // MARK: - Действия
@@ -201,23 +239,25 @@ final class UploadModel {
     func refresh() async {
         await env.markUploadRepository.uploadAllPending()
         await env.trackUploadRepository.uploadAllPending()
+        await env.judgeScanUploadRepository.uploadAllPending()
     }
 
     // MARK: - Derived
 
     /// Есть ли что показывать (иначе экран рисует empty-state «Пока нечего загружать»). Порт `total > 0`
     /// по photo-aware `uploadCounts` (любые взятия скоупа) ИЛИ наличию точек трека.
-    var hasContent: Bool { (counts?.total ?? 0) > 0 || hasTrack }
+    var hasContent: Bool { (counts?.total ?? 0) > 0 || hasTrack || hasJudge }
 
     /// Подзаголовок ряда «Загрузка данных» в TeamView. Cloud — главная цель (LAN вне гонки всегда 0 и
     /// пугал бы), поэтому pending = `total - cloud` по всем видам (отметки+кадры+точки): «N не отправлено» /
     /// «Всё отправлено» / «Пока нечего загружать».
     var pendingLabel: String {
-        let totalItems = (counts?.total ?? 0) + (trackCounts?.total ?? 0)
+        let totalItems = (counts?.total ?? 0) + (trackCounts?.total ?? 0) + (judgeCounts?.total ?? 0)
         guard totalItems > 0 else { return "Пока нечего загружать" }
         let markPending = max(0, (counts?.total ?? 0) - (counts?.cloud ?? 0))
         let trackPending = max(0, (trackCounts?.total ?? 0) - (trackCounts?.cloud ?? 0))
-        let pending = markPending + trackPending
+        let judgePending = max(0, (judgeCounts?.total ?? 0) - (judgeCounts?.cloud ?? 0))
+        let pending = markPending + trackPending + judgePending
         return pending <= 0 ? "Всё отправлено" : "\(pending) не отправлено"
     }
 
@@ -271,11 +311,28 @@ final class UploadModel {
         finishLineOrNil(uploaded: trackCounts?.local ?? 0, total: trackTotal, outcome: trackOutcomes[.local])
     }
 
+    // MARK: - Секция «Судейские отметки» (судейские пики гонки)
+
+    /// Есть ли судейские пики вообще — секция скрыта при нуле (правило секций «Фото»/«Трек»).
+    var hasJudge: Bool { judgeTotal > 0 }
+
+    /// Receipt-строка «Интернет» (cloud) секции «Судейские отметки» — показывается всегда (когда секция видима).
+    var judgeCloudLine: ReceiptLine {
+        makeLine(label: "Интернет", uploaded: judgeCounts?.cloud ?? 0, total: judgeTotal,
+                 outcome: judgeOutcomes[.cloud], offlineLabel: "нет интернета")
+    }
+
+    /// Receipt-строка «Финиш» (LAN) секции «Судейские отметки» — только когда есть что сказать. Порт `showFinishLine`.
+    var judgeFinishLine: ReceiptLine? {
+        finishLineOrNil(uploaded: judgeCounts?.local ?? 0, total: judgeTotal, outcome: judgeOutcomes[.local])
+    }
+
     // MARK: - Хелперы
 
     private var metadataTotal: Int { metadataCounts?.total ?? 0 }
     private var photoTotal: Int { photoCounts?.total ?? 0 }
     private var trackTotal: Int { trackCounts?.total ?? 0 }
+    private var judgeTotal: Int { judgeCounts?.total ?? 0 }
 
     /// «Финиш»-строка с правилом видимости `outcome != nil || uploaded > 0`, общая для обеих секций.
     private func finishLineOrNil(uploaded: Int, total: Int, outcome: TargetUploadOutcome?) -> ReceiptLine? {
