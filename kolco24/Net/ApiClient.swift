@@ -275,6 +275,32 @@ struct ApiClient {
         }
     }
 
+    /// `POST /app/race/<raceId>/tags/` — привязать чип [nfcUid] к КП [checkpointId] (стабильный
+    /// `Checkpoint.id`, не человеко-читаемый номер). Тело — `TagBindRequest(checkpoint_id, nfc_uid)`,
+    /// сериализуется в `Data` **один раз** (те же байты хэшируются в подпись и отправляются —
+    /// конвенция `post`). `201` при свежем bind / `200` при идемпотентном повторе того же КП →
+    /// `.success` с распарсенным `TagBindResponse` (несёт hex-`code` для записи на чип); `409` →
+    /// `.conflict` (чип уже привязан к **другому** КП — авто-ребинда нет); `404` → `.error(404)` (КП
+    /// нет или тип hidden); прочие статусы — по `post`. Вызывается на **cloud-клиенте** (админ-
+    /// операции не ходят на LAN, как login/logout). **Не ретраится** (гарантия `post`: 403 auth-vs-
+    /// skew неразличим, replay небезопасен). Путь — с завершающим слэшем (он в подписанной канонике).
+    func bindTag(
+        raceId: Int,
+        checkpointId: Int,
+        nfcUid: String
+    ) async -> PostResult<TagBindResponse> {
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(TagBindRequest(checkpointId: checkpointId, nfcUid: nfcUid))
+        } catch {
+            // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
+            return .error(code: nil)
+        }
+        return await post(url: endpoint("/app/race/\(raceId)/tags/"), body: body) {
+            try JSONDecoder().decode(TagBindResponse.self, from: $0)
+        }
+    }
+
     // MARK: - Эндпоинты (админ-авторизация)
 
     /// `POST /app/login/` с admin-`email`/`password`. Тело — `LoginRequest`, сериализуется в `Data`

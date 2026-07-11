@@ -605,9 +605,76 @@ struct ApiClientTests {
         if case .offline = result {} else { Issue.record("ожидался .offline, получено \(result)") }
     }
 
+    // MARK: - Провижининг: bindTag (Зеркало `ApiClientTest.kt` bindTag-группа)
+
+    @Test func bindTag_201_parsesResponseWithCode_andPostsBinding() async throws {
+        // Зеркало `bindTag_201_parsesResponseWithCode_andPostsBinding`: свежий bind, тело с
+        // checkpoint_id (стабильный id) + nfc_uid, распарсенный code для записи.
+        let transport = FakeTransport()
+        transport.enqueue(
+            statusCode: 201,
+            bodyString: #"{"bid":"b1","checkpoint_id":101,"number":5,"nfc_uid":"04A2B3","code":"DEADBEEF"}"#
+        )
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.bindTag(raceId: 8, checkpointId: 101, nfcUid: "04A2B3")
+
+        guard case .success(let response) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(response.bid == "b1")
+        #expect(response.checkpointId == 101)
+        #expect(response.number == 5)
+        #expect(response.nfcUid == "04A2B3")
+        #expect(response.code == "DEADBEEF")
+
+        let recorded = transport.last!
+        #expect(recorded.httpMethod == "POST")
+        #expect(fullPath(recorded.url!) == "/app/race/8/tags/")
+        #expect(recorded.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        let obj = try #require(try JSONSerialization.jsonObject(with: recorded.httpBody!) as? [String: Any])
+        #expect(obj["checkpoint_id"] as? Int == 101)
+        #expect(obj["nfc_uid"] as? String == "04A2B3")
+    }
+
+    @Test func bindTag_200_idempotentRebind_parsesResponseWithCode() async {
+        // Зеркало `bindTag_200_idempotentRebind_parsesResponseWithCode`: 200 (повтор того же КП) всё
+        // равно парсится в TagBindResponse — путь перезаписи нуждается в `code`.
+        let transport = FakeTransport()
+        transport.enqueue(
+            statusCode: 200,
+            bodyString: #"{"bid":"b1","checkpoint_id":101,"number":5,"nfc_uid":"04A2B3","code":"DEADBEEF"}"#
+        )
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.bindTag(raceId: 8, checkpointId: 101, nfcUid: "04A2B3")
+
+        guard case .success(let response) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(response.code == "DEADBEEF")
+    }
+
+    @Test func bindTag_409_returnsConflict() async {
+        // Зеркало `bindTag_409_returnsConflict`: чип уже на другом КП, авто-ребинда нет.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 409, bodyString: #"{"detail":"already bound"}"#)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.bindTag(raceId: 8, checkpointId: 101, nfcUid: "04A2B3")
+        if case .conflict = result {} else { Issue.record("ожидался .conflict, получено \(result)") }
+    }
+
+    @Test func bindTag_404_returnsErrorWith404() async {
+        // Зеркало `bindTag_404_returnsErrorWith404`: КП нет / тип hidden.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 404)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.bindTag(raceId: 8, checkpointId: 999, nfcUid: "04A2B3")
+        if case .error(let code) = result { #expect(code == 404) }
+        else { Issue.record("ожидался .error(404), получено \(result)") }
+    }
+
     // MARK: - Часть 2: эндпоинты и условные GET (Зеркало `ApiClientTest.kt` fetch-группа)
-    //
-    // bindTag (типизированный POST-метод `ApiClientTest.kt`) — Task 11. Generic `post` — часть 1 выше.
 
     private let racesJson = """
         {

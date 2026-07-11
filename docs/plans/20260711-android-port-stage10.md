@@ -270,12 +270,12 @@
 - Modify: `kolco24Tests/Net/ApiClientTests.swift`
 - Create: `kolco24Tests/Core/ProvisioningLogicTests.swift`
 
-- [ ] `TagBindRequest{checkpoint_id, nfc_uid}` (стабильный `Checkpoint.id`, **не** человеческий номер), `TagBindResponse{bid, checkpoint_id, number, nfc_uid, code}`; `ApiClient.bindTag(raceId:checkpointId:nfcUid:) async -> PostResult<TagBindResponse>` — trailing-slash `/app/race/<id>/tags/`, без ретраев; вызывается на **cloud-клиенте** (как login/logout — админ-операции не ходят на LAN)
-- [ ] `enum ProvisionState: Equatable { waitingForChip, binding(uid), waitingForWrite(uid: String, code: String), success(number: Int), failed(reason: String) }`
-- [ ] `provisionErrorMessage(_ result:) -> String` — русские строки 1:1 (409 generic «уже привязан к другому КП» — тело ответа номера КП не несёт; 403 «Нет прав администратора… или ошибка подписи/часов»; 401 «Сессия истекла, войдите снова»; 404 «КП не найдено»; offline/прочие)
-- [ ] `chipTokenLabel(uid:) -> String` — последние 4 hex-символа
-- [ ] зеркало `ApiClientTest.kt` bindTag-кейсов (201 парсит `code`; 200 идемпотентный; 409 → `.conflict`; 404; тело запроса по `FakeTransport`-логу) и `ProvisioningModelTest.kt` → `ProvisioningLogicTests` (`provisionErrorMessage` по каждому статусу; `chipTokenLabel` tail/короткий/5-символьный; `railTicks` — **не портируется**, пейджер заменён списком)
-- [ ] run tests - must pass before next task
+- [x] `TagBindRequest{checkpoint_id, nfc_uid}` (стабильный `Checkpoint.id`, **не** человеческий номер), `TagBindResponse{bid, checkpoint_id, number, nfc_uid, code}`; `ApiClient.bindTag(raceId:checkpointId:nfcUid:) async -> PostResult<TagBindResponse>` — trailing-slash `/app/race/<id>/tags/`, без ретраев; вызывается на **cloud-клиенте** (как login/logout — админ-операции не ходят на LAN)
+- [x] `enum ProvisionState: Equatable { waitingForChip, binding(uid), waitingForWrite(uid: String, code: String), success(number: Int), failed(reason: String) }`
+- [x] `provisionErrorMessage(_ result:) -> String` — русские строки 1:1 (409 generic «уже привязан к другому КП» — тело ответа номера КП не несёт; 403 «Нет прав администратора… или ошибка подписи/часов»; 401 «Сессия истекла, войдите снова»; 404 «КП не найдено»; offline/прочие)
+- [x] `chipTokenLabel(uid:) -> String` — последние 4 hex-символа
+- [x] зеркало `ApiClientTest.kt` bindTag-кейсов (201 парсит `code`; 200 идемпотентный; 409 → `.conflict`; 404; тело запроса по `FakeTransport`-логу) и `ProvisioningModelTest.kt` → `ProvisioningLogicTests` (`provisionErrorMessage` по каждому статусу; `chipTokenLabel` tail/короткий/5-символьный; `railTicks` — **не портируется**, пейджер заменён списком)
+- [x] run tests - must pass before next task
 
 ### Task 12: App+UI — ProvisioningModel + ProvisioningView (двухтаповый флоу)
 
