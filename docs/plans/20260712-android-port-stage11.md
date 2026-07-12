@@ -166,10 +166,12 @@
 - Create: `kolco24/Assets.xcassets/AppIcon.appiconset/AppIcon-1024-tinted.png`
 - Modify: `kolco24/Assets.xcassets/AppIcon.appiconset/Contents.json`
 
-- [ ] скрипт на ImageMagick (`magick` есть в brew): **dark** — белый фон → прозрачный, графит компаса (`~#26262E`) → светлый `E6EAF0`, красный бейдж «24» без изменений; **tinted** — grayscale на прозрачном фоне (систему iOS 18 красит сама)
-- [ ] `Contents.json`: dark/tinted-слоты → новые filenames (слоты уже существуют)
-- [ ] проверка глазами: домашний экран симулятора в режимах Light / Dark / Tinted
-- [ ] no unit tests; сборка зелёная (asset-каталог валиден); run tests — must pass before task 8
+- [x] скрипт на ImageMagick (`magick` есть в brew): **dark** — белый фон → прозрачный, графит компаса (`~#26262E`) → светлый `E6EAF0`, красный бейдж «24» без изменений; **tinted** — grayscale на прозрачном фоне (систему iOS 18 красит сама)
+- [x] `Contents.json`: dark/tinted-слоты → новые filenames (слоты уже существуют)
+- [x] eyes check (manual - not automatable) — домашний экран симулятора в режимах Light / Dark / Tinted
+- [x] no unit tests; сборка зелёная (asset-каталог валиден); run tests — must pass before task 8
+
+**➕ Уточнение по палитре (грип `magick … histogram:`):** графит компаса в исходнике оказался `#1B1C20` (не `~#26262E`); скрипт таргетит `#1B1C20` c `-fuzz 25%` при замене на `#E6EAF0`, белый фон — `-fuzz 15% -transparent white` (до перекраски, т.к. `#E6EAF0` сам почти-белый). Оба варианта — RGBA/GrayAlpha с прозрачным фоном, 1024×1024. Красный бейдж `#C3011C` далёк от графита — 25%-fuzz его не трогает.
 
 ### Task 8: TestFlight-подготовка проекта
 
