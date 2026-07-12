@@ -115,11 +115,11 @@
 - Modify: `kolco24/App/ScanModel.swift`
 - Modify: `kolco24Tests/App/ScanModelTests.swift`
 
-- [ ] `defaultSuccessHoldMs` 3300 → 0: механизм холда (FIFO-перепроверка `completionCheck`, Finding-1) **не трогается** — просто нулевая задержка; «Готово!»-бит остаётся видимым на время анимации закрытия шита
-- [ ] `private(set) var didComplete = false` — выставляется в `handleCompletionCheck()` перед `finalizeSession()` (только успешное завершение; истечение окна его НЕ выставляет); `@ObservationIgnored` не нужен — флаг читается после dismiss
-- [ ] фанфару (`fanfareTask`, 275 мс) не трогать — играет независимо от закрытия
-- [ ] обновить/добавить кейсы `ScanModelTests`: с `successHoldMs = 0` завершение → `closeRequested` без задержки + `didComplete == true`; истечение окна → `closeRequested`, `didComplete == false`; существующие кейсы с инжектированным холдом остаются валидны
-- [ ] run tests — must pass before task 5
+- [x] `defaultSuccessHoldMs` 3300 → 0: механизм холда (FIFO-перепроверка `completionCheck`, Finding-1) **не трогается** — просто нулевая задержка; «Готово!»-бит остаётся видимым на время анимации закрытия шита
+- [x] `private(set) var didComplete = false` — выставляется в `handleCompletionCheck()` перед `finalizeSession()` (только успешное завершение; истечение окна его НЕ выставляет); `@ObservationIgnored` не нужен — флаг читается после dismiss
+- [x] фанфару (`fanfareTask`, 275 мс) не трогать — играет независимо от закрытия
+- [x] обновить/добавить кейсы `ScanModelTests`: с `successHoldMs = 0` завершение → `closeRequested` без задержки + `didComplete == true`; истечение окна → `closeRequested`, `didComplete == false`; существующие кейсы с инжектированным холдом остаются валидны
+- [x] run tests — must pass before task 5
 
 ### Task 5: `ConfettiOverlay` + празднование на «Отметках»
 

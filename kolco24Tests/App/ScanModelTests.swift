@@ -492,6 +492,30 @@ struct ScanModelTests {
         await poll { model.closeRequested }
         #expect(model.closeRequested == true)
         #expect(model.session == nil)
+        #expect(model.didComplete == false)   // истечение окна — не успешное завершение (нет конфетти)
+    }
+
+    // MARK: - Быстрое автозакрытие: successHoldMs = 0 → немедленное закрытие + didComplete (этап 11)
+
+    @Test func completionWithZeroHoldClosesImmediatelyAndDidComplete() async throws {
+        let env = try makeEnv()
+        let code = kpCode(25)
+        try await registerKp(env, cpId: 100, number: 5, cost: 2, code: code)
+        try await bind(env, slot: 1, uid: "M1", pnum: 101)
+
+        let scanner = FakeChipScanner()
+        // Нулевой hold (дефолт этапа 11) — завершение закрывает оверлей немедленно.
+        let model = makeModel(env: env, roster: members([1]), scanner: scanner, successHoldMs: 0)
+        model.start(scanner: scanner)
+        await poll { model.bindings["M1"] == 1 }
+
+        scanner.emit(reading(code: code, uid: "CP", elapsed: 0))
+        await poll { model.session?.checkpointId == 100 }
+        scanner.emit(reading(code: nil, uid: "M1", elapsed: 100))
+        await poll { model.closeRequested }
+        #expect(model.closeRequested == true)
+        #expect(model.didComplete == true)   // успешное завершение → конфетти на «Отметках»
+        #expect(model.session == nil)
     }
 
     // MARK: - Near-deadline скан продлевает окно; таймер не финализирует его как истёкший (Finding-1)

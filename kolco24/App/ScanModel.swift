@@ -46,6 +46,10 @@ final class ScanModel: Identifiable {
     private(set) var completed = false
     /// Сигнал автозакрытия оверлея (истечение окна / завершение / конец стрима). Вьюха его наблюдает.
     private(set) var closeRequested = false
+    /// `true`, если оверлей закрылся по УСПЕШНОМУ завершению взятия (весь ростер present), а не по истечению
+    /// окна/концу стрима. Выставляется в `handleCompletionCheck()` перед `finalizeSession()`; читается ПОСЛЕ
+    /// dismiss (`MarksView` запускает конфетти) — истечение окна его НЕ выставляет.
+    private(set) var didComplete = false
 
     /// Потокобезопасное зеркало «оверлей жив» для `NfcChipScanner.shouldRestart` (читается на делегатной
     /// NFC-очереди, пишется здесь на MainActor). `true` с момента создания (оверлей открыт) → `false` на
@@ -145,8 +149,10 @@ final class ScanModel: Identifiable {
     private static let defaultTickMs: Int64 = 250
     /// `COMPLETE_FANFARE_DELAY_MS` из `ScanScreen.kt`.
     private static let defaultFanfareDelayMs: Int64 = 275
-    /// `SUCCESS_HOLD_MS` из `ScanScreen.kt`.
-    private static let defaultSuccessHoldMs: Int64 = 3_300
+    /// Быстрое автозакрытие (этап 11): удержание «Готово!»-бита убрано — оверлей закрывается немедленно,
+    /// «Готово!» остаётся видимым лишь на время анимации закрытия шита, конфетти играет на «Отметках».
+    /// Механизм холда (FIFO-пере-проверка `completionCheck`, Finding-1) не тронут — просто нулевая задержка.
+    private static let defaultSuccessHoldMs: Int64 = 0
 
     init(
         raceId: Int,
@@ -546,6 +552,9 @@ final class ScanModel: Identifiable {
     private func handleCompletionCheck() {
         guard completed else { return }
         if isComplete(session: session, rosterSize: roster.count) {
+            // Успешное завершение (весь ростер present) — помечаем ПЕРЕД finalizeSession(), чтобы
+            // `MarksView` мог отличить его от истечения окна/конца стрима и запустить конфетти после dismiss.
+            didComplete = true
             finalizeSession()
             requestClose()
         } else {
