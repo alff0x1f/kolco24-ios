@@ -134,18 +134,29 @@
 - [x] Reduce Motion: `@Environment(\.accessibilityReduceMotion)` → при `true` конфетти не запускается (фанфара уже отыграла из `ScanModel`)
 - [x] no unit tests (визуальный код, конвенция Android — конфетти там тоже не тестируется); проверка глазами: превью + симулятор с `FakeChipScanner`-флоу
 - [x] run tests — must pass before task 6
-: Аудит тёмной темы (экраны этапов 5–10)
+### Task 6: Аудит тёмной темы (экраны этапов 5–10)
 
 **Files:**
 - Modify: `kolco24/EmptyStates.swift`
 - Modify: `kolco24/CheckChipView.swift` (по результату аудита)
 - Modify: прочие вьюхи по найденному (точечно)
 
-- [ ] `EmptyStates.swift:87`: литеральный градиент → токены `charcoal`/`charcoalHi` (получает тёмный дизайн `27313D → 171D25` автоматически)
-- [ ] прогон в симуляторе в обеих темах (переключатель «Внешний вид» этапа 9): `ScanSheet`, `BindChipSheet`, `UploadView`, `SettingsView`, `PhotoNumberPickerView`, `AdminFlowView` + логин + 4 подэкрана (судейский, 2 проверки чипа, провижининг), тост/баннеры этого этапа
-- [ ] `CheckChipView.swift:240–245`: проверить контраст цветов КП на тёмном фоне; если читается — оставить литералами с комментарием (прецедент `amber`), нет — адаптивные пары `Color(light:dark:)`
-- [ ] найденные проблемы чинить **только токенами** (без новых литералов, кроме документированных fixed-dark); список фиксов зафиксировать в этом файле (➕)
-- [ ] no unit tests (визуальная работа); сборка зелёная; run tests — must pass before task 7
+- [x] `EmptyStates.swift:87`: литеральный градиент → токены `charcoal`/`charcoalHi` (получает тёмный дизайн `27313D → 171D25` автоматически)
+- [x] прогон в симуляторе в обеих темах (переключатель «Внешний вид» этапа 9): `ScanSheet`, `BindChipSheet`, `UploadView`, `SettingsView`, `PhotoNumberPickerView`, `AdminFlowView` + логин + 4 подэкрана (судейский, 2 проверки чипа, провижининг), тост/баннеры этого этапа
+- [x] `CheckChipView.swift:240–245`: проверить контраст цветов КП на тёмном фоне; если читается — оставить литералами с комментарием (прецедент `amber`), нет — адаптивные пары `Color(light:dark:)`
+- [x] найденные проблемы чинить **только токенами** (без новых литералов, кроме документированных fixed-dark); список фиксов зафиксировать в этом файле (➕)
+- [x] no unit tests (визуальная работа); сборка зелёная; run tests — must pass before task 7
+
+**➕ Результаты аудита (гриб литералов по всем экранам этапов 5–10):**
+- ➕ `EmptyStates.swift:87` (баг) — герой-градиент иллюстрации `Color(hex: "1D242D")/"2A333E"` → `Color.charcoal`/`Color.charcoalHi`. Теперь fixed-dark в обеих темах, но следует каждому дизайну (light `1D242D→2A323C`, dark `27313D→171D25`), как `DarkHeroBackground`. Добавлен поясняющий комментарий.
+- ➕ `CheckChipView.swift:238` — литералы цветов категорий КП (`E53935`/`1E88E5`/`F4B400`/`8E44AD` в `barColor`) **оставлены литералами** (насыщенные оттенки читаются на тёмном `0C0F14`; семантика цвета КП едина в обеих темах — прецедент токена `amber`). Расширен поясняющий комментарий.
+- ➕ **Ложные срабатывания грепа — изменений не требуют** (белый контент на цветных/акцентных поверхностях либо документированный fixed-dark, корректны в обеих темах):
+  - `ScanSheet.swift:194` — `.white` текст «Готово» на `kolcoOrange`-CTA; `:296` — белая галочка на `Color.good`-круге; `:354–390` — `TimerHeroView` внутри `DarkHeroBackground` (fixed-dark).
+  - `BindChipSheet.swift:103` — `.white` на `kolcoOrange`-кнопке «Перепривязать».
+  - `SettingsView.swift:301` / `AdminFlowView.swift:293` — `.black` opacity как тень бейджа-иконки (не поверхность); `SettingsView.swift:304` / `AdminFlowView.swift:296` — белый глиф на цветном бейдже.
+  - `JudgeScanView.swift:66,69` — белый текст внутри `DarkHeroBackground` (fixed-dark).
+  - `AdminFlowView.swift:128,132` — `.white` ProgressView/«Войти» на `kolcoOrange`-row; `:179` — белая галочка на `Color.good`-бейдже.
+  - `UploadView`/`PhotoNumberPickerView`/`ProvisioningView`/`CheckMemberChipView` — литералов нет (используют токены).
 
 ### Task 7: Иконка — dark/tinted-варианты
 
