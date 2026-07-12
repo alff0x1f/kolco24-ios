@@ -392,6 +392,12 @@ struct ScanModelTests {
         await poll { (try? await env.markStore.getById("mark-1")) != nil }
         let mark = try #require(try await env.markStore.getById("mark-1"))
         #expect(mark.cost == 7)
+
+        // Конец стрима (§6) закрывает оверлей через `requestClose`, но это НЕ успешное завершение —
+        // `didComplete` остаётся false (конфетти на «Отметках» не запускается).
+        await poll { model.closeRequested }
+        #expect(model.closeRequested == true)
+        #expect(model.didComplete == false)
     }
 
     // MARK: - GPS-attach один раз, не трогает present
@@ -515,6 +521,43 @@ struct ScanModelTests {
         await poll { model.closeRequested }
         #expect(model.closeRequested == true)
         #expect(model.didComplete == true)   // успешное завершение → конфетти на «Отметках»
+        #expect(model.session == nil)
+    }
+
+    // MARK: - Продовый дефолт successHoldMs (этап 11): реальный init БЕЗ параметра → немедленное закрытие
+
+    /// Замок на продовое значение `defaultSuccessHoldMs = 0`: строим `ScanModel` через РЕАЛЬНЫЙ init,
+    /// НЕ передавая `successHoldMs` (в отличие от `makeModel`, который дефолтит его на 3_600_000). Так
+    /// проверяется именно продовый дефолт этапа 11, а не механизм с явно переданным нулём — откат
+    /// константы к 3300 уронил бы этот тест (иначе оверлей не автозакрылся бы немедленно).
+    @Test func completionUsesProductionDefaultHoldAndClosesImmediately() async throws {
+        let env = try makeEnv()
+        let code = kpCode(26)
+        try await registerKp(env, cpId: 100, number: 5, cost: 2, code: code)
+        try await bind(env, slot: 1, uid: "M1", pnum: 101)
+
+        let scanner = FakeChipScanner()
+        let elapsed = FakeElapsed()
+        let ids = IdGen()
+        // Реальный init БЕЗ successHoldMs — берётся продовый `defaultSuccessHoldMs` (этап 11: 0).
+        let model = ScanModel(
+            raceId: race, teamId: team, roster: members([1]),
+            legendRepository: env.legendRepository, markStore: env.markStore,
+            bindingStore: env.memberChipBindingStore,
+            locationProvider: RecordingLocationProvider(fix: nil),
+            feedback: RecordingFeedback(), elapsedNowMs: { await elapsed.get() },
+            newMarkId: { ids.next() },
+            tickMs: 3_600_000, fanfareDelayMs: 0
+        )
+        model.start(scanner: scanner)
+        await poll { model.bindings["M1"] == 1 }
+
+        scanner.emit(reading(code: code, uid: "CP", elapsed: 0))
+        await poll { model.session?.checkpointId == 100 }
+        scanner.emit(reading(code: nil, uid: "M1", elapsed: 100))
+        await poll { model.closeRequested }
+        #expect(model.closeRequested == true)
+        #expect(model.didComplete == true)
         #expect(model.session == nil)
     }
 
@@ -670,6 +713,43 @@ struct ScanModelTests {
         #expect(feedback.fanfares == 0)       // задержка ещё не истекла
 
         // Фанфары приходят после задержки.
+        await poll { feedback.fanfares >= 1 }
+        #expect(feedback.fanfares == 1)
+    }
+
+    // MARK: - Фанфара переживает stop() (быстрое автозакрытие этапа 11)
+
+    /// Замок на §6-идиому фанфары: при `successHoldMs = 0` успешное завершение немедленно закрывает
+    /// оверлей, а его `onDisappear` зовёт `stop()` РАНЬШЕ, чем истечёт `fanfareDelayMs`. Фанфара должна
+    /// доиграть, потому что её Task захватывает `feedback` (не `self`) и НЕ отменяется в `stop()`.
+    /// До фикса `stop()` отменял `fanfareTask` до конца задержки — фанфара завершения не звучала.
+    @Test func fanfareSurvivesImmediateStopOnCompletion() async throws {
+        let env = try makeEnv()
+        let code = kpCode(27)
+        try await registerKp(env, cpId: 100, number: 5, cost: 2, code: code)
+        try await bind(env, slot: 1, uid: "M1", pnum: 101)
+
+        let scanner = FakeChipScanner()
+        let feedback = RecordingFeedback()
+        // Ненулевая задержка фанфары + нулевой hold (дефолт этапа 11) — stop() гарантированно раньше фанфары.
+        let model = makeModel(
+            env: env, roster: members([1]), scanner: scanner, feedback: feedback,
+            fanfareDelayMs: 150, successHoldMs: 0
+        )
+        model.start(scanner: scanner)
+        await poll { model.bindings["M1"] == 1 }
+
+        scanner.emit(reading(code: code, uid: "CP", elapsed: 0))
+        await poll { model.session?.checkpointId == 100 }
+        scanner.emit(reading(code: nil, uid: "M1", elapsed: 100))
+
+        // Завершение просит закрытие немедленно; вьюха бы дизмиссила шит и его onDisappear зовёт stop().
+        await poll { model.closeRequested }
+        #expect(model.didComplete == true)
+        #expect(feedback.fanfares == 0)   // задержка ещё идёт в момент закрытия
+        model.stop()
+
+        // Несмотря на stop() до истечения задержки — фанфара всё равно доигрывает.
         await poll { feedback.fanfares >= 1 }
         #expect(feedback.fanfares == 1)
     }

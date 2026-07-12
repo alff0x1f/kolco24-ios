@@ -117,15 +117,16 @@ final class AppModel {
         await launchStartupRefresh()
     }
 
-    /// Единственный потребитель `TrustedClock.statusUpdates` (этап 11): читает начальное значение
-    /// (`await status`), затем `for await` публикует каждое обновление в `clockStatus`. Идемпотентен
-    /// по подписке (`guard clockStatusTask == nil`) — `statusUpdates` одно-итераторный, повторный
-    /// `for await` уронил бы рантайм. Отменяется вместе с моделью.
+    /// Единственный потребитель `TrustedClock.statusUpdates` (этап 11): `for await` публикует каждое
+    /// обновление в `clockStatus`. Начальное значение приходит первой же итерацией — `statusUpdates`
+    /// это `bufferingNewest(1)`-стрим, засеянный текущим статусом в `TrustedClock.init`, поэтому
+    /// отдельное `await clock.status` перед циклом не нужно. Идемпотентен по подписке
+    /// (`guard clockStatusTask == nil`) — `statusUpdates` одно-итераторный, повторный `for await`
+    /// уронил бы рантайм. Отменяется вместе с моделью.
     private func startClockStatusObservationIfNeeded() {
         guard clockStatusTask == nil else { return }
         let clock = env.trustedClock
         clockStatusTask = Task { [weak self] in
-            self?.clockStatus = await clock.status
             for await status in clock.statusUpdates {
                 guard let self else { return }
                 self.clockStatus = status

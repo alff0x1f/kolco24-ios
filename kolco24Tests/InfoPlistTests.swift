@@ -66,6 +66,28 @@ struct InfoPlistTests {
         let categories = apiTypes.compactMap { $0["NSPrivacyAccessedAPIType"] as? String }
         #expect(categories.contains("NSPrivacyAccessedAPICategoryUserDefaults"))
         #expect(categories.contains("NSPrivacyAccessedAPICategorySystemBootTime"))
+
+        // Precise location уходит с устройства (GPS-трек + координата взятия), привязана к команде —
+        // Apple считает это «collected». Манифест обязан заявить тип, иначе App Store отклоняет билд
+        // за расхождение с App-Privacy-опросником (см. docs/release.md §5).
+        let collected = try #require(plist["NSPrivacyCollectedDataTypes"] as? [[String: Any]])
+        let location = try #require(
+            collected.first { ($0["NSPrivacyCollectedDataType"] as? String) == "NSPrivacyCollectedDataTypePreciseLocation" }
+        )
+        #expect(location["NSPrivacyCollectedDataTypeLinked"] as? Bool == true)
+        #expect(location["NSPrivacyCollectedDataTypeTracking"] as? Bool == false)
+        let purposes = try #require(location["NSPrivacyCollectedDataTypePurposes"] as? [String])
+        #expect(purposes.contains("NSPrivacyCollectedDataTypePurposeAppFunctionality"))
+
+        // Фото-отметки (JPEG-кадры) тоже уходят на сервер — тип должен быть заявлен,
+        // иначе App-Privacy-опросник расходится с манифестом.
+        let photos = try #require(
+            collected.first { ($0["NSPrivacyCollectedDataType"] as? String) == "NSPrivacyCollectedDataTypePhotosorVideos" }
+        )
+        #expect(photos["NSPrivacyCollectedDataTypeLinked"] as? Bool == true)
+        #expect(photos["NSPrivacyCollectedDataTypeTracking"] as? Bool == false)
+        let photoPurposes = try #require(photos["NSPrivacyCollectedDataTypePurposes"] as? [String])
+        #expect(photoPurposes.contains("NSPrivacyCollectedDataTypePurposeAppFunctionality"))
     }
 
     @Test func generatedKeysSurviveMergeWithPartialPlist() throws {
