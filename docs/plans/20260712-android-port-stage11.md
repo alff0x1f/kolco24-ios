@@ -181,12 +181,12 @@
 - Modify: `kolco24Tests/InfoPlistTests.swift`
 - Create: `docs/release.md`
 
-- [ ] `Info.plist`: `ITSAppUsesNonExemptEncryption = false` (только HTTPS — экземпт; убирает вопрос экспорт-комплаенса на каждой загрузке)
-- [ ] `PrivacyInfo.xcprivacy` (`NSPrivacyAccessedAPITypes`): `NSPrivacyAccessedAPICategoryUserDefaults` → `CA92.1` (свои `InstallId`/`ClockAnchorStore`/`ThemePreference`/`RaceLeaseStore`); `NSPrivacyAccessedAPICategorySystemBootTime` → `35F9.1` (`mach_continuous_time` в `SystemClockProviders`, `CoreLocationProvider`, `CLLocationMapping`, `CoreLocationTrackEngine`, `ApiClient` — везде измерение прошедшего времени; одна запись покрывает все). GRDB свой манифест везёт. Файл должен попасть в бандл как ресурс — synchronized group это делает сам (в отличие от `Info.plist` исключение НЕ нужно)
-- [ ] `InfoPlistTests`: ассерты в стиле `backgroundLocationModeIsDeclared` — `ITSAppUsesNonExemptEncryption == false` в собранном plist; `PrivacyInfo.xcprivacy` присутствует в бандле
-- [ ] Release-сборка проходит: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -configuration Release -destination 'platform=iOS Simulator,name=iPhone 16' build` (`Secrets.xcconfig` — база обеих конфигураций через `App.xcconfig`; `MARKETING_VERSION = 1.0` / `CURRENT_PROJECT_VERSION = 1` — ок для первой загрузки)
-- [ ] `docs/release.md` — чек-лист ручных шагов (см. Post-Completion): App ID + NFC Tag Reading capability, запись в App Store Connect, signing team в Xcode, Organizer → Archive → Upload, Internal Testing группа, инкремент build-номера на повторных загрузках
-- [ ] run tests — must pass before task 9
+- [x] `Info.plist`: `ITSAppUsesNonExemptEncryption = false` (только HTTPS — экземпт; убирает вопрос экспорт-комплаенса на каждой загрузке)
+- [x] `PrivacyInfo.xcprivacy` (`NSPrivacyAccessedAPITypes`): `NSPrivacyAccessedAPICategoryUserDefaults` → `CA92.1` (свои `InstallId`/`ClockAnchorStore`/`ThemePreference`/`RaceLeaseStore`); `NSPrivacyAccessedAPICategorySystemBootTime` → `35F9.1` (`mach_continuous_time` в `SystemClockProviders`, `CoreLocationProvider`, `CLLocationMapping`, `CoreLocationTrackEngine`, `ApiClient` — везде измерение прошедшего времени; одна запись покрывает все). Плюс `NSPrivacyTracking = false`, пустые `NSPrivacyTrackingDomains`/`NSPrivacyCollectedDataTypes`. GRDB свой манифест везёт. Файл попал в бандл как ресурс — synchronized group это делает сам (в отличие от `Info.plist` исключение НЕ нужно; проверено — `membershipExceptions` содержит только `Info.plist`, файл доехал до `Release-iphonesimulator/kolco24.app/PrivacyInfo.xcprivacy`)
+- [x] `InfoPlistTests`: ассерты в стиле `backgroundLocationModeIsDeclared` — `exportComplianceKeyIsDeclared` (`ITSAppUsesNonExemptEncryption == false` в собранном plist); `privacyManifestIsBundled` (`Bundle.main.url(forResource:"PrivacyInfo", withExtension:"xcprivacy")` + обе API-категории)
+- [x] Release-сборка проходит: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -configuration Release -destination 'platform=iOS Simulator,name=iPhone 16' build` (`Secrets.xcconfig` — база обеих конфигураций через `App.xcconfig`; `MARKETING_VERSION = 1.0` / `CURRENT_PROJECT_VERSION = 1` — ок для первой загрузки) — **BUILD SUCCEEDED**
+- [x] `docs/release.md` — чек-лист ручных шагов (см. Post-Completion): App ID + NFC Tag Reading capability, запись в App Store Connect, signing team в Xcode, Organizer → Archive → Upload, App Privacy (геолокация), Internal Testing группа, инкремент build-номера на повторных загрузках
+- [x] run tests — must pass before task 9
 
 ### Task 9: Verify acceptance criteria
 

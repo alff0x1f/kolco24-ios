@@ -40,6 +40,34 @@ struct InfoPlistTests {
         #expect(modes.contains("location"))
     }
 
+    @Test func exportComplianceKeyIsDeclared() throws {
+        // ITSAppUsesNonExemptEncryption = false приходит из частичного
+        // kolco24/Info.plist (приложение ходит только по HTTPS — экспортный
+        // экземпт). Без ключа App Store Connect задаёт вопрос экспорт-комплаенса
+        // на каждой загрузке билда.
+        let usesNonExempt = try #require(
+            Bundle.main.object(forInfoDictionaryKey: "ITSAppUsesNonExemptEncryption") as? Bool
+        )
+        #expect(usesNonExempt == false)
+    }
+
+    @Test func privacyManifestIsBundled() throws {
+        // PrivacyInfo.xcprivacy должен доехать в бандл как ресурс: synchronized
+        // group подхватывает его автоматически (в отличие от Info.plist, который
+        // исключён membershipException'ом). Без манифеста App Store отклоняет
+        // загрузку (required-reason API: UserDefaults + SystemBootTime).
+        let url = try #require(
+            Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy")
+        )
+        let plist = try #require(
+            NSDictionary(contentsOf: url) as? [String: Any]
+        )
+        let apiTypes = try #require(plist["NSPrivacyAccessedAPITypes"] as? [[String: Any]])
+        let categories = apiTypes.compactMap { $0["NSPrivacyAccessedAPIType"] as? String }
+        #expect(categories.contains("NSPrivacyAccessedAPICategoryUserDefaults"))
+        #expect(categories.contains("NSPrivacyAccessedAPICategorySystemBootTime"))
+    }
+
     @Test func generatedKeysSurviveMergeWithPartialPlist() throws {
         // NFCReaderUsageDescription приходит из генерируемой части plist;
         // регресс слияния (например, GENERATE_INFOPLIST_FILE = NO) молча
