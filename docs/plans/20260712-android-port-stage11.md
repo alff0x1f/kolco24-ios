@@ -128,14 +128,13 @@
 - Modify: `kolco24/MarksView.swift`
 - Modify: `kolco24/ScanSheet.swift`
 
-- [ ] `ConfettiOverlay(running: Bool)`: `TimelineView(.animation)` + `Canvas`; 90 частиц по спецификации `ScanScreen.kt:401–480` (поля `ConfettiPiece`, стагер `delay + fall ≤ 1`, фейд последних 20%, прямоугольники 1:0.7 + 30% кругов, sway-синусоида); длительность 2.8 с; палитра `E53935`/`1E88E5`/`F4B400`/`8E44AD`/`1F7A3D`/`C65A2E` через `Color(hex:)`; частицы генерируются один раз на запуск (`@State`, пересоздание по `running`-ребру)
-- [ ] **hand-off НЕ через чтение `scanModel` в `onDismiss`** (critical finding plan-review): у `.sheet(item: $scanModel)` биндинг обнуляется **до** `onDismiss`, `scanModel?.didComplete` там всегда `nil` (существующий `flushAfterScan` работает лишь потому, что читает только `appModel`). Вместо этого: `ScanSheet` получает замыкание `onCompleted: () -> Void`; в его существующем `.onChange(of: model.closeRequested)` при `model.didComplete` — вызвать `onCompleted()` перед `dismiss()`
-- [ ] `MarksView`: `@State pendingCelebration = false` (выставляет `onCompleted`) + `@State celebrating = false`; в `onDismiss` (рядом с `flushAfterScan`) — `if pendingCelebration { pendingCelebration = false; celebrating = true }` (конфетти стартует, когда шит уже ушёл); `ConfettiOverlay` поверх контента, `allowsHitTesting(false)` (FAB «Фото» кликабелен сразу); автосброс `celebrating` по `.task` через ~2.8 с
-- [ ] Reduce Motion: `@Environment(\.accessibilityReduceMotion)` → при `true` конфетти не запускается (фанфара уже отыграла из `ScanModel`)
-- [ ] no unit tests (визуальный код, конвенция Android — конфетти там тоже не тестируется); проверка глазами: превью + симулятор с `FakeChipScanner`-флоу
-- [ ] run tests — must pass before task 6
-
-### Task 6: Аудит тёмной темы (экраны этапов 5–10)
+- [x] `ConfettiOverlay(running: Bool)`: `TimelineView(.animation)` + `Canvas`; 90 частиц по спецификации `ScanScreen.kt:401–480` (поля `ConfettiPiece`, стагер `delay + fall ≤ 1`, фейд последних 20%, прямоугольники 1:0.7 + 30% кругов, sway-синусоида); длительность 2.8 с; палитра `E53935`/`1E88E5`/`F4B400`/`8E44AD`/`1F7A3D`/`C65A2E` через `Color(hex:)`; частицы генерируются один раз на запуск (`@State`, пересоздание по `running`-ребру)
+- [x] **hand-off НЕ через чтение `scanModel` в `onDismiss`** (critical finding plan-review): у `.sheet(item: $scanModel)` биндинг обнуляется **до** `onDismiss`, `scanModel?.didComplete` там всегда `nil` (существующий `flushAfterScan` работает лишь потому, что читает только `appModel`). Вместо этого: `ScanSheet` получает замыкание `onCompleted: () -> Void`; в его существующем `.onChange(of: model.closeRequested)` при `model.didComplete` — вызвать `onCompleted()` перед `dismiss()`
+- [x] `MarksView`: `@State pendingCelebration = false` (выставляет `onCompleted`) + `@State celebrating = false`; в `onDismiss` (рядом с `flushAfterScan`) — `if pendingCelebration { pendingCelebration = false; celebrating = true }` (конфетти стартует, когда шит уже ушёл); `ConfettiOverlay` поверх контента, `allowsHitTesting(false)` (FAB «Фото» кликабелен сразу); автосброс `celebrating` по `.task` через ~2.8 с
+- [x] Reduce Motion: `@Environment(\.accessibilityReduceMotion)` → при `true` конфетти не запускается (фанфара уже отыграла из `ScanModel`)
+- [x] no unit tests (визуальный код, конвенция Android — конфетти там тоже не тестируется); проверка глазами: превью + симулятор с `FakeChipScanner`-флоу
+- [x] run tests — must pass before task 6
+: Аудит тёмной темы (экраны этапов 5–10)
 
 **Files:**
 - Modify: `kolco24/EmptyStates.swift`

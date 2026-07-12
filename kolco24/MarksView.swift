@@ -28,6 +28,12 @@ struct MarksView: View {
     /// Открытый лайтбокс (ненулевой ⇒ `fullScreenCover`); несёт глобальную ленту кадров и стартовый
     /// индекс (первый кадр тапнутого тайла).
     @State private var lightbox: LightboxContext?
+    /// Празднование взятия (этап 11): `ScanSheet.onCompleted` взводит `pendingCelebration` (шит ещё жив),
+    /// `onDismiss` переносит его в `celebrating` — конфетти стартует поверх сетки, когда шит уже ушёл.
+    @State private var pendingCelebration = false
+    @State private var celebrating = false
+    /// Reduce Motion → конфетти не показываем (фанфара уже отыграла из `ScanModel`).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Точка входа во флоу выбора команды (пробрасывается хостом; в превью — no-op).
     var onChooseTeam: () -> Void = {}
     /// Переход на вкладку «Команда» для привязки чипов (нудж пустого состояния).
@@ -35,6 +41,11 @@ struct MarksView: View {
 
     var body: some View {
         content
+            .overlay {
+                // Празднование поверх сетки; без хит-теста — FAB «Фото»/«Отметить КП» кликабельны сразу.
+                ConfettiOverlay(running: celebrating)
+                    .allowsHitTesting(false)
+            }
             .background(Color.paper)
             .navigationTitle("Отметки")
             .navigationBarTitleDisplayMode(.inline)
@@ -42,11 +53,21 @@ struct MarksView: View {
                 if model == nil { model = appModel.makeMarksModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
             }
+            .task(id: celebrating) {
+                // Автосброс празднования через длительность конфетти (~2.8 с).
+                guard celebrating else { return }
+                try? await Task.sleep(for: .milliseconds(2800))
+                celebrating = false
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 FloatingCTAView(onNFC: openScan, onPhoto: openPhoto)
             }
-            .sheet(item: $scanModel, onDismiss: flushAfterScan) { model in
-                ScanSheet(model: model, clockStatus: appModel.clockStatus)
+            .sheet(item: $scanModel, onDismiss: onScanDismiss) { model in
+                ScanSheet(
+                    model: model,
+                    clockStatus: appModel.clockStatus,
+                    onCompleted: { pendingCelebration = true }
+                )
             }
             .fullScreenCover(item: $photoModel, onDismiss: flushAfterScan) { model in
                 PhotoFlowView(model: model)
@@ -85,6 +106,17 @@ struct MarksView: View {
     private func flushAfterScan() {
         guard let raceId = appModel.selectedRaceId, let teamId = appModel.selectedTeamId else { return }
         appModel.flushUploads(raceId: raceId, teamId: teamId)
+    }
+
+    /// Закрытие скан-шита: дренаж (этап 6) + празднование (этап 11). Конфетти стартуем здесь, когда шит
+    /// уже ушёл — `pendingCelebration` взведён `ScanSheet.onCompleted` (успешное завершение). Reduce Motion
+    /// подавляет визуал (фанфара уже отыграла из `ScanModel`).
+    private func onScanDismiss() {
+        flushAfterScan()
+        if pendingCelebration {
+            pendingCelebration = false
+            if !reduceMotion { celebrating = true }
+        }
     }
 
     /// Тап FAB «Отметить КП»: строим скан-модель выбранной команды. Нет команды (`makeScanModel` →

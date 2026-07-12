@@ -25,6 +25,10 @@ struct ScanSheet: View {
     /// мягкая, `.ok` ничего. Параметром (не environment): `ScanSheet` видит только `ScanModel`,
     /// хост (`MarksView`) прокидывает `appModel.clockStatus`.
     var clockStatus: ClockStatus = .ok
+    /// Сигнал успешного завершения взятия (этап 11): вызывается ПЕРЕД `dismiss()`, когда автозакрытие
+    /// пришло по `didComplete`. Читать `model` в `onDismiss` нельзя — `.sheet(item:)` обнуляет биндинг
+    /// раньше, поэтому празднование хэнд-оффится замыканием, а не флагом модели.
+    var onCompleted: () -> Void = {}
 
     /// Ростер, отсортированный по слоту (стабильный порядок грида).
     private var roster: [TeamMemberItem] {
@@ -112,7 +116,12 @@ struct ScanSheet: View {
             model.beginScanning()
         }
         .onChange(of: model.closeRequested) { _, requested in
-            if requested { dismiss() }
+            if requested {
+                // Успешное завершение (не истечение окна) — сигналим хосту ДО dismiss: он включит
+                // конфетти в `onDismiss`, когда шит уже ушёл (системная NFC-шторка перекрыла бы оверлей).
+                if model.didComplete { onCompleted() }
+                dismiss()
+            }
         }
         .onDisappear {
             // Любое закрытие оверлея инвалидирует NFC-сессию; начатые записи в БД живут в своих Task'ах.
