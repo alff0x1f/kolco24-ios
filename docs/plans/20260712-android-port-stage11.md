@@ -77,10 +77,10 @@
 - Create: `kolco24/Core/Time/SkewFormat.swift`
 - Create: `kolco24Tests/Core/SkewFormatTests.swift`
 
-- [ ] `formatSkewMinutes(_ skewMs: Int64) -> String` — порт 1:1 (`ClockWarningBanner.kt:31–34`): округление по модулю `(abs(Double(skewMs)) / 60_000).rounded()` → «N мин», без направления; `abs` в `Double` (не `Int64` — `Int64.min` не ловушка). Foundation-only (греп-инвариант `Core/`)
-- [ ] зеркало 5 кейсов `ClockWarningBannerTest.kt` (имена 1:1: `roundsHalfUp`, `bothSignsCollapseToMagnitude`, `justOverThresholdRoundsToOne`, `roundsTowardNearest`, `longMinValueDoesNotTrapAndStaysPositive`), header «Зеркало ClockWarningBannerTest.kt»
-- [ ] проверить полу-к-верху семантику: Kotlin `Math.round(2.5) = 3` ↔ Swift `.rounded(.toNearestOrAwayFromZero)` на положительном `abs` эквивалентен — кейс `roundsHalfUp` это фиксирует
-- [ ] run tests — must pass before task 2
+- [x] `formatSkewMinutes(_ skewMs: Int64) -> String` — порт 1:1 (`ClockWarningBanner.kt:31–34`): округление по модулю `(abs(Double(skewMs)) / 60_000).rounded()` → «N мин», без направления; `abs` в `Double` (не `Int64` — `Int64.min` не ловушка). Foundation-only (греп-инвариант `Core/`)
+- [x] зеркало 5 кейсов `ClockWarningBannerTest.kt` (имена 1:1: `roundsHalfUp`, `bothSignsCollapseToMagnitude`, `justOverThresholdRoundsToOne`, `roundsTowardNearest`, `longMinValueDoesNotTrapAndStaysPositive`), header «Зеркало ClockWarningBannerTest.kt»
+- [x] проверить полу-к-верху семантику: Kotlin `Math.round(2.5) = 3` ↔ Swift `.rounded(.toNearestOrAwayFromZero)` на положительном `abs` эквивалентен — кейс `roundsHalfUp` это фиксирует
+- [x] run tests — must pass before task 2
 
 ### Task 2: `AppModel.clockStatus` — единственный потребитель `statusUpdates`
 
