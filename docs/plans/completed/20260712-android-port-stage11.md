@@ -199,9 +199,9 @@
 
 ### Task 10: [Final] Документация
 
-- [ ] `CLAUDE.md`: секция этапа 11 (баннер часов + единственный потребитель `statusUpdates`, быстрое закрытие + `didComplete` + конфетти, фиксы тёмной темы, иконка, privacy-манифест, `docs/release.md`)
-- [ ] `docs/plans/android-port.md`: этап 11 → «✅ выполнен — см. [детальный план](completed/20260712-android-port-stage11.md)» с кратким резюме решений
-- [ ] переместить этот план в `docs/plans/completed/`
+- [x] `CLAUDE.md`: секция этапа 11 (баннер часов + единственный потребитель `statusUpdates`, быстрое закрытие + `didComplete` + конфетти, фиксы тёмной темы, иконка, privacy-манифест, `docs/release.md`)
+- [x] `docs/plans/android-port.md`: этап 11 → «✅ выполнен — см. [детальный план](completed/20260712-android-port-stage11.md)» с кратким резюме решений
+- [x] переместить этот план в `docs/plans/completed/`
 
 ## Post-Completion
 

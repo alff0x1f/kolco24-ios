@@ -100,7 +100,14 @@ Android-приложение (`kolco24_app_v2`) — полнофункциона
 - **Известный факт:** эндпоинт `POST /app/race/<id>/judge_scans/` на сервере не задеплоен — судейские строки останутся pending, self-heal дошлёт их той же сборкой (как было с `/marks/`).
 
 ### Этап 11. Полировка
-- Баннер сдвига часов (TrustedClock.Skewed), празднования взятий, тёмная тема для новых экранов, иконка, TestFlight.
+
+✅ выполнен — см. [детальный план](completed/20260712-android-port-stage11.md).
+
+- Баннер сдвига часов — первый потребитель `TrustedClock.statusUpdates` (`AppModel.clockStatus`, re-entry-guarded `Task` в `start()`): глобальная плашка над вкладками (только `.skewed`), мягкая плашка в скан-оверлее (`.skewed`/`.noSync`), заметная судейская карточка. `Core/Time/SkewFormat.formatSkewMinutes` — 1:1 из Kotlin + 5 зеркальных тестов; тексты байт-в-байт.
+- Празднование взятия — быстрый возврат: `ScanModel.defaultSuccessHoldMs` 3300 → 0, `didComplete` только на успешном завершении; конфетти (`ConfettiOverlay`, `TimelineView`+`Canvas`, 90 частиц/2.8 с) на «Отметках» после закрытия шита (hand-off через `onCompleted`-замыкание, не чтение `scanModel` в `onDismiss`); Reduce Motion → без конфетти, фанфара остаётся.
+- Тёмная тема — аудит экранов этапов 5–10: единственный фикс `EmptyStates` (герой-градиент → токены `charcoal`/`charcoalHi`); цвета категорий КП в `CheckChipView` осознанно оставлены литералами (семантика, прецедент `amber`); прочих случайных хардкодов нет.
+- Иконка — `tools/appicon-variants.sh` (ImageMagick) генерирует dark/tinted-варианты из 1024-PNG; слоты `Contents.json` перенаправлены.
+- TestFlight — `ITSAppUsesNonExemptEncryption = false`, `PrivacyInfo.xcprivacy` (UserDefaults CA92.1 + SystemBootTime 35F9.1), `InfoPlistTests` проверяет доезд обоих до бандла, `docs/release.md` — ручной чек-лист. Автоматизации (fastlane) нет.
 
 ## Принципы
 - После этапов 3–5 приложение уже полезно участнику на гонке (легенда + отметки локально); загрузка (этап 6) делает его боевым — это MVP-граница.
