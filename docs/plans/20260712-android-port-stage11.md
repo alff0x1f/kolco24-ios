@@ -190,12 +190,12 @@
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] баннер: глобальный только на `.skewed`; NoSync виден только в скан-оверлее (мягко) и судейском скане (карточка); тексты байт-в-байт с Android
-- [ ] празднование: завершение взятия → шит закрывается немедленно, конфетти на «Отметках», FAB «Фото» кликабелен; истечение окна → без празднования; Reduce Motion → без конфетти
-- [ ] тёмная тема: все экраны этапов 5–10 корректны в обеих темах; fixed-dark поверхности не тронуты
-- [ ] иконка: три режима на домашнем экране; Release-сборка зелёная
-- [ ] полный сьют: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] греп-инварианты: `Core/Time/SkewFormat` — Foundation-only; `AppModel`/`ScanModel` — только `Observation`/`Foundation`; новые вьюхи — в корне `kolco24/`; `import GRDB` не расползся
+- [x] баннер: глобальный только на `.skewed`; NoSync виден только в скан-оверлее (мягко) и судейском скане (карточка); тексты байт-в-байт с Android — verified by code inspection: `GlobalClockBanner` рендерит только `case .skewed` (иначе пусто); `ScanClockBanner` — `.skewed` красная / `.noSync` мягкая / `.ok` `EmptyView`; `JudgeClockBanner` — `.skewed` красная / `.noSync` заметная error-карточка / `.ok` `EmptyView`. Все три строки совпадают байт-в-байт с Kotlin (`ClockWarningBanner.kt` + `JudgeScanScreen.kt:480`: «Часы телефона расходятся с сервером на N мин — проверьте дату и время», «Время не подтверждено — подключитесь к сети. Отметка всё равно будет сохранена.», судейская «Время не подтверждено — синхронизируйте до начала работы»). Проброс: `ContentView.safeAreaInset` (глобальный), `MarksView→ScanSheet` и `AdminFlowView/JudgeScanView` параметром. Живой сдвиг часов — manual/Post-Completion
+- [x] празднование: завершение взятия → шит закрывается немедленно, конфетти на «Отметках», FAB «Фото» кликабелен; истечение окна → без празднования; Reduce Motion → без конфетти — verified by code inspection: `ScanModel.defaultSuccessHoldMs == 0`; `didComplete` выставляется ТОЛЬКО в `handleCompletionCheck()` при `isComplete` (истечение окна `handleExpiryTick` его не трогает); `ScanSheet.onChange(closeRequested)` зовёт `onCompleted()` при `didComplete` перед `dismiss()`; `MarksView.onScanDismiss` переносит `pendingCelebration→celebrating` под `!reduceMotion`-гардом; `ConfettiOverlay(running:).allowsHitTesting(false)` поверх сетки; автосброс ~2.8 с. Визуал конфетти — manual/Post-Completion
+- [x] тёмная тема: все экраны этапов 5–10 корректны в обеих темах; fixed-dark поверхности не тронуты — verified by code inspection: `EmptyStates.swift:86` теперь использует токены `Color.charcoal`/`Color.charcoalHi` (был литеральный градиент); fixed-dark поверхности не тронуты (`NFCTileView` литералы `#171D25→#232A33`, `DarkHeroBackground`, `PhotoCaptureView`/`PhotoLightboxView`, белый `CPBadge` — без изменений). Визуальный обзор в обеих темах — manual/Post-Completion
+- [x] иконка: три режима на домашнем экране; Release-сборка зелёная — verified: `AppIcon-1024-dark.png` (RGBA 1024×1024) + `AppIcon-1024-tinted.png` (Grayscale-Alpha 1024×1024) присутствуют; `Contents.json` указывает на них через `luminosity` dark/tinted-слоты; Release-сборка — **BUILD SUCCEEDED**. Домашний экран в трёх режимах — manual/Post-Completion
+- [x] полный сьют: `xcodebuild test … -destination 'platform=iOS Simulator,id=F5E33361-…'` — **TEST SUCCEEDED** (полностью зелёный)
+- [x] греп-инварианты: `Core/Time/SkewFormat` — Foundation-only ✓; `AppModel`/`ScanModel` — только `Observation`/`Foundation` ✓; новые вьюхи (`ClockBanners.swift`, `ConfettiOverlay.swift`) — в корне `kolco24/` ✓; `import GRDB` не расползся за `Data/` ✓ (вне `Data/` только комментарии)
 
 ### Task 10: [Final] Документация
 
