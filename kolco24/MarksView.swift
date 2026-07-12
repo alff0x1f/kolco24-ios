@@ -46,7 +46,7 @@ struct MarksView: View {
                 FloatingCTAView(onNFC: openScan, onPhoto: openPhoto)
             }
             .sheet(item: $scanModel, onDismiss: flushAfterScan) { model in
-                ScanSheet(model: model)
+                ScanSheet(model: model, clockStatus: appModel.clockStatus)
             }
             .fullScreenCover(item: $photoModel, onDismiss: flushAfterScan) { model in
                 PhotoFlowView(model: model)

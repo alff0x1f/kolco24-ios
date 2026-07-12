@@ -21,6 +21,10 @@ import SwiftUI
 struct ScanSheet: View {
     @Environment(\.dismiss) private var dismiss
     let model: ScanModel
+    /// Статус доверенных часов (этап 11) — плашка над CP-карточкой: `.skewed` красная, `.noSync`
+    /// мягкая, `.ok` ничего. Параметром (не environment): `ScanSheet` видит только `ScanModel`,
+    /// хост (`MarksView`) прокидывает `appModel.clockStatus`.
+    var clockStatus: ClockStatus = .ok
 
     /// Ростер, отсортированный по слоту (стабильный порядок грида).
     private var roster: [TeamMemberItem] {
@@ -50,6 +54,11 @@ struct ScanSheet: View {
                 .padding(.horizontal, DS.hPad)
                 .padding(.top, 4)
                 .padding(.bottom, 10)
+
+                // Clock-skew notice (этап 11) — над CP-карточкой; `.ok` → нулевая высота.
+                ScanClockBanner(status: clockStatus)
+                    .padding(.horizontal, DS.hPad)
+                    .padding(.bottom, clockStatus == .ok ? 0 : 10)
 
                 // CP card — waiting / identified / done
                 CPCardView(
@@ -397,6 +406,7 @@ private final class PreviewChipScanner: ChipScanning, @unchecked Sendable {
 /// поверх РЕАЛЬНЫХ сторов и прогоняет чип КП + пару браслетов через `PreviewChipScanner`.
 private struct ScanSheetPreviewHost: View {
     @State private var model: ScanModel?
+    var clockStatus: ClockStatus = .ok
 
     private let raceId = 7
     private let teamId = 42
@@ -404,7 +414,7 @@ private struct ScanSheetPreviewHost: View {
     var body: some View {
         Group {
             if let model {
-                ScanSheet(model: model)
+                ScanSheet(model: model, clockStatus: clockStatus)
             } else {
                 Color.paper
             }
@@ -466,5 +476,13 @@ private struct ScanSheetPreviewHost: View {
 #Preview("Dark") {
     ScanSheetPreviewHost()
         .preferredColorScheme(.dark)
+}
+
+#Preview("Skewed") {
+    ScanSheetPreviewHost(clockStatus: .skewed(skewMs: 150_000))
+}
+
+#Preview("NoSync") {
+    ScanSheetPreviewHost(clockStatus: .noSync)
 }
 #endif

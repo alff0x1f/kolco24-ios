@@ -324,7 +324,7 @@ private struct JudgeScanHostView: View {
     var body: some View {
         Group {
             if let model {
-                JudgeScanView(model: model)
+                JudgeScanView(model: model, clockStatus: appModel.clockStatus)
             } else {
                 AdminNoTeamPlaceholder()
             }

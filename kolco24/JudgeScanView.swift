@@ -16,6 +16,10 @@ import SwiftUI
 
 struct JudgeScanView: View {
     let model: JudgeScanModel
+    /// Статус доверенных часов (этап 11) — плашка над скан-зоной: `.skewed` та же красная, что у
+    /// участника; `.noSync` — заметная судейская error-карточка; `.ok` ничего. Параметром (не
+    /// environment): хост (`AdminFlowView`) прокидывает `appModel.clockStatus`.
+    var clockStatus: ClockStatus = .ok
 
     private var title: String {
         model.eventType == "finish" ? "Отметка финиша" : "Отметка старта"
@@ -25,6 +29,10 @@ struct JudgeScanView: View {
         ScrollView {
             VStack(spacing: 16) {
                 clockHero
+
+                if clockStatus != .ok {
+                    JudgeClockBanner(status: clockStatus)
+                }
 
                 if model.needsSync {
                     syncPlate
@@ -215,6 +223,7 @@ private final class PreviewJudgeScanner: ChipScanning, @unchecked Sendable {
 
 private struct JudgeScanPreviewHost: View {
     @State private var model: JudgeScanModel?
+    var clockStatus: ClockStatus = .ok
 
     private let raceId = 7
 
@@ -222,7 +231,7 @@ private struct JudgeScanPreviewHost: View {
         NavigationStack {
             Group {
                 if let model {
-                    JudgeScanView(model: model)
+                    JudgeScanView(model: model, clockStatus: clockStatus)
                 } else {
                     Color.paper
                 }
@@ -270,5 +279,13 @@ private struct JudgeScanPreviewHost: View {
 #Preview("Dark") {
     JudgeScanPreviewHost()
         .preferredColorScheme(.dark)
+}
+
+#Preview("Skewed") {
+    JudgeScanPreviewHost(clockStatus: .skewed(skewMs: 150_000))
+}
+
+#Preview("NoSync") {
+    JudgeScanPreviewHost(clockStatus: .noSync)
 }
 #endif

@@ -41,6 +41,13 @@ struct ContentView: View {
             .onChange(of: selectedTab) {
                 UISelectionFeedbackGenerator().selectionChanged()
             }
+            // Глобальная плашка сдвига часов над вкладками (этап 11) — только на `.skewed`, иначе
+            // нулевая высота (паритет с Android; полноэкранные каверы её не показывают). Анимация
+            // появления — как у тоста.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                GlobalClockBanner(status: appModel.clockStatus)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: appModel.clockStatus)
+            }
 
             // Тост ошибки refresh — overlay над таб-баром, авто-скрытие ~3 с.
             if let toast = appModel.toastMessage {

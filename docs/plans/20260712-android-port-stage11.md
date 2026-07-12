@@ -103,11 +103,11 @@
 - Modify: `kolco24/AdminFlowView.swift`
 - Modify: `kolco24/JudgeScanView.swift`
 
-- [ ] `ClockBanners.swift`: переиспользуемый ряд (иконка + текст, токены) в двух стилях — «skewed» (`brandRed`-контейнер, белый текст, иконка `clock.badge.exclamationmark`) и «мягкий noSync» (`card`-фон, `sub`-текст, иконка `icloud.slash`); + заметная судейская NoSync-карточка (аналог `JudgeScanScreen.kt:442+`). Тексты байт-в-байт с Android: «Часы телефона расходятся с сервером на {formatSkewMinutes} — проверьте дату и время», «Время не подтверждено — подключитесь к сети. Отметка всё равно будет сохранена.»
-- [ ] `ContentView`: `.safeAreaInset(edge: .top)` на `TabView` — глобальный баннер только при `.skewed`, иначе `EmptyView` (нулевая высота); анимация появления как у тоста
-- [ ] `ScanSheet` получает `clockStatus: ClockStatus` параметром (от `MarksView` через `appModel.clockStatus`); плашка над CP-карточкой: `.skewed` → красная, `.noSync` → мягкая, `.ok` → ничего; превью обновить (все три состояния)
-- [ ] `JudgeScanView` получает `clockStatus: ClockStatus` параметром; **два call-site'а** (finding plan-review): хост в `AdminFlowView.swift:~327` и превью-хост в `JudgeScanView.swift:225` (+ `#Preview`-блоки 266/270); `.skewed` → общая плашка, `.noSync` → судейская error-карточка над скан-зоной, `.ok` → ничего
-- [ ] no new unit tests (вёрстка); ворота — сборка + существующие тесты зелёные; run tests — must pass before task 4
+- [x] `ClockBanners.swift`: переиспользуемый ряд (иконка + текст, токены) в двух стилях — «skewed» (`brandRed`-контейнер, белый текст, иконка `clock.badge.exclamationmark`) и «мягкий noSync» (`card`-фон, `sub`-текст, иконка `icloud.slash`); + заметная судейская NoSync-карточка (аналог `JudgeScanScreen.kt:442+`). Тексты байт-в-байт с Android: «Часы телефона расходятся с сервером на {formatSkewMinutes} — проверьте дату и время», «Время не подтверждено — подключитесь к сети. Отметка всё равно будет сохранена.»
+- [x] `ContentView`: `.safeAreaInset(edge: .top)` на `TabView` — глобальный баннер только при `.skewed`, иначе `EmptyView` (нулевая высота); анимация появления как у тоста
+- [x] `ScanSheet` получает `clockStatus: ClockStatus` параметром (от `MarksView` через `appModel.clockStatus`); плашка над CP-карточкой: `.skewed` → красная, `.noSync` → мягкая, `.ok` → ничего; превью обновить (все три состояния)
+- [x] `JudgeScanView` получает `clockStatus: ClockStatus` параметром; **два call-site'а** (finding plan-review): хост в `AdminFlowView.swift:~327` и превью-хост в `JudgeScanView.swift:225` (+ `#Preview`-блоки 266/270); `.skewed` → общая плашка, `.noSync` → судейская error-карточка над скан-зоной, `.ok` → ничего
+- [x] no new unit tests (вёрстка); ворота — сборка + существующие тесты зелёные; run tests — must pass before task 4
 
 ### Task 4: Быстрое автозакрытие + `didComplete` в `ScanModel`
 
