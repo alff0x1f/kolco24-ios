@@ -476,6 +476,49 @@ struct AppModelTests {
         #expect(AppModel.localModeToast(.noRace) == "Гонка не выбрана")
     }
 
+    // MARK: - Статус часов (этап 11)
+
+    /// Мутабельные провайдеры времени для управляемого `TrustedClock` (как `Fakes` в `TrustedClockTests`).
+    private final class ClockFakes: @unchecked Sendable {
+        var elapsed: Int64
+        var wall: Int64
+        var boot: Int?
+        init(elapsed: Int64, wall: Int64, boot: Int?) {
+            self.elapsed = elapsed
+            self.wall = wall
+            self.boot = boot
+        }
+    }
+
+    /// `AppModel` — единственный потребитель `TrustedClock.statusUpdates`: после `start()` подписка
+    /// републикует статус в `clockStatus`. Загоняем часы в скью (якорь + сдвиг wall) → свойство
+    /// становится `.skewed`.
+    @Test func start_republishesClockStatusFromTrustedClock() async throws {
+        let transport = FakeTransport()
+        enqueue304s(transport, 4)
+        let fakes = ClockFakes(elapsed: 1_000, wall: 0, boot: 1)
+        let clock = TrustedClock(
+            elapsedProvider: { [unowned fakes] in fakes.elapsed },
+            wallProvider: { [unowned fakes] in fakes.wall },
+            bootCountProvider: { [unowned fakes] in fakes.boot }
+        )
+        let env = try AppEnvironment.inMemory(transport: transport.handle, trustedClock: clock)
+        let model = AppModel(env: env)
+
+        await model.start()
+        // До синхры — noSync (начальное значение, прочитанное подпиской).
+        await waitUntil { model.clockStatus == .noSync }
+        #expect(model.clockStatus == .noSync)
+
+        // Заякориться (wall == trusted → сперва .ok), затем сдвинуть wall на >60 с → .skewed.
+        await clock.onServerTime(serverMs: 1_000_000, anchorElapsed: 1_000, wallNow: 1_000_000, bootNow: 1)
+        fakes.wall = 1_000_000 + 90_000
+        await clock.recomputeStatus()
+
+        await waitUntil { model.clockStatus == .skewed(skewMs: 90_000) }
+        #expect(model.clockStatus == .skewed(skewMs: 90_000))
+    }
+
     // MARK: - Тема (seed + persist)
 
     /// `themeMode` засеивается из `ThemePreference` в `init`; сеттер персистит через стор; новый

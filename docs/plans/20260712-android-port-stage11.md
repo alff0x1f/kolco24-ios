@@ -88,10 +88,10 @@
 - Modify: `kolco24/App/AppModel.swift`
 - Modify: `kolco24Tests/App/AppModelTests.swift`
 
-- [ ] `var clockStatus: ClockStatus = .noSync` (@Observable, публичное чтение); в `start()` — долгоживущий `Task`: `clockStatus = await trustedClock.status`, затем `for await s in trustedClock.statusUpdates { clockStatus = s }` (идиома существующих подписок; отмена вместе с моделью)
-- [ ] **guard от повторного входа** (finding plan-review): `statusUpdates` — одно-итераторный `AsyncStream`, второй `for await` = runtime fault; подписку хранить в `clockStatusTask` и гардить `guard clockStatusTask == nil` (идиома `startSelectionObservationIfNeeded`) — корневой `.task` в `kolco24App` теоретически может перезапуститься
-- [ ] fresh-тест в `AppModelTests`: `AppEnvironment.inMemory` → `start()` → толкнуть `trustedClock` в skew (через `onServerTime`-якорь + подмену `wallProvider`, как в `TrustedClockTests`) → дождаться `clockStatus == .skewed` (идиома поллинга существующих async-тестов)
-- [ ] run tests — must pass before task 3
+- [x] `var clockStatus: ClockStatus = .noSync` (@Observable, публичное чтение); в `start()` — долгоживущий `Task`: `clockStatus = await trustedClock.status`, затем `for await s in trustedClock.statusUpdates { clockStatus = s }` (идиома существующих подписок; отмена вместе с моделью)
+- [x] **guard от повторного входа** (finding plan-review): `statusUpdates` — одно-итераторный `AsyncStream`, второй `for await` = runtime fault; подписку хранить в `clockStatusTask` и гардить `guard clockStatusTask == nil` (идиома `startSelectionObservationIfNeeded`) — корневой `.task` в `kolco24App` теоретически может перезапуститься
+- [x] fresh-тест в `AppModelTests`: `AppEnvironment.inMemory` → `start()` → толкнуть `trustedClock` в skew (через `onServerTime`-якорь + подмену `wallProvider`, как в `TrustedClockTests`) → дождаться `clockStatus == .skewed` (идиома поллинга существующих async-тестов)
+- [x] run tests — must pass before task 3
 
 ### Task 3: Три поверхности баннера (вёрстка + проброс)
 

@@ -40,6 +40,12 @@ final class AppModel {
     /// спиннер тумблера читает это. Гард от двойного входа — `guard !localModeBusy` в `toggleLocalMode`.
     var localModeBusy: Bool = false
 
+    /// Текущий статус доверенных часов (этап 11). Единственный потребитель `TrustedClock.statusUpdates`:
+    /// `AppModel` держит одну подписку и публикует значение сюда, все баннер-поверхности читают свойство
+    /// (глобальный над вкладками, плашка в скан-оверлее, судейский скан). `@Observable` → перекраска
+    /// баннеров мгновенна.
+    private(set) var clockStatus: ClockStatus = .noSync
+
     /// Текущий режим темы (этап 9). Сид из `ThemePreference`; сеттер персистит через стор. Корневая
     /// вьюха маппит в `.preferredColorScheme`. `@Observable` трекает stored-property → перекраска мгновенна.
     var themeMode: ThemeMode {
@@ -65,6 +71,10 @@ final class AppModel {
     /// 5-минутный foreground-цикл дренажа выгрузки (порт таймера `MainActivity.kt` L167/589–597).
     /// Пересоздаётся `scenePhaseChanged(isActive:)` (аналог `repeatOnLifecycle(STARTED)`).
     @ObservationIgnored private var uploadLoopTask: Task<Void, Never>?
+    /// Подписка на `TrustedClock.statusUpdates` (этап 11). Хранится, чтобы гардить повторный вход:
+    /// `statusUpdates` — одно-итераторный `AsyncStream`, второй `for await` = runtime fault (корневой
+    /// `.task` теоретически может перезапуститься). Идиома `startSelectionObservationIfNeeded`.
+    @ObservationIgnored private var clockStatusTask: Task<Void, Never>?
     /// Гонка, для которой уже отработал реактивный refresh (Launch B) — чтобы не перезапускать его на
     /// повторных эмиссиях той же гонки. `nil` при сбросе выбора → повторный выбор той же гонки снова
     /// дёрнет refresh.
@@ -101,9 +111,26 @@ final class AppModel {
     /// 5-минутный цикл дренажа выгрузки и стартовый refresh (Launch A). Идемпотентен по подписке.
     func start() async {
         startSelectionObservationIfNeeded()
+        startClockStatusObservationIfNeeded()
         startUploadLoop()
         sweepOrphanPhotoDirs()
         await launchStartupRefresh()
+    }
+
+    /// Единственный потребитель `TrustedClock.statusUpdates` (этап 11): читает начальное значение
+    /// (`await status`), затем `for await` публикует каждое обновление в `clockStatus`. Идемпотентен
+    /// по подписке (`guard clockStatusTask == nil`) — `statusUpdates` одно-итераторный, повторный
+    /// `for await` уронил бы рантайм. Отменяется вместе с моделью.
+    private func startClockStatusObservationIfNeeded() {
+        guard clockStatusTask == nil else { return }
+        let clock = env.trustedClock
+        clockStatusTask = Task { [weak self] in
+            self?.clockStatus = await clock.status
+            for await status in clock.statusUpdates {
+                guard let self else { return }
+                self.clockStatus = status
+            }
+        }
     }
 
     /// Стартовый sweep осиротевших фото-каталогов (этап 7, fire-and-forget): кадры, чья строка взятия
