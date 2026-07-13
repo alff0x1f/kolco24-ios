@@ -532,7 +532,9 @@ private struct PhotoReviewNotice: View {
     private var title: String {
         let tokens = tokensLabel(summary.tokens)
         if summary.points > 0 {
-            return "\(summary.count) КП по фото (\(tokens)) · \(pointsLabel(summary.points))"
+            // Порт `MarksScreen.kt:921`: склонение «балл/балла/баллов».
+            let word = pluralRu(count: summary.points, one: "балл", few: "балла", many: "баллов")
+            return "\(summary.count) КП по фото (\(tokens)) · \(summary.points) \(word)"
         }
         return "\(summary.count) КП по фото (\(tokens))"
     }
