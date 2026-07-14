@@ -84,7 +84,10 @@ private struct EmptyTeamIllustration: View {
 
             ZStack {
                 LinearGradient(
-                    colors: [Color(hex: "1D242D"), Color(hex: "2A333E")],
+                    // charcoal/charcoalHi tokens: dark-valued in both themes (like
+                    // `DarkHeroBackground`), so the illustration stays fixed-dark but now
+                    // follows each design — light `1D242D→2A323C`, dark `27313D→171D25`.
+                    colors: [Color.charcoal, Color.charcoalHi],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
                 RadialGradient(

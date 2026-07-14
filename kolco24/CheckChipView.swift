@@ -235,6 +235,8 @@ private func feedStyle(_ result: ChipCheckResult) -> FeedStyle {
 
 /// `CheckpointColor → Color` — фиксированные декоративные оттенки (одинаковы в light/dark), зеркало
 /// `barColor()` (`LegendScreen.kt` :594). `nil` (неизвестный/пустой токен) → прозрачный.
+/// Семантика цвета КП едина в обеих темах (прецедент токена `amber`), а насыщенные оттенки
+/// (red/blue/yellow/purple) читаются на тёмном фоне — поэтому оставлены литералами, не токенами.
 func barColor(_ color: CheckpointColor?) -> Color {
     switch color {
     case .red: return Color(hex: "E53935")

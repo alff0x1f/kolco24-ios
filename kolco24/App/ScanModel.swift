@@ -46,6 +46,10 @@ final class ScanModel: Identifiable {
     private(set) var completed = false
     /// Сигнал автозакрытия оверлея (истечение окна / завершение / конец стрима). Вьюха его наблюдает.
     private(set) var closeRequested = false
+    /// `true`, если оверлей закрылся по УСПЕШНОМУ завершению взятия (весь ростер present), а не по истечению
+    /// окна/концу стрима. Выставляется в `handleCompletionCheck()` перед `finalizeSession()`; читается ПОСЛЕ
+    /// dismiss (`MarksView` запускает конфетти) — истечение окна его НЕ выставляет.
+    private(set) var didComplete = false
 
     /// Потокобезопасное зеркало «оверлей жив» для `NfcChipScanner.shouldRestart` (читается на делегатной
     /// NFC-очереди, пишется здесь на MainActor). `true` с момента создания (оверлей открыт) → `false` на
@@ -145,8 +149,10 @@ final class ScanModel: Identifiable {
     private static let defaultTickMs: Int64 = 250
     /// `COMPLETE_FANFARE_DELAY_MS` из `ScanScreen.kt`.
     private static let defaultFanfareDelayMs: Int64 = 275
-    /// `SUCCESS_HOLD_MS` из `ScanScreen.kt`.
-    private static let defaultSuccessHoldMs: Int64 = 3_300
+    /// Быстрое автозакрытие (этап 11): удержание «Готово!»-бита убрано — оверлей закрывается немедленно,
+    /// «Готово!» остаётся видимым лишь на время анимации закрытия шита, конфетти играет на «Отметках».
+    /// Механизм холда (FIFO-пере-проверка `completionCheck`, Finding-1) не тронут — просто нулевая задержка.
+    private static let defaultSuccessHoldMs: Int64 = 0
 
     init(
         raceId: Int,
@@ -193,7 +199,8 @@ final class ScanModel: Identifiable {
         timerTask?.cancel()
         bindingsTask?.cancel()
         completionTask?.cancel()
-        fanfareTask?.cancel()
+        // `fanfareTask` НЕ отменяем: фанфара завершения должна доиграть независимо от dealloc (§6 —
+        // Task захватил `feedback`, не `self`).
         inputContinuation?.finish()
         scanner?.stop()
     }
@@ -270,7 +277,8 @@ final class ScanModel: Identifiable {
         forwardTask?.cancel()
         timerTask?.cancel()
         completionTask?.cancel()
-        fanfareTask?.cancel()
+        // `fanfareTask` НЕ отменяем: при быстром автозакрытии (этап 11) `stop()` наступает раньше
+        // `fanfareDelayMs` — фанфара завершения должна доиграть (§6, Task захватил `feedback`, не `self`).
         // `streamTask` НЕ отменяем: `finish()` даёт ему дренировать уже форварднутые (в т.ч. near-deadline,
         // Finding-1) чтения из буфера общего стрима и лишь потом завершиться — принятый скан не пропадёт
         // между `requestClose` и teardown (§6). Он `[weak self]`: снимает оставшиеся входы, зовёт
@@ -517,11 +525,19 @@ final class ScanModel: Identifiable {
 
     private func scheduleFanfare() {
         let delay = fanfareDelayMs
+        // Захватываем `feedback` (а не `self`) — §6-идиома «переживает закрытие оверлея». При быстром
+        // автозакрытии (этап 11: `successHoldMs = 0`) успешное завершение просит `closeRequested`
+        // немедленно, вьюха дизмиссит шит и его `onDisappear` зовёт `stop()` РАНЬШЕ, чем истечёт
+        // `fanfareDelayMs` (~275 мс). Поэтому фанфару НЕ отменяем в `stop()`/`deinit` и не держим за
+        // `self` слабо (иначе после dealloc модели `self == nil` — фанфара не сыграла бы). Task живёт
+        // сам по себе (рантайм держит его), захватив только `Sendable`-фидбек. Повторный вызов
+        // (`scheduleFanfare` на новом завершении) всё же отменяет предыдущий — дедуп фанфар.
+        let feedback = self.feedback
         fanfareTask?.cancel()
-        fanfareTask = Task { [weak self] in
+        fanfareTask = Task {
             try? await Task.sleep(for: .milliseconds(Int(delay)))
-            guard let self, !Task.isCancelled else { return }
-            self.feedback.fanfare()
+            if Task.isCancelled { return }
+            feedback.fanfare()
         }
     }
 
@@ -546,6 +562,9 @@ final class ScanModel: Identifiable {
     private func handleCompletionCheck() {
         guard completed else { return }
         if isComplete(session: session, rosterSize: roster.count) {
+            // Успешное завершение (весь ростер present) — помечаем ПЕРЕД finalizeSession(), чтобы
+            // `MarksView` мог отличить его от истечения окна/конца стрима и запустить конфетти после dismiss.
+            didComplete = true
             finalizeSession()
             requestClose()
         } else {
