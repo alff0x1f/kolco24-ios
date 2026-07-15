@@ -422,15 +422,16 @@ private struct NFCTileView: View {
                         .shadow(.inner(color: .black.opacity(0.6), radius: side * 0.1, y: 2))
                         .shadow(.inner(color: .white.opacity(0.04), radius: 0.5, y: -1))
                     )
-                // subtle diagonal sheen (white α≈0.025)
+                // subtle diagonal sheen; направление «/» — параллельно
+                // гипотенузе цветного уголка (top-left), а не поперёк неё
                 Canvas { ctx, s in
                     let step: CGFloat = 4
-                    var x: CGFloat = -s.height
+                    var x: CGFloat = 0
                     while x < s.width + s.height {
                         var p = Path()
                         p.move(to: CGPoint(x: x, y: 0))
-                        p.addLine(to: CGPoint(x: x + s.height, y: s.height))
-                        ctx.stroke(p, with: .color(Color.white.opacity(0.025)), lineWidth: 1)
+                        p.addLine(to: CGPoint(x: x - s.height, y: s.height))
+                        ctx.stroke(p, with: .color(Color.white.opacity(0.06)), lineWidth: 1)
                         x += step
                     }
                 }
