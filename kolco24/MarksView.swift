@@ -381,6 +381,26 @@ private struct TileKpToken: View {
     }
 }
 
+// MARK: - Tile Color Corner
+// Цветной уголок дисциплины КП (top-left): треугольник цвета КП через общий
+// `barColor`. КП без цвета уголка не несёт.
+private struct TileColorCorner: View {
+    let color: CheckpointColor?
+
+    var body: some View {
+        if let color {
+            Path { p in
+                p.move(to: .zero)
+                p.addLine(to: CGPoint(x: 22, y: 0))
+                p.addLine(to: CGPoint(x: 0, y: 22))
+                p.closeSubpath()
+            }
+            .fill(barColor(color))
+            .frame(width: 22, height: 22)
+        }
+    }
+}
+
 // MARK: - NFC Tile
 // Dark "chip card": fixed-dark in both themes (like DarkHeroBackground),
 // not adaptive tokens. Big mono KP token.
@@ -422,6 +442,9 @@ private struct NFCTileView: View {
                     .foregroundStyle(.white.opacity(0.82))
                     .padding(.trailing, 8)
                     .padding(.bottom, 6)
+            }
+            .overlay(alignment: .topLeading) {
+                TileColorCorner(color: tile.color)
             }
             .overlay { Rectangle().stroke(Color.white.opacity(0.06), lineWidth: 0.5) }
         }
@@ -485,6 +508,9 @@ private struct PhotoTileView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .clipped()
+        .overlay(alignment: .topLeading) {
+            TileColorCorner(color: tile.color)
+        }
         .overlay(alignment: .topTrailing) {
             // Глиф камеры — эксклюзив photo-взятия (NFC-взятие с фото им не помечается).
             if tile.kind == .photo {
