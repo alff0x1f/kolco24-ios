@@ -425,13 +425,13 @@ private struct NFCTileView: View {
                 // subtle diagonal sheen; направление «/» — параллельно
                 // гипотенузе цветного уголка (top-left), а не поперёк неё
                 Canvas { ctx, s in
-                    let step: CGFloat = 4
+                    let step: CGFloat = 7
                     var x: CGFloat = 0
                     while x < s.width + s.height {
                         var p = Path()
                         p.move(to: CGPoint(x: x, y: 0))
                         p.addLine(to: CGPoint(x: x - s.height, y: s.height))
-                        ctx.stroke(p, with: .color(Color.white.opacity(0.06)), lineWidth: 1)
+                        ctx.stroke(p, with: .color(Color.white.opacity(0.075)), lineWidth: 1)
                         x += step
                     }
                 }
@@ -497,8 +497,10 @@ private struct PhotoTileView: View {
                     .foregroundStyle(.white.opacity(0.3))
             }
             // Равномерное затенение кадра — центральный белый КП-токен должен
-            // читаться на любом снимке (светлое небо, снег).
-            Color.black.opacity(0.35)
+            // читаться на любом снимке (светлое небо, снег). Тон — графит NFC-карты,
+            // не чистый чёрный: холодный оттенок сводит фото в один регистр с
+            // тёмными nfc-плитками, не давая грязно-серого на тёплых кадрах.
+            Color(hex: "171D25").opacity(0.45)
             // Нижний скрим — время читается каптионом над яркой нижней кромкой кадра.
             VStack {
                 Spacer()
