@@ -365,7 +365,7 @@ private struct MarksEmptyLadder: View {
 
 // MARK: - NFC Tile
 // Dark "chip card": fixed-dark in both themes (like DarkHeroBackground),
-// not adaptive tokens. Contactless arcs glyph + big mono number.
+// not adaptive tokens. Big mono number.
 private struct NFCTileView: View {
     let tile: MarkTile
 
@@ -396,42 +396,21 @@ private struct NFCTileView: View {
                         x += step
                     }
                 }
-                VStack(spacing: side * 0.04) {
-                    ContactlessGlyph()
-                        .frame(width: side * 0.38, height: side * 0.38)
-                    Text(tile.number)
-                        .font(.mono(28, weight: .bold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.5), radius: 0, y: 1)
-                }
+                Text(tile.number)
+                    .font(.mono(28, weight: .bold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 0, y: 1)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Text(tile.time)
+                    .font(.mono(10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .padding(.trailing, 8)
+                    .padding(.bottom, 6)
             }
             .overlay { Rectangle().stroke(Color.white.opacity(0.06), lineWidth: 0.5) }
         }
         .aspectRatio(1, contentMode: .fit)
-    }
-}
-
-// Three contactless-payment arcs (matches design_dark.html NFCTile glyph).
-private struct ContactlessGlyph: View {
-    var body: some View {
-        Canvas { ctx, s in
-            let sx = s.width / 32
-            let sy = s.height / 32
-            func arc(_ mx: CGFloat, _ my: CGFloat,
-                     _ cx: CGFloat, _ cy: CGFloat,
-                     _ ex: CGFloat, _ ey: CGFloat) -> Path {
-                var p = Path()
-                p.move(to: CGPoint(x: mx * sx, y: my * sy))
-                p.addQuadCurve(to: CGPoint(x: ex * sx, y: ey * sy),
-                               control: CGPoint(x: cx * sx, y: cy * sy))
-                return p
-            }
-            let shading = GraphicsContext.Shading.color(Color(hex: "E6EAF0"))
-            let style = StrokeStyle(lineWidth: 2.2 * sx, lineCap: .round)
-            ctx.stroke(arc(8, 10, 14, 16, 8, 22), with: shading, style: style)
-            ctx.stroke(arc(13, 6, 22, 16, 13, 26), with: shading, style: style)
-            ctx.stroke(arc(18, 2, 30, 16, 18, 30), with: shading, style: style)
-        }
     }
 }
 
