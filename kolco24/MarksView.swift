@@ -464,9 +464,13 @@ private struct PhotoTileView: View {
                 startPoint: .top, endPoint: .bottom
             )
             if let url = firstFrameURL, let image = UIImage(contentsOfFile: url.path) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+                // Кадр — оверлеем над нулевым слоем: scaledToFill отдаёт layout-у размер больше
+                // предложенного (портретный кадр выше квадрата), и ZStack раздувался бы по нему.
+                Color.clear.overlay(
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                )
             } else {
                 // Кап-заглушка при нечитаемом файле (тот же тёмный фон + глиф фото).
                 Image(systemName: "photo")
