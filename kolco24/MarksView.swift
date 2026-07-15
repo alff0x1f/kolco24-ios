@@ -226,9 +226,9 @@ private struct MetricsCard: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            MetricView(label: "Взято", value: takenValue, unit: "КП")
+            MetricView(label: "Взято КП", value: takenValue)
             VDivider()
-            MetricView(label: "Сумма", value: scoreValue, unit: "бал.")
+            MetricView(label: "Баллов", value: scoreValue)
             VDivider()
             // «ДО КВ» — плейсхолдер: источника контрольного времени пока нет (как в Android).
             MetricView(label: "До КВ", value: "—")
@@ -363,9 +363,27 @@ private struct MarksEmptyLadder: View {
     }
 }
 
+// MARK: - Tile KP Token
+// Единое обозначение КП тайла (nfc и фото): крупный центрированный mono-токен
+// «стоимость-номер» (голый номер при нулевой цене). Белый с тенью — рассчитан
+// на тёмную подложку (chip card / затенённый кадр).
+private struct TileKpToken: View {
+    let tile: MarkTile
+
+    var body: some View {
+        Text(markTileToken(tile))
+            .font(.mono(28, weight: .bold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.5), radius: 0, y: 1)
+            .padding(.horizontal, 6)
+    }
+}
+
 // MARK: - NFC Tile
 // Dark "chip card": fixed-dark in both themes (like DarkHeroBackground),
-// not adaptive tokens. Big mono number.
+// not adaptive tokens. Big mono KP token.
 private struct NFCTileView: View {
     let tile: MarkTile
 
@@ -396,10 +414,7 @@ private struct NFCTileView: View {
                         x += step
                     }
                 }
-                Text(tile.number)
-                    .font(.mono(28, weight: .bold))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.5), radius: 0, y: 1)
+                TileKpToken(tile: tile)
             }
             .overlay(alignment: .bottomTrailing) {
                 Text(tile.time)
@@ -416,9 +431,10 @@ private struct NFCTileView: View {
 
 // MARK: - Photo Tile
 // Реальный тайл фото-взятия (порт `PhotoTileBody`): первый кадр во всю плитку (thumb с фолбэком на
-// полный кадр), тёмный градиент-«сиденье» под ним (и заглушка при нечитаемом файле), нижний скрим +
-// время каптионом, КП-чип top-left, глиф камеры top-right ТОЛЬКО у photo-взятия, бейдж «+N» скрытых
-// кадров bottom-left. Тап открывает лайтбокс (тайл используется лишь при `photoCount > 0`).
+// полный кадр), тёмный градиент-«сиденье» под ним (и заглушка при нечитаемом файле), равномерное
+// затенение кадра + центральный КП-токен (как на nfc-плитке), нижний скрим + время каптионом,
+// глиф камеры top-right ТОЛЬКО у photo-взятия, бейдж «+N» скрытых кадров bottom-left.
+// Тап открывает лайтбокс (тайл используется лишь при `photoCount > 0`).
 private struct PhotoTileView: View {
     let tile: MarkTile
     let urlFor: (String) -> URL?
@@ -456,19 +472,19 @@ private struct PhotoTileView: View {
                     .font(.system(size: 22))
                     .foregroundStyle(.white.opacity(0.3))
             }
+            // Равномерное затенение кадра — центральный белый КП-токен должен
+            // читаться на любом снимке (светлое небо, снег).
+            Color.black.opacity(0.35)
             // Нижний скрим — время читается каптионом над яркой нижней кромкой кадра.
             VStack {
                 Spacer()
                 LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
                     .frame(maxHeight: .infinity)
             }
+            TileKpToken(tile: tile)
         }
         .aspectRatio(1, contentMode: .fit)
         .clipped()
-        .overlay(alignment: .topLeading) {
-            PhotoKpChip(token: markTileToken(tile))
-                .padding(4)
-        }
         .overlay(alignment: .topTrailing) {
             // Глиф камеры — эксклюзив photo-взятия (NFC-взятие с фото им не помечается).
             if tile.kind == .photo {
