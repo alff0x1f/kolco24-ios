@@ -17,6 +17,12 @@
 //  может глушить хаптики — звук главный канал, поэтому и `.duckOthers` (писк
 //  пробивается сквозь музыку в наушниках).
 //
+//  Дак — только на время клипа: сессия активируется перед воспроизведением и
+//  деактивируется (`.notifyOthersOnDeactivation` — система возвращает громкость
+//  чужому аудио) по окончании клипа с небольшим хвостом. `prepareToPlay` в init
+//  недопустим — он неявно активирует сессию, и подкаст/музыка пользователя
+//  приглушались бы с самого старта приложения навсегда.
+//
 //  Маппинг Kotlin → iOS:
 //  - Android SoundPool → по одному предзагруженному `AVAudioPlayer` на клип.
 //  - Android VibrationEffect паттерны → хаптик-генераторы UIKit (точные ms-паттерны
@@ -30,12 +36,20 @@ import UIKit
 
 /// Проигрыватель аудио/тактильного фидбека скана.
 ///
-/// Плееры предзагружаются в `init` (декод в память + `prepareToPlay`), чтобы первый
-/// тап не ждал загрузки; `AVAudioSession` конфигурируется один раз как `.playback`
-/// c `.mixWithOthers`/`.duckOthers`. Вызовы `play`/`fanfare` — с любого потока
-/// (`AVAudioPlayer.play` и хаптик-генераторы потокобезопасны через диспетч на main
-/// для генераторов).
+/// Файлы клипов декодируются в `init` (`AVAudioPlayer(contentsOf:)`), но без
+/// `prepareToPlay` — он неявно активировал бы `AVAudioSession` и включил дакинг
+/// на старте приложения; буферы готовятся при первом `play()` (десятки мс,
+/// для скана незаметно). `AVAudioSession` конфигурируется один раз как `.playback`
+/// c `.mixWithOthers`/`.duckOthers`; активируется перед клипом и деактивируется
+/// по его окончании (см. `playClip`/`deactivateIfIdle`). Вызовы `play`/`fanfare` —
+/// с любого потока: работа с сессией и отложенной деактивацией сериализуется
+/// на собственной очереди `sessionQueue`.
 final class ScanFeedbackPlayer: ScanFeedbackPlaying {
+
+    /// Хвост после конца клипа до деактивации сессии — покрывает связку
+    /// «success-писк → фанфары через 275 мс» (новый клип отменяет и переносит
+    /// деактивацию) и неточность `duration`.
+    private static let deactivationTailSeconds: TimeInterval = 0.3
 
     private let successPlayer: AVAudioPlayer?
     private let failurePlayer: AVAudioPlayer?
@@ -44,8 +58,15 @@ final class ScanFeedbackPlayer: ScanFeedbackPlaying {
     private let impact = UIImpactFeedbackGenerator(style: .light)
     private let notification = UINotificationFeedbackGenerator()
 
+    /// Серийная очередь всей работы с `AVAudioSession` и `pendingDeactivation`.
+    private let sessionQueue = DispatchQueue(label: "kolco24.audio.session")
+    /// Отложенная деактивация сессии; доступ только с `sessionQueue`.
+    private var pendingDeactivation: DispatchWorkItem?
+
     init() {
-        // `.playback` + микс/дак: писк слышен поверх музыки, музыка приглушается на время клипа.
+        // `.playback` + микс/дак: писк слышен поверх музыки, музыка приглушается
+        // на время клипа. Сама setCategory сессию не активирует — дак начнётся
+        // только с setActive(true) в playClip.
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
 
@@ -77,16 +98,41 @@ final class ScanFeedbackPlayer: ScanFeedbackPlaying {
 
     private func playClip(_ player: AVAudioPlayer?) {
         guard let player else { return }
-        // Активируем сессию лениво (первый звук) — быстрее старт приложения, дешевле дак.
-        try? AVAudioSession.sharedInstance().setActive(true, options: [])
-        player.currentTime = 0
-        player.play()
+        sessionQueue.async { [self] in
+            // Новый клип отменяет запланированную деактивацию — сессия не дёргается
+            // между success-писком и фанфарами.
+            pendingDeactivation?.cancel()
+            pendingDeactivation = nil
+
+            try? AVAudioSession.sharedInstance().setActive(true, options: [])
+            player.currentTime = 0
+            player.play()
+
+            let item = DispatchWorkItem { [self] in deactivateIfIdle() }
+            pendingDeactivation = item
+            sessionQueue.asyncAfter(
+                deadline: .now() + player.duration + Self.deactivationTailSeconds,
+                execute: item
+            )
+        }
+    }
+
+    /// Деактивация сессии по окончании клипа (только с `sessionQueue`).
+    /// `.notifyOthersOnDeactivation` — система возвращает громкость приглушённому
+    /// чужому аудио (подкаст/музыка). Защитная проверка: `setActive(false)` при
+    /// играющем плеере вернула бы ошибку — тогда просто оставляем сессию активной
+    /// до следующего писка.
+    private func deactivateIfIdle() {
+        pendingDeactivation = nil
+        let players = [successPlayer, failurePlayer, fanfarePlayer].compactMap { $0 }
+        guard !players.contains(where: { $0.isPlaying }) else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
     private static func makePlayer(_ name: String) -> AVAudioPlayer? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "wav") else { return nil }
-        let player = try? AVAudioPlayer(contentsOf: url)
-        player?.prepareToPlay()
-        return player
+        // Без prepareToPlay: он неявно активирует аудиосессию (дак на старте).
+        // Файл уже декодирован конструктором; play() подготовит буферы сам.
+        return try? AVAudioPlayer(contentsOf: url)
     }
 }
