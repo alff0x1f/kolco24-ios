@@ -382,20 +382,35 @@ private struct TileKpToken: View {
 }
 
 // MARK: - Tile Color Corner
-// Цветной уголок дисциплины КП (top-left): треугольник цвета КП через общий
-// `barColor`. КП без цвета уголка не несёт.
+// Цветной уголок дисциплины КП (top-left). КП без цвета уголка не несёт.
+// Не общий `barColor`: там green/orange — адаптивные токены (по теме системы),
+// а плитка fixed-dark в обеих темах — уголок не должен менять яркость при
+// неизменном фоне. Все шесть цветов заякорены литералами (green/orange — их
+// тёмнотемные варианты, читаемые на графите).
 private struct TileColorCorner: View {
     let color: CheckpointColor?
 
+    private var fill: Color {
+        switch color {
+        case .red: return Color(hex: "E53935")
+        case .blue: return Color(hex: "1E88E5")
+        case .green: return Color(hex: "34C759")
+        case .yellow: return Color(hex: "F4B400")
+        case .orange: return Color(hex: "F0763C")
+        case .purple: return Color(hex: "8E44AD")
+        case nil: return Color.clear
+        }
+    }
+
     var body: some View {
-        if let color {
+        if color != nil {
             Path { p in
                 p.move(to: .zero)
                 p.addLine(to: CGPoint(x: 22, y: 0))
                 p.addLine(to: CGPoint(x: 0, y: 22))
                 p.closeSubpath()
             }
-            .fill(barColor(color))
+            .fill(fill)
             .frame(width: 22, height: 22)
         }
     }
