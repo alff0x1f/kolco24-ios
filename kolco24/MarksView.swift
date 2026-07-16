@@ -226,9 +226,9 @@ private struct MetricsCard: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            MetricView(label: "Взято", value: takenValue, unit: "КП")
+            MetricView(label: "Взято КП", value: takenValue)
             VDivider()
-            MetricView(label: "Сумма", value: scoreValue, unit: "бал.")
+            MetricView(label: "Баллов", value: scoreValue)
             VDivider()
             // «ДО КВ» — плейсхолдер: источника контрольного времени пока нет (как в Android).
             MetricView(label: "До КВ", value: "—")
@@ -363,9 +363,62 @@ private struct MarksEmptyLadder: View {
     }
 }
 
+// MARK: - Tile KP Token
+// Единое обозначение КП тайла (nfc и фото): крупный центрированный mono-токен
+// «стоимость-номер» (голый номер при нулевой цене). Белый с тенью — рассчитан
+// на тёмную подложку (chip card / затенённый кадр).
+private struct TileKpToken: View {
+    let tile: MarkTile
+
+    var body: some View {
+        Text(markTileToken(tile))
+            .font(.mono(28, weight: .bold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.5), radius: 0, y: 1)
+            .padding(.horizontal, 6)
+    }
+}
+
+// MARK: - Tile Color Corner
+// Цветной уголок дисциплины КП (top-left). КП без цвета уголка не несёт.
+// Не общий `barColor`: там green/orange — адаптивные токены (по теме системы),
+// а плитка fixed-dark в обеих темах — уголок не должен менять яркость при
+// неизменном фоне. Все шесть цветов заякорены литералами (green/orange — их
+// тёмнотемные варианты, читаемые на графите).
+private struct TileColorCorner: View {
+    let color: CheckpointColor?
+
+    private var fill: Color {
+        switch color {
+        case .red: return Color(hex: "E53935")
+        case .blue: return Color(hex: "1E88E5")
+        case .green: return Color(hex: "34C759")
+        case .yellow: return Color(hex: "F4B400")
+        case .orange: return Color(hex: "F0763C")
+        case .purple: return Color(hex: "8E44AD")
+        case nil: return Color.clear
+        }
+    }
+
+    var body: some View {
+        if color != nil {
+            Path { p in
+                p.move(to: .zero)
+                p.addLine(to: CGPoint(x: 22, y: 0))
+                p.addLine(to: CGPoint(x: 0, y: 22))
+                p.closeSubpath()
+            }
+            .fill(fill)
+            .frame(width: 22, height: 22)
+        }
+    }
+}
+
 // MARK: - NFC Tile
 // Dark "chip card": fixed-dark in both themes (like DarkHeroBackground),
-// not adaptive tokens. Contactless arcs glyph + big mono number.
+// not adaptive tokens. Big mono KP token.
 private struct NFCTileView: View {
     let tile: MarkTile
 
@@ -384,26 +437,30 @@ private struct NFCTileView: View {
                         .shadow(.inner(color: .black.opacity(0.6), radius: side * 0.1, y: 2))
                         .shadow(.inner(color: .white.opacity(0.04), radius: 0.5, y: -1))
                     )
-                // subtle diagonal sheen (white α≈0.025)
+                // subtle diagonal sheen; направление «/» — параллельно
+                // гипотенузе цветного уголка (top-left), а не поперёк неё
                 Canvas { ctx, s in
-                    let step: CGFloat = 4
-                    var x: CGFloat = -s.height
+                    let step: CGFloat = 7
+                    var x: CGFloat = 0
                     while x < s.width + s.height {
                         var p = Path()
                         p.move(to: CGPoint(x: x, y: 0))
-                        p.addLine(to: CGPoint(x: x + s.height, y: s.height))
-                        ctx.stroke(p, with: .color(Color.white.opacity(0.025)), lineWidth: 1)
+                        p.addLine(to: CGPoint(x: x - s.height, y: s.height))
+                        ctx.stroke(p, with: .color(Color.white.opacity(0.075)), lineWidth: 1)
                         x += step
                     }
                 }
-                VStack(spacing: side * 0.04) {
-                    ContactlessGlyph()
-                        .frame(width: side * 0.38, height: side * 0.38)
-                    Text(tile.number)
-                        .font(.mono(28, weight: .bold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.5), radius: 0, y: 1)
-                }
+                TileKpToken(tile: tile)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Text(tile.time)
+                    .font(.mono(10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .padding(.trailing, 8)
+                    .padding(.bottom, 6)
+            }
+            .overlay(alignment: .topLeading) {
+                TileColorCorner(color: tile.color)
             }
             .overlay { Rectangle().stroke(Color.white.opacity(0.06), lineWidth: 0.5) }
         }
@@ -411,35 +468,12 @@ private struct NFCTileView: View {
     }
 }
 
-// Three contactless-payment arcs (matches design_dark.html NFCTile glyph).
-private struct ContactlessGlyph: View {
-    var body: some View {
-        Canvas { ctx, s in
-            let sx = s.width / 32
-            let sy = s.height / 32
-            func arc(_ mx: CGFloat, _ my: CGFloat,
-                     _ cx: CGFloat, _ cy: CGFloat,
-                     _ ex: CGFloat, _ ey: CGFloat) -> Path {
-                var p = Path()
-                p.move(to: CGPoint(x: mx * sx, y: my * sy))
-                p.addQuadCurve(to: CGPoint(x: ex * sx, y: ey * sy),
-                               control: CGPoint(x: cx * sx, y: cy * sy))
-                return p
-            }
-            let shading = GraphicsContext.Shading.color(Color(hex: "E6EAF0"))
-            let style = StrokeStyle(lineWidth: 2.2 * sx, lineCap: .round)
-            ctx.stroke(arc(8, 10, 14, 16, 8, 22), with: shading, style: style)
-            ctx.stroke(arc(13, 6, 22, 16, 13, 26), with: shading, style: style)
-            ctx.stroke(arc(18, 2, 30, 16, 18, 30), with: shading, style: style)
-        }
-    }
-}
-
 // MARK: - Photo Tile
 // Реальный тайл фото-взятия (порт `PhotoTileBody`): первый кадр во всю плитку (thumb с фолбэком на
-// полный кадр), тёмный градиент-«сиденье» под ним (и заглушка при нечитаемом файле), нижний скрим +
-// время каптионом, КП-чип top-left, глиф камеры top-right ТОЛЬКО у photo-взятия, бейдж «+N» скрытых
-// кадров bottom-left. Тап открывает лайтбокс (тайл используется лишь при `photoCount > 0`).
+// полный кадр), тёмный градиент-«сиденье» под ним (и заглушка при нечитаемом файле), равномерное
+// затенение кадра + центральный КП-токен (как на nfc-плитке), нижний скрим + время каптионом,
+// глиф камеры top-right ТОЛЬКО у photo-взятия, бейдж «+N» скрытых кадров bottom-left.
+// Тап открывает лайтбокс (тайл используется лишь при `photoCount > 0`).
 private struct PhotoTileView: View {
     let tile: MarkTile
     let urlFor: (String) -> URL?
@@ -464,27 +498,36 @@ private struct PhotoTileView: View {
                 startPoint: .top, endPoint: .bottom
             )
             if let url = firstFrameURL, let image = UIImage(contentsOfFile: url.path) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+                // Кадр — оверлеем над нулевым слоем: scaledToFill отдаёт layout-у размер больше
+                // предложенного (портретный кадр выше квадрата), и ZStack раздувался бы по нему.
+                Color.clear.overlay(
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                )
             } else {
                 // Кап-заглушка при нечитаемом файле (тот же тёмный фон + глиф фото).
                 Image(systemName: "photo")
                     .font(.system(size: 22))
                     .foregroundStyle(.white.opacity(0.3))
             }
+            // Равномерное затенение кадра — центральный белый КП-токен должен
+            // читаться на любом снимке (светлое небо, снег). Тон — графит NFC-карты,
+            // не чистый чёрный: холодный оттенок сводит фото в один регистр с
+            // тёмными nfc-плитками, не давая грязно-серого на тёплых кадрах.
+            Color(hex: "171D25").opacity(0.45)
             // Нижний скрим — время читается каптионом над яркой нижней кромкой кадра.
             VStack {
                 Spacer()
                 LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
                     .frame(maxHeight: .infinity)
             }
+            TileKpToken(tile: tile)
         }
         .aspectRatio(1, contentMode: .fit)
         .clipped()
         .overlay(alignment: .topLeading) {
-            PhotoKpChip(token: markTileToken(tile))
-                .padding(4)
+            TileColorCorner(color: tile.color)
         }
         .overlay(alignment: .topTrailing) {
             // Глиф камеры — эксклюзив photo-взятия (NFC-взятие с фото им не помечается).
