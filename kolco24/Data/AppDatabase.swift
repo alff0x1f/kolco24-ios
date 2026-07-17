@@ -3,9 +3,12 @@
 //  kolco24
 //
 //  Слой данных на GRDB — аналог Android `data/db/AppDatabase.kt` (Room v5).
-//  Держит `any DatabaseWriter` + `DatabaseMigrator` с единственной миграцией `"v1"`:
-//  снимок финальной схемы Room v5 (`schemas/…/5.json`). Историю Room-миграций
-//  1→5 не повторяем — iOS-база рождается сразу в финальной схеме.
+//  Держит `any DatabaseWriter` + `DatabaseMigrator` с двумя миграциями. `"v1"` —
+//  снимок финальной схемы Room v5 (`schemas/…/5.json`); историю Room-миграций
+//  1→5 не повторяем, iOS-база стартует сразу с v5. `"v2"` — ПЕРВАЯ iOS-only
+//  дивергенция от Room v5: `ALTER TABLE races ADD COLUMN mapUrl TEXT` (оффлайн-
+//  карта гонки, вкладка «Карта»), так что база больше НЕ рождается ровно в v5 —
+//  существующие установки догоняют v2 на старте, `makeInMemory()` тоже до v2.
 //
 //  Порт-инвариант: имена таблиц/колонок 1:1 с Room v5 (camelCase-колонки), SQL из
 //  DAO переносится дословно. FK нет нигде — связи по id в запросах (см. план этапа 2).
@@ -87,7 +90,8 @@ struct AppDatabase {
 
     // MARK: - Миграции
 
-    /// Единственная миграция `"v1"` — снимок схемы Room v5 (все 13 таблиц + индексы).
+    /// Миграции: `"v1"` — снимок схемы Room v5 (все 13 таблиц + индексы); `"v2"` —
+    /// iOS-only `races.mapUrl` (см. шапку файла).
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 

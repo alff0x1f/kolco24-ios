@@ -2,12 +2,13 @@
 //  AppDatabaseSchemaTests.swift
 //  kolco24Tests
 //
-//  Snapshot-тест схемы `"v1"` — замена Android `MigrationTest` (мигрировать нечего,
-//  iOS-база рождается сразу в финальной схеме Room v5). Сверяет инвентарь
+//  Snapshot-тест схемы — замена Android `MigrationTest`. `"v1"` — снимок финальной
+//  схемы Room v5 (стартовая точка iOS-базы), `"v2"` — iOS-only `races.mapUrl` (см.
+//  `migrationV1ToV2AddsMapUrlAndPreservesRows`). Сверяет инвентарь
 //  таблиц/колонок/индексов/PK, транскрибированный дословно из
-//  `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/5.json`, с тем, что реально
-//  создаёт миграция. Любое расхождение (тип, nullability, лишний SQL-`DEFAULT`,
-//  забытый индекс, порядок композитного PK) валит тест.
+//  `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/5.json` (+ колонка `mapUrl`
+//  от v2), с тем, что реально создают миграции. Любое расхождение (тип, nullability,
+//  лишний SQL-`DEFAULT`, забытый индекс, порядок композитного PK) валит тест.
 //
 
 import GRDB
