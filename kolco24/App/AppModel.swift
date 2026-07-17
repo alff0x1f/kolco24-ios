@@ -338,6 +338,17 @@ final class AppModel {
         MarksModel(env: env)
     }
 
+    /// Фабрика модели вкладки «Карта». Привязывается к ТЕКУЩЕМУ скоупу выбора
+    /// (`selectedRaceId`/`selectedTeamId`); `nil` без выбранной команды (вьюха тогда зовёт
+    /// `onChooseTeam`). Держит `env` инкапсулированным; ошибка скачивания подложки идёт тостом в этот
+    /// `AppModel` (`toastMessage`).
+    func makeMapModel() -> MapModel? {
+        guard let raceId = selectedRaceId, let teamId = selectedTeamId else { return nil }
+        let model = MapModel(env: env, onToast: { [weak self] message in self?.toastMessage = message })
+        model.rebind(teamId: teamId, raceId: raceId)
+        return model
+    }
+
     /// Фабрика модели экрана «Загрузка данных» (этап 6). Привязывается к ТЕКУЩЕМУ скоупу выбора
     /// (`selectedRaceId`/`selectedTeamId`) — шит открывается для выбранной команды. Держит `env`
     /// инкапсулированным; `nowMs` прокидывается для тестируемого относительного времени.

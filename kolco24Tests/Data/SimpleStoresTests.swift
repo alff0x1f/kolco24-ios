@@ -59,6 +59,20 @@ struct SimpleStoresTests {
         #expect(rows.first(where: { $0.id == 2 })?.mapUrl == nil)
     }
 
+    @Test func raceGetByIdReturnsRowOrNil() async throws {
+        // Снимок одной гонки по id (источник mapUrl для MapModel): строка есть → она; нет → nil.
+        let db = try makeDB()
+        let store = RaceStore(db)
+        try await store.insertAll([
+            Race(id: 1, name: "R1", slug: "r1", date: "2026-02-01",
+                 place: "P", regStatus: "open", mapUrl: "https://cdn.test/1.mbtiles"),
+            race(2, date: "2026-01-01"),
+        ])
+        #expect(try await store.getById(1)?.mapUrl == "https://cdn.test/1.mbtiles")
+        #expect(try await store.getById(2)?.mapUrl == nil)
+        #expect(try await store.getById(999) == nil)
+    }
+
     @Test func raceObserveSortsByDateThenIdDesc() async throws {
         let db = try makeDB()
         let store = RaceStore(db)
