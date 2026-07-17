@@ -36,6 +36,11 @@ struct ContentView: View {
                 }
                 .tabItem { Label("Команда", systemImage: "person.3.fill") }
                 .tag(2)
+                NavigationStack {
+                    MapTabView(onChooseTeam: { showPicker = true })
+                }
+                .tabItem { Label("Карта", systemImage: "mappin.and.ellipse") }
+                .tag(3)
             }
             .tint(Color.kolcoOrange)
             .onChange(of: selectedTab) {
