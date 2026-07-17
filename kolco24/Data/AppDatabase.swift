@@ -296,6 +296,14 @@ struct AppDatabase {
             try db.execute(sql: "CREATE INDEX `index_judge_scans_raceId` ON `judge_scans` (`raceId`)")
         }
 
+        // v2 — первая iOS-only дивергенция от Room v5: колонка `mapUrl` в `races`
+        // (URL оффлайн-подложки `.mbtiles` для вкладки «Карта»). Существующие установки
+        // мигрируют на старте (`ADD COLUMN` — nullable, без SQL-DEFAULT). База больше
+        // не рождается сразу в v5; `makeInMemory()` тоже мигрирует до v2.
+        migrator.registerMigration("v2") { db in
+            try db.execute(sql: "ALTER TABLE races ADD COLUMN mapUrl TEXT")
+        }
+
         return migrator
     }
 }

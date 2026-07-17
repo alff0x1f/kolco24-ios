@@ -21,7 +21,8 @@ extension Race: FetchableRecord, PersistableRecord {
             date: row["date"],
             dateEnd: row["dateEnd"],
             place: row["place"],
-            regStatus: row["regStatus"]
+            regStatus: row["regStatus"],
+            mapUrl: row["mapUrl"]
         )
     }
 
@@ -33,5 +34,6 @@ extension Race: FetchableRecord, PersistableRecord {
         container["dateEnd"] = dateEnd
         container["place"] = place
         container["regStatus"] = regStatus
+        container["mapUrl"] = mapUrl
     }
 }

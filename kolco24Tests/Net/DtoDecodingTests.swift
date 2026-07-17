@@ -66,6 +66,41 @@ struct DtoDecodingTests {
         #expect(resp.races[0].dateEnd == nil)
     }
 
+    @Test func race_mapUrl_present() throws {
+        // map_url присутствует → маппится в mapUrl (forward-compat поле, миграция v2).
+        let json = """
+        {"races": [
+          {"id": 8, "name": "R", "slug": "r", "date": "2026-06-20", "place": "P",
+           "reg_status": "open", "map_url": "https://cdn.test/8.mbtiles"}
+        ]}
+        """
+        let resp = try decode(RacesResponse.self, json)
+        #expect(resp.races[0].mapUrl == "https://cdn.test/8.mbtiles")
+    }
+
+    @Test func race_mapUrl_missing_isNil() throws {
+        // Ключа map_url нет (сервер без поля) → nil (синтезированный decodeIfPresent).
+        let json = """
+        {"races": [
+          {"id": 1, "name": "R", "slug": "r", "date": "2026-01-01", "place": "P", "reg_status": "upcoming"}
+        ]}
+        """
+        let resp = try decode(RacesResponse.self, json)
+        #expect(resp.races[0].mapUrl == nil)
+    }
+
+    @Test func race_mapUrl_explicitNull_isNil() throws {
+        // Явный null (карты для гонки нет) → nil.
+        let json = """
+        {"races": [
+          {"id": 1, "name": "R", "slug": "r", "date": "2026-01-01", "place": "P",
+           "reg_status": "open", "map_url": null}
+        ]}
+        """
+        let resp = try decode(RacesResponse.self, json)
+        #expect(resp.races[0].mapUrl == nil)
+    }
+
     @Test func races_empty() throws {
         let resp = try decode(RacesResponse.self, #"{"races": []}"#)
         #expect(resp.races.isEmpty)

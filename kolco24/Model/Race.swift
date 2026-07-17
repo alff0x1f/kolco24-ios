@@ -12,6 +12,10 @@
 //
 
 /// Одна гонка. [dateEnd] опционален (одно-/многодневные события).
+///
+/// [mapUrl] — прямой HTTPS-URL оффлайн-подложки `.mbtiles` для этой гонки
+/// (`nil` = карты нет). Первая iOS-only колонка сверх Room v5 (миграция `"v2"`,
+/// `map_url` в DTO). Дефолт `nil` в `init` — существующие конструкции не трогаем.
 struct Race: Equatable {
     let id: Int
     let name: String
@@ -20,6 +24,7 @@ struct Race: Equatable {
     let dateEnd: String?
     let place: String
     let regStatus: String
+    let mapUrl: String?
 
     init(
         id: Int,
@@ -28,7 +33,8 @@ struct Race: Equatable {
         date: String,
         dateEnd: String? = nil,
         place: String,
-        regStatus: String
+        regStatus: String,
+        mapUrl: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -37,5 +43,6 @@ struct Race: Equatable {
         self.dateEnd = dateEnd
         self.place = place
         self.regStatus = regStatus
+        self.mapUrl = mapUrl
     }
 }
