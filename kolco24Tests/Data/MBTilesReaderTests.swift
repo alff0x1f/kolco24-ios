@@ -94,4 +94,24 @@ struct MBTilesReaderTests {
             _ = try MBTilesReader(path: missing)
         }
     }
+
+    /// Битый/пустой `.mbtiles`: валидный sqlite, но без таблиц `tiles`/`metadata`.
+    /// `init` открывается (это sqlite), а `tileData`/`metadata` ловят SQL-ошибку
+    /// «no such table» → `nil` (never-throw, карта пустая, но не крэш).
+    @Test func corruptFileMissingTablesReturnsNilNeverThrows() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mbtiles-corrupt-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("empty.mbtiles").path
+        // Валидный sqlite-файл без ожидаемых таблиц.
+        let queue = try DatabaseQueue(path: path)
+        try queue.write { db in
+            try db.execute(sql: "CREATE TABLE unrelated (x INTEGER)")
+        }
+        try queue.close()
+
+        let reader = try MBTilesReader(path: path)
+        #expect(reader.tileData(z: 2, x: 3, y: 1) == nil)
+        #expect(reader.metadata() == nil)
+    }
 }
