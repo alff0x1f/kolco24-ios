@@ -171,7 +171,7 @@ struct ScanModelTests {
         #expect(isComplete(session: model.session, rosterSize: 1))
         await poll { feedback.fanfares >= 1 }
         #expect(feedback.fanfares == 1)
-        #expect(feedback.successCount >= 2)   // КП + завершающий участник
+        #expect(feedback.successCount == 1)   // только КП: завершающий чип молчит (системный «тык-тык»)
         #expect(model.completed == true)
 
         // Персист: строка взятия дошла до БД с полным ростером и complete.
@@ -192,7 +192,8 @@ struct ScanModelTests {
         try await bind(env, slot: 2, uid: "M2", pnum: 102)
 
         let scanner = FakeChipScanner()
-        let model = makeModel(env: env, roster: members([1, 2]), scanner: scanner)
+        let feedback = RecordingFeedback()
+        let model = makeModel(env: env, roster: members([1, 2]), scanner: scanner, feedback: feedback)
         model.start(scanner: scanner)
         await poll { model.bindings.count == 2 }
 
@@ -206,6 +207,11 @@ struct ScanModelTests {
         await poll { model.session?.checkpointId == 100 }
         #expect(model.session?.present == [1, 2])          // буфер слит
         #expect(model.session?.bufferedBeforeKp.isEmpty == true)
+
+        // Завершающий чип здесь — КП (буфер уже полон): молчит по общему правилу §11, только
+        // M1/M2 сыграли обычный success, а фанфара отыграла взятие целиком.
+        await poll { feedback.fanfares == 1 }
+        #expect(feedback.successCount == 2)
 
         // Персист: present[] и снимки участников с их participantNumber.
         await poll { (try? await env.markStore.getById("mark-1"))??.present.count == 2 }
@@ -499,6 +505,8 @@ struct ScanModelTests {
         #expect(model.closeRequested == true)
         #expect(model.session == nil)
         #expect(model.didComplete == false)   // истечение окна — не успешное завершение (нет конфетти)
+        // Автозакрытие останавливает сканер сразу (NFC-шторка уезжает параллельно шиту, не в onDisappear).
+        #expect(scanner.stopped == true)
     }
 
     // MARK: - Быстрое автозакрытие: successHoldMs = 0 → немедленное закрытие + didComplete (этап 11)
@@ -521,7 +529,12 @@ struct ScanModelTests {
         await poll { model.closeRequested }
         #expect(model.closeRequested == true)
         #expect(model.didComplete == true)   // успешное завершение → конфетти на «Отметках»
-        #expect(model.session == nil)
+        // UI-сессия НЕ финализируется на успешном завершении — «Готово!» остаётся на CP-карточке,
+        // пока вьюха доигрывает dismiss-анимацию (модель всё равно уходит на teardown вместе с шитом).
+        #expect(model.session?.checkpointId == 100)
+        #expect(model.completed == true)
+        // Автозакрытие останавливает сканер сразу — шторка не перекрывает конфетти на «Отметках».
+        #expect(scanner.stopped == true)
     }
 
     // MARK: - Продовый дефолт successHoldMs (этап 11): реальный init БЕЗ параметра → немедленное закрытие
@@ -558,7 +571,8 @@ struct ScanModelTests {
         await poll { model.closeRequested }
         #expect(model.closeRequested == true)
         #expect(model.didComplete == true)
-        #expect(model.session == nil)
+        // UI-сессия НЕ финализируется на успешном завершении (см. `completionWithZeroHoldClosesImmediatelyAndDidComplete`).
+        #expect(model.session?.checkpointId == 100)
     }
 
     // MARK: - Near-deadline скан продлевает окно; таймер не финализирует его как истёкший (Finding-1)
@@ -621,7 +635,8 @@ struct ScanModelTests {
         scanner.emit(reading(code: nil, uid: "M1", elapsed: 100))
         await poll { model.closeRequested }
         #expect(model.closeRequested == true)
-        #expect(model.session == nil)
+        // UI-сессия НЕ финализируется на успешном завершении (см. `completionWithZeroHoldClosesImmediatelyAndDidComplete`).
+        #expect(model.session?.checkpointId == 100)
     }
 
     // MARK: - Повтор того же КП в живом окне → только перештамп окна (§3)
@@ -707,9 +722,10 @@ struct ScanModelTests {
         await poll { model.session?.checkpointId == 100 }
         scanner.emit(reading(code: nil, uid: "M1", elapsed: 100))
 
-        // На переходе incomplete→complete: success записан немедленно, фанфары ЕЩЁ нет (ждут 300 мс).
+        // На переходе incomplete→complete: завершающий чип без бипа (его роль — системный «тык-тык»
+        // NFC-галочки), фанфары ЕЩЁ нет (ждут 300 мс).
         await poll { isComplete(session: model.session, rosterSize: 1) }
-        #expect(feedback.successCount >= 2)   // КП + завершающий участник
+        #expect(feedback.successCount == 1)   // только КП: завершающий чип молчит
         #expect(feedback.fanfares == 0)       // задержка ещё не истекла
 
         // Фанфары приходят после задержки.

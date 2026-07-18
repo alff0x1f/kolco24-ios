@@ -120,15 +120,25 @@ struct ScanSheet: View {
                 // Успешное завершение (не истечение окна) — сигналим хосту ДО dismiss: он включит
                 // конфетти в `onDismiss`, когда шит уже ушёл (системная NFC-шторка перекрыла бы оверлей).
                 if model.didComplete { onCompleted() }
-                dismiss()
+                // close(), не dismiss(): сканер стопается ДО dismiss, чтобы системная NFC-шторка
+                // уезжала параллельно с анимацией шита, а не после `onDisappear` (~0.4 с позже).
+                close()
             }
         }
         .onDisappear {
-            // Любое закрытие оверлея инвалидирует NFC-сессию; начатые записи в БД живут в своих Task'ах.
+            // Страховка для путей закрытия мимо `close()` (свайп вниз): инвалидирует NFC-сессию;
+            // начатые записи в БД живут в своих Task'ах. `stop()` идемпотентен.
             model.stop()
             // Flush накопленных взятий (этап 6) живёт в `MarksView.sheet(item:onDismiss:)` — у ScanSheet
             // нет доступа к `AppModel`/репозиторию, а `onDismiss` покрывает все пути закрытия шита.
         }
+    }
+
+    /// Ручное закрытие (крестик / «Отменить» / «Готово»): останавливаем сканер ДО `dismiss()`, чтобы
+    /// системная NFC-шторка начала уезжать сразу, а не после анимации закрытия шита (`onDisappear`).
+    private func close() {
+        model.stop()
+        dismiss()
     }
 
     private var header: some View {
@@ -139,7 +149,7 @@ struct ScanSheet: View {
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(Color.ink)
             Spacer()
-            Button { dismiss() } label: {
+            Button { close() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(Color.sub)
@@ -181,7 +191,7 @@ struct ScanSheet: View {
 
     private var actions: some View {
         HStack(spacing: 10) {
-            Button("Отменить") { dismiss() }
+            Button("Отменить") { close() }
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.ink)
                 .frame(maxWidth: .infinity)
@@ -189,7 +199,7 @@ struct ScanSheet: View {
                 .background(Color.sub.opacity(0.2))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            Button("Готово") { dismiss() }
+            Button("Готово") { close() }
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)

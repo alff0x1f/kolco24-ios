@@ -312,6 +312,12 @@ final class AppModel {
         Task { await repo.uploadPending(raceId: raceId, teamId: teamId) }
     }
 
+    /// Звук залпа конфетти-хлопушек — прокси к `env.feedback` для `MarksView.launchConfetti()`
+    /// (вьюхи не видят граф зависимостей; best-effort по контракту `ScanFeedbackPlaying`).
+    func playConfettiLaunchSound() {
+        env.feedback.confettiLaunch()
+    }
+
     /// Фабрика модели флоу выбора гонки/команды. Держит `env` инкапсулированным (вьюхи не видят
     /// граф зависимостей): `TeamPickerModel` получает и `env`, и обратную ссылку на этот `AppModel`
     /// (для `confirm` → `selectTeam`). `now` прокидывается для тестируемого `today`.

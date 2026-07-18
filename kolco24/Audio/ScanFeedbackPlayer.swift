@@ -32,6 +32,7 @@
 //
 
 import AVFoundation
+import os
 import UIKit
 
 /// Проигрыватель аудио/тактильного фидбека скана.
@@ -54,6 +55,19 @@ final class ScanFeedbackPlayer: ScanFeedbackPlaying {
     private let successPlayer: AVAudioPlayer?
     private let failurePlayer: AVAudioPlayer?
     private let fanfarePlayer: AVAudioPlayer?
+    /// Два экземпляра одного клипа выстрела хлопушки: залпы идут с перекрытием
+    /// (правый стартует через `confettiSecondPopDelay`, клип ~0.6 с), а один
+    /// `AVAudioPlayer` не умеет играть поверх самого себя — повторный `play()`
+    /// перемотал бы первый выстрел на ноль.
+    private let fireworksPlayers: [AVAudioPlayer?]
+
+    /// Задержка второго выстрела — синхронно со стаггером правой хлопушки в
+    /// `ConfettiPiece.random` (`ConfettiOverlay.swift`, 0.12 с).
+    private static let confettiSecondPopDelay: TimeInterval = 0.12
+
+    /// Диагностика best-effort плеера: контракт «сбой проглатывается» остаётся, но причина тишины
+    /// (клип не в бандле / не декодировался) видна в Console.app без дебаггера.
+    private static let log = Logger(subsystem: "kolco24", category: "Audio")
 
     private let impact = UIImpactFeedbackGenerator(style: .light)
     private let notification = UINotificationFeedbackGenerator()
@@ -73,6 +87,10 @@ final class ScanFeedbackPlayer: ScanFeedbackPlaying {
         successPlayer = Self.makePlayer("beep_ok3")
         failurePlayer = Self.makePlayer("beep_err")
         fanfarePlayer = Self.makePlayer("checkpoint_mark_completed")
+        fireworksPlayers = [
+            Self.makePlayer("frequent-ringing-fireworks"),
+            Self.makePlayer("frequent-ringing-fireworks"),
+        ]
     }
 
     /// Диспетч по исходу тапа (`feedbackFor` → этот `kind`): success/failure/neutral.
@@ -94,6 +112,19 @@ final class ScanFeedbackPlayer: ScanFeedbackPlaying {
     /// Завершающий скан уже проиграл свой обычный success перед этим.
     func fanfare() {
         playClip(fanfarePlayer)
+    }
+
+    /// Звук залпа хлопушек: два выстрела (по одному на каждую), второй — через
+    /// `confettiSecondPopDelay`, синхронно с визуальным стаггером правой хлопушки.
+    /// `playClip` внутри сам уходит на `sessionQueue` (async, не sync — дедлока нет)
+    /// и переносит отложенную деактивацию сессии, так что пара выстрелов не дёргает дак.
+    func confettiLaunch() {
+        Self.log.debug("залп хлопушек: плееры \(self.fireworksPlayers.compactMap { $0 }.count)/2")
+        playClip(fireworksPlayers[0])
+        sessionQueue.asyncAfter(deadline: .now() + Self.confettiSecondPopDelay) { [weak self] in
+            guard let self else { return }
+            self.playClip(self.fireworksPlayers[1])
+        }
     }
 
     private func playClip(_ player: AVAudioPlayer?) {
@@ -124,15 +155,23 @@ final class ScanFeedbackPlayer: ScanFeedbackPlaying {
     /// до следующего писка.
     private func deactivateIfIdle() {
         pendingDeactivation = nil
-        let players = [successPlayer, failurePlayer, fanfarePlayer].compactMap { $0 }
+        let players = ([successPlayer, failurePlayer, fanfarePlayer] + fireworksPlayers).compactMap { $0 }
         guard !players.contains(where: { $0.isPlaying }) else { return }
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
     private static func makePlayer(_ name: String) -> AVAudioPlayer? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "wav") else { return nil }
+        guard let url = Bundle.main.url(forResource: name, withExtension: "wav") else {
+            log.warning("клип \(name).wav не найден в бандле — звук молчит")
+            return nil
+        }
         // Без prepareToPlay: он неявно активирует аудиосессию (дак на старте).
         // Файл уже декодирован конструктором; play() подготовит буферы сам.
-        return try? AVAudioPlayer(contentsOf: url)
+        do {
+            return try AVAudioPlayer(contentsOf: url)
+        } catch {
+            log.warning("клип \(name).wav не декодировался: \(error) — звук молчит")
+            return nil
+        }
     }
 }

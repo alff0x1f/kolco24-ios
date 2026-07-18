@@ -49,7 +49,11 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
     private let lock = NSLock()
     private var session: NFCTagReaderSession?
     private var continuation: AsyncStream<TagReading>.Continuation?
-    private var finished = false
+    private var finished = true
+    /// Сессии, для которых CoreNFC ещё не прислал `didInvalidateWithError`. Обычно элемент один;
+    /// множество закрывает гонку stop с тихим пересозданием после системного 60-с таймаута.
+    private var activeSessionIds: Set<ObjectIdentifier> = []
+    private var stopWaiters: [CheckedContinuation<Void, Never>] = []
 
     /// Дебаунс: последний прочитанный UID и когда.
     private var lastUid: String?
@@ -98,9 +102,30 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         session = nil
         let cont = continuation
         continuation = nil
+        let waiters: [CheckedContinuation<Void, Never>]
+        if activeSessionIds.isEmpty {
+            waiters = stopWaiters
+            stopWaiters.removeAll()
+        } else {
+            waiters = []
+        }
         lock.unlock()
         s?.invalidate()
         cont?.finish()
+        waiters.forEach { $0.resume() }
+    }
+
+    func waitUntilStopped() async {
+        await withCheckedContinuation { waiter in
+            lock.lock()
+            if finished && activeSessionIds.isEmpty {
+                lock.unlock()
+                waiter.resume()
+            } else {
+                stopWaiters.append(waiter)
+                lock.unlock()
+            }
+        }
     }
 
     /// Обновить прогресс в системной шторке (хост `ScanModel` вызывает по мере набора участников:
@@ -181,6 +206,7 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
             return
         }
         session = s
+        activeSessionIds.insert(ObjectIdentifier(s))
         lock.unlock()
         s.begin()
     }
@@ -190,8 +216,16 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         finished = true
         let cont = continuation
         continuation = nil
+        let waiters: [CheckedContinuation<Void, Never>]
+        if activeSessionIds.isEmpty {
+            waiters = stopWaiters
+            stopWaiters.removeAll()
+        } else {
+            waiters = []
+        }
         lock.unlock()
         cont?.finish()
+        waiters.forEach { $0.resume() }
     }
 }
 
@@ -204,6 +238,7 @@ extension NfcChipScanner: NFCTagReaderSessionDelegate {
     func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
         lock.lock()
         session === self.session ? (self.session = nil) : ()
+        activeSessionIds.remove(ObjectIdentifier(session))
         let alreadyFinished = finished
         lock.unlock()
 
