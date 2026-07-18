@@ -64,6 +64,9 @@ protocol ChipScanning: AnyObject {
     func start()
     /// Инвалидировать сессию (закрытие оверлея) — идемпотентно.
     func stop()
+    /// Дождаться фактической инвалидации платформенной сессии. `stop()` только инициирует закрытие
+    /// системной NFC-шторки; этот барьер завершается из delegate-callback CoreNFC.
+    func waitUntilStopped() async
     /// Прогресс-строка для системной NFC-шторки, которую хост (`ScanModel`) толкает по мере набора
     /// участников («Приложите чип КП» / «КП 32 · чипы 2/4» / диагностика). У `NfcChipScanner` это
     /// `session.alertMessage`; у фейков/превью — no-op (нет системной шторки).
@@ -71,6 +74,9 @@ protocol ChipScanning: AnyObject {
 }
 
 extension ChipScanning {
+    /// У фейков/превью нет отдельной системной шторки: их `stop()` считается завершённым сразу.
+    func waitUntilStopped() async {}
+
     /// По умолчанию — no-op: фейкам/превью нечего показывать (нет системной NFC-шторки).
     func setStatus(_ text: String) {}
 }
@@ -101,4 +107,14 @@ protocol ScanFeedbackPlaying {
     /// с задержкой `COMPLETE_FANFARE_DELAY_MS` после success на переходе
     /// incomplete→complete.
     func fanfare()
+    /// Звук залпа конфетти-хлопушек (по одному «выстрелу» на каждую из двух, правая чуть позже —
+    /// синхронно с визуальным стаггером в `ConfettiOverlay`). Зовётся `MarksView` при фактическом
+    /// старте залпов (после барьеров дизмисса).
+    func confettiLaunch()
+}
+
+extension ScanFeedbackPlaying {
+    /// Дефолт no-op: празднование опционально для фейков/превью (`SilentFeedback`, тестовые
+    /// рекордеры) — конформеры без звука хлопушек не обязаны его реализовывать.
+    func confettiLaunch() {}
 }

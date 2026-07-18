@@ -13,6 +13,7 @@
 //  (`onBindChips`).
 //
 
+import os
 import SwiftUI
 
 // MARK: - MarksView
@@ -29,9 +30,41 @@ struct MarksView: View {
     /// индекс (первый кадр тапнутого тайла).
     @State private var lightbox: LightboxContext?
     /// Празднование взятия (этап 11): `ScanSheet.onCompleted` взводит `pendingCelebration` (шит ещё жив),
-    /// `onDismiss` переносит его в `celebrating` — конфетти стартует поверх сетки, когда шит уже ушёл.
+    /// а запуск ждёт и `onDismiss`, и фактическую инвалидацию CoreNFC-сессии.
     @State private var pendingCelebration = false
     @State private var celebrating = false
+    /// Взято новое взятие, пока дождь предыдущего ещё идёт (`celebrating == true`) — `launchConfetti()`
+    /// не обрывает видимую анимацию/звук, а откладывает перезапуск до `onFinished` текущего залпа.
+    /// Счётчик (не bool): несколько взятий могут накопиться, пока идёт один показ (тесная серия КП) —
+    /// каждое должно получить свой залп, а не слиться с последним в одно.
+    @State private var celebrationQueuedCount = 0
+    /// Счётчик запусков дождя: `.id(celebrationRun)` пересоздаёт оверлей (свежие частицы + отсчёт,
+    /// `onChange(initial: true)`), а `.task(id: celebrationRun)` перезаводит страховочный сброс — так
+    /// поздний NFC-барьер может ПЕРЕЗАПУСТИТЬ дождь, ушедший за ещё видимую шторку после форс-старта.
+    /// Основной сброс `celebrating` — событие `onFinished` от оверлея (см. `.overlay`).
+    @State private var celebrationRun = 0
+    /// Два независимых барьера празднования: dismiss нашего шита и delegate-callback инвалидации
+    /// CoreNFC. Конфетти стартует, только когда завершились оба.
+    @State private var scanSheetDismissed = false
+    @State private var nfcSessionStopped = false
+    @State private var celebrationWaitTask: Task<Void, Never>?
+    /// Дедлайн-фолбэк празднования: если один из барьеров молчит (капризы первой NFC-сессии процесса /
+    /// первого показа шита), дождь запускается принудительно, а warning в Console называет виновника.
+    @State private var celebrationDeadlineTask: Task<Void, Never>?
+    /// Диагностика хэнд-оффа празднования (см. дедлайн-фолбэк) — читается в Console.app по подсистеме.
+    private static let log = Logger(subsystem: "kolco24", category: "Celebration")
+    /// Гейт видимости: пока системная NFC-шторка на экране, сцена `.inactive` (колбэк инвалидации
+    /// приходит РАНЬШЕ ухода её UI — подтверждено логом первого взятия). Запуск дождя при неактивной
+    /// сцене откладывается до возврата `.active`. Тот же флаг используют и открытый фото-кавер
+    /// (`photoModel != nil`), и открытый лайтбокс (`lightbox != nil`) — оверлей MarksView во всех трёх
+    /// случаях реально не виден пользователю (полноэкранные каверы не меняют `scenePhase`).
+    @State private var awaitingActiveScene = false
+    @Environment(\.scenePhase) private var scenePhase
+    /// Живое зеркало `scenePhase == .active`. КРИТИЧНО: читать `scenePhase` из async-замыканий нельзя —
+    /// `@Environment` в захваченной копии вью заморожен на момент захвата (Task создаётся при ещё
+    /// видимой шторке → вечное `.inactive` → дождь ждал перехода, который уже случился). `@State`
+    /// читается через общий стораж — всегда актуален; сеется `onChange(initial: true)`.
+    @State private var sceneIsActive = true
     /// Reduce Motion → конфетти не показываем (фанфара уже отыграла из `ScanModel`).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Точка входа во флоу выбора команды (пробрасывается хостом; в превью — no-op).
@@ -43,7 +76,15 @@ struct MarksView: View {
         content
             .overlay {
                 // Празднование поверх сетки; без хит-теста — FAB «Фото»/«Отметить КП» кликабельны сразу.
-                ConfettiOverlay(running: celebrating)
+                // Сброс — по событию `onFinished` от самого оверлея: его render-time часы стартуют с
+                // первого видимого кадра, и только он знает, когда дождь реально дорисован (wall-clock
+                // таймер от запуска резал хвост при позднем первом кадре — Cancel системной шторки).
+                ConfettiOverlay(running: celebrating, onFinished: {
+                    Self.log.debug("конфетти: дорисован — сброс celebrating")
+                    celebrating = false
+                    replayQueuedCelebrationIfNeeded()
+                })
+                    .id(celebrationRun)
                     .allowsHitTesting(false)
             }
             .background(Color.paper)
@@ -53,11 +94,58 @@ struct MarksView: View {
                 if model == nil { model = appModel.makeMarksModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
             }
-            .task(id: celebrating) {
-                // Автосброс празднования через длительность конфетти (~2.8 с).
+            .task(id: celebrationRun) {
+                // Страховочный сброс на 2× длительности — на случай, если рендер так и не случился
+                // (сцена не вернулась) и `onFinished` не пришёл. Основной сброс — событие от оверлея.
+                // Ключ — счётчик запусков: перезапуск залпов перезаводит и страховку.
                 guard celebrating else { return }
-                try? await Task.sleep(for: .milliseconds(2800))
+                try? await Task.sleep(for: .milliseconds(Int(ConfettiOverlay.durationSec * 2000)))
+                // Отменённая страховка прошлого запуска (смена id) не должна гасить новый залп:
+                // `try?` глотает CancellationError, и без этого гарда сон «досыпал» бы мгновенно.
+                // `celebrating` перепроверяем и здесь: обычный сброс по `onFinished` не отменяет эту
+                // задачу (тот же `celebrationRun`), иначе warning ложно стрелял бы на каждом взятии.
+                guard !Task.isCancelled, celebrating else { return }
+                Self.log.warning("конфетти: onFinished не пришёл — страховочный сброс")
                 celebrating = false
+                replayQueuedCelebrationIfNeeded()
+            }
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                Self.log.debug("scenePhase → \(String(describing: phase))")
+                sceneIsActive = phase == .active
+                if phase == .active, awaitingActiveScene {
+                    // Шторка реально ушла (сцена снова активна) — отложенный залп запускаем видимо.
+                    // Через `launchConfetti()` (sceneIsActive уже true — гард пройдёт), а не дублируя
+                    // его тело: иначе этот путь минует звук хлопушек. Reduce Motion перепроверяем и
+                    // здесь: пользователь мог включить его, пока залп ждал возврата сцены, — остальные
+                    // вызовы `launchConfetti()` уже гейтятся `!reduceMotion`, этот путь не должен быть
+                    // исключением.
+                    awaitingActiveScene = false
+                    if !reduceMotion {
+                        Self.log.debug("старт конфетти по возврату сцены")
+                        launchConfetti()
+                    }
+                } else if phase == .inactive {
+                    // Системная NFC-шторка тоже держит сцену `.inactive`, не только бэкграунд —
+                    // подтверждено логом первого взятия (см. комментарий у `sceneIsActive`). Если
+                    // пользователь открыл новый скан, пока дождь предыдущего взятия ещё идёт
+                    // (`openScan()` сознательно не трогает `celebrating` в этом случае), появление
+                    // системной шторки должно спрятать залп так же, как уход в фон — иначе он
+                    // «замрёт» и мгновенно завершится на первом кадре после её ухода. Очередь и
+                    // отложенный (ещё не стартовавший) залп не трогаем: краткая `.inactive` — не
+                    // значит, что пользователь покинул приложение.
+                    pauseCelebrationForOcclusion()
+                } else if phase == .background {
+                    if celebrating {
+                        pauseCelebrationForOcclusion()
+                    } else {
+                        // Пользователь покинул приложение — отложенный праздник протух. Роняем и очередь
+                        // целиком: иначе `celebrationQueuedCount` остался бы висеть до следующего не
+                        // связанного взятия и вызвал бы лишний, ничем не подтверждённый повторный залп на
+                        // его `onFinished`.
+                        awaitingActiveScene = false
+                        celebrationQueuedCount = 0
+                    }
+                }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 FloatingCTAView(onNFC: openScan, onPhoto: openPhoto)
@@ -66,13 +154,13 @@ struct MarksView: View {
                 ScanSheet(
                     model: model,
                     clockStatus: appModel.clockStatus,
-                    onCompleted: { pendingCelebration = true }
+                    onCompleted: { armCelebration(after: model) }
                 )
             }
-            .fullScreenCover(item: $photoModel, onDismiss: flushAfterScan) { model in
+            .fullScreenCover(item: $photoModel, onDismiss: onPhotoDismiss) { model in
                 PhotoFlowView(model: model)
             }
-            .fullScreenCover(item: $lightbox) { ctx in
+            .fullScreenCover(item: $lightbox, onDismiss: onLightboxDismiss) { ctx in
                 PhotoLightboxView(
                     photos: ctx.photos,
                     initialIndex: ctx.initialIndex,
@@ -87,6 +175,11 @@ struct MarksView: View {
         guard let model, let first = tile.photoPaths.first else { return }
         let photos = model.lightboxPhotos
         let start = photos.firstIndex { $0.path == first && $0.tile == tile } ?? 0
+        // Лайтбокс — полноэкранный кавер: если дождь предыдущего взятия ещё идёт, его нужно
+        // спрятать так же, как при уходе сцены в `.inactive`/`.background` (см.
+        // `pauseCelebrationForOcclusion`) — иначе он «замрёт» за кавером и мгновенно завершится,
+        // не увиденный, на первом кадре после закрытия.
+        pauseCelebrationForOcclusion()
         lightbox = LightboxContext(photos: photos, initialIndex: start)
     }
 
@@ -94,6 +187,8 @@ struct MarksView: View {
     /// снимать некуда, ведём в выбор команды вместо пустого кавера.
     private func openPhoto() {
         if let photo = appModel.makePhotoModel() {
+            // См. комментарий в `openLightbox` — та же полноэкранная окклюзия уже идущего дождя.
+            pauseCelebrationForOcclusion()
             photoModel = photo
         } else {
             onChooseTeam()
@@ -108,20 +203,186 @@ struct MarksView: View {
         appModel.flushUploads(raceId: raceId, teamId: teamId)
     }
 
+    /// Закрытие фото-кавера: дренаж (этап 6) + попытка отложенного празднования. Пока кавер открыт,
+    /// `launchConfetti()` сам откладывает старт (см. гард `photoModel == nil`) — иначе залп прошёл бы
+    /// беззвучно-невидимо за полноэкранным фото-флоу (звук отыграл бы, а дождь никто не увидел бы).
+    /// После закрытия другого события уже не будет, так что перезапускаем явно здесь же.
+    private func onPhotoDismiss() {
+        flushAfterScan()
+        if awaitingActiveScene, sceneIsActive, !reduceMotion {
+            awaitingActiveScene = false
+            launchConfetti()
+        }
+    }
+
+    /// Закрытие лайтбокса: как `onPhotoDismiss`, но без дренажа (лайтбокс не создаёт новых взятий) —
+    /// только попытка отложенного празднования, если `launchConfetti()` отложил его на время просмотра
+    /// (см. гард `lightbox == nil`).
+    private func onLightboxDismiss() {
+        if awaitingActiveScene, sceneIsActive, !reduceMotion {
+            awaitingActiveScene = false
+            launchConfetti()
+        }
+    }
+
     /// Закрытие скан-шита: дренаж (этап 6) + празднование (этап 11). Конфетти стартуем здесь, когда шит
     /// уже ушёл — `pendingCelebration` взведён `ScanSheet.onCompleted` (успешное завершение). Reduce Motion
     /// подавляет визуал (фанфара уже отыграла из `ScanModel`).
+    ///
+    /// Старт гейтится двумя СОБЫТИЯМИ, а не таймером: dismiss нашего шита и фактической инвалидацией
+    /// CoreNFC. Длительность системной галочки плавает, особенно у первой сессии процесса.
     private func onScanDismiss() {
         flushAfterScan()
-        if pendingCelebration {
-            pendingCelebration = false
-            if !reduceMotion { celebrating = true }
+        Self.log.debug("onScanDismiss: pending=\(pendingCelebration)")
+        scanSheetDismissed = true
+        startCelebrationIfReady()
+    }
+
+    /// Вызывается до `dismiss()`, пока модель гарантированно жива. Task удерживает её до delegate-
+    /// callback и тем самым не теряет первый сигнал инвалидации при демонтаже `.sheet(item:)`.
+    private func armCelebration(after model: ScanModel) {
+        Self.log.debug("armCelebration: празднование взведено")
+        pendingCelebration = true
+        scanSheetDismissed = false
+        nfcSessionStopped = false
+        celebrationWaitTask?.cancel()
+        celebrationWaitTask = Task {
+            await model.waitForScannerToStop()
+            guard !Task.isCancelled else { return }
+            // Callback означает инвалидацию сессии; короткий settle оставляет за экраном только
+            // системную анимацию ухода, не завися от плавающей длительности самой NFC-сессии.
+            try? await Task.sleep(for: .milliseconds(Self.nfcDismissSettleMs))
+            guard !Task.isCancelled else { return }
+            Self.log.debug("nfc-барьер: сессия инвалидирована")
+            nfcSessionStopped = true
+            if pendingCelebration {
+                startCelebrationIfReady()
+            } else if !reduceMotion, awaitingActiveScene {
+                // Дедлайн уже форс-стартовал дождь, но на медленной первой сессии процесса шторка
+                // в тот момент ещё была на экране — дождь прошёл за ней невидимо (запуск отложен,
+                // `awaitingActiveScene == true`). Поздний барьер = экран реально открыт: перезапускаем
+                // дождь так, чтобы его увидели. Если `awaitingActiveScene` уже `false`, отложенный залп
+                // уже подхватил и запустил `.onChange(of: scenePhase)` — повторный вызов здесь удвоил бы
+                // дождь и звук хлопушек. Флаг сбрасываем САМИ (как и `.onChange(of: scenePhase)`):
+                // `launchConfetti()` его не трогает, когда сцена уже активна — без явного сброса он
+                // остался бы липким и мог бы ложно перезапустить дождь на не связанном последующем
+                // переходе сцены в `.active` (например, Пункт управления без ухода в `.background`).
+                Self.log.warning("поздний nfc-барьер после форс-старта — перезапуск конфетти")
+                awaitingActiveScene = false
+                launchConfetti()
+            }
+        }
+        // Дедлайн-фолбэк: празднование не должно зависеть от капризов сигналов — по истечении дождь
+        // запускается безусловно, а warning называет молчавший барьер (диагностика «первого взятия»).
+        celebrationDeadlineTask?.cancel()
+        celebrationDeadlineTask = Task {
+            try? await Task.sleep(for: .milliseconds(Self.celebrationDeadlineMs))
+            guard !Task.isCancelled, pendingCelebration else { return }
+            Self.log.warning("дедлайн празднования: dismissed=\(scanSheetDismissed) nfcStopped=\(nfcSessionStopped) — форс-старт")
+            scanSheetDismissed = true
+            nfcSessionStopped = true
+            startCelebrationIfReady()
         }
     }
+
+    private func startCelebrationIfReady() {
+        guard pendingCelebration, scanSheetDismissed, nfcSessionStopped else { return }
+        pendingCelebration = false
+        // `celebrationWaitTask` НЕ обнуляем: при форс-старте по дедлайну он ещё ждёт поздний
+        // NFC-барьер (перезапуск дождя) и должен остаться отменяемым из `openScan`.
+        celebrationDeadlineTask?.cancel()
+        celebrationDeadlineTask = nil
+        guard !reduceMotion else { return }
+        Self.log.debug("старт конфетти")
+        launchConfetti()
+    }
+
+    /// Прячет уже идущий залп и просит перезапустить его с нуля по возврату видимости — вызывается
+    /// из `.onChange(of: scenePhase)` (`.inactive`/`.background`) и из `openPhoto`/`openLightbox`
+    /// (полноэкранные каверы). `TimelineView(.animation)` не тикает, пока оверлей реально не
+    /// рендерится: не спрятав залп, первый же кадр после возврата видимости досчитал бы весь
+    /// просуществовавший «за кадром» wall-clock интервал разом и мгновенно завершил бы показ
+    /// (`progress ≥ 1` на первом же тике) — ровно то, для чего был введён render-time старт. Бампаем
+    /// `celebrationRun` сразу же (не ждём перезапуска в `launchConfetti()`): иначе страховочный сброс
+    /// старого запуска (`.task(id: celebrationRun)`, всё ещё «спит» на старом id) мог бы проснуться
+    /// сразу после возврата видимости и ложно погасить уже перезапущенный дождь. No-op, если дождь не
+    /// идёт (`celebrating == false`) — отложенный (ещё не стартовавший) залп и очередь не трогает.
+    private func pauseCelebrationForOcclusion() {
+        guard celebrating else { return }
+        celebrating = false
+        celebrationRun += 1
+        awaitingActiveScene = true
+    }
+
+    /// Запуск/перезапуск дождя: инкремент `celebrationRun` пересоздаёт оверлей (свежие частицы,
+    /// отсчёт с нуля) и перезаводит таймер автосброса. Откладывается, пока оверлей MarksView реально
+    /// не виден: неактивная сцена (системная NFC-шторка ещё на экране, см. `.onChange(of: scenePhase)`),
+    /// открытый полноэкранный фото-кавер (см. `onPhotoDismiss`) или открытый лайтбокс (см.
+    /// `onLightboxDismiss`) — иначе звук хлопушек отыграл бы, а саму анимацию никто бы не увидел.
+    /// Если дождь ПРЕДЫДУЩЕГО взятия ещё идёт (`celebrating == true`, например команда взяла второй
+    /// КП за считаные секунды после первого) — не обрываем видимую анимацию/звук перезапуском:
+    /// откладываем через `celebrationQueuedCount`, `onFinished` текущего залпа сам вызовет нас снова.
+    private func launchConfetti() {
+        guard sceneIsActive, photoModel == nil, lightbox == nil else {
+            Self.log.debug("сцена неактивна, открыт фото-кавер или лайтбокс — дождь отложен до возврата видимости")
+            awaitingActiveScene = true
+            return
+        }
+        guard !celebrating else {
+            Self.log.debug("дождь предыдущего взятия ещё идёт — перезапуск отложен до onFinished")
+            celebrationQueuedCount += 1
+            return
+        }
+        celebrating = true
+        celebrationRun += 1
+        // Звук выстрелов хлопушек (по одному на каждую, стаггер внутри плеера) — в момент
+        // фактического старта залпов; при Reduce Motion сюда не доходим (звук без визуала не нужен,
+        // фанфара уже отыграла из `ScanModel`).
+        appModel.playConfettiLaunchSound()
+    }
+
+    /// Разгребает очередь отложенных взятий после того, как текущий залп дорисован
+    /// (`celebrating` уже сброшен в `false` вызывающей стороной): по одному взятию за раз —
+    /// `launchConfetti()` сам поставит следующее в очередь, если пока идёт этот показ. Reduce Motion
+    /// мог включиться, пока залп ждал своей очереди, — перепроверяем здесь же и целиком роняем очередь
+    /// (не только пропускаем один показ), а не молча проигрываем видео вопреки настройке.
+    private func replayQueuedCelebrationIfNeeded() {
+        guard celebrationQueuedCount > 0 else { return }
+        guard !reduceMotion else {
+            celebrationQueuedCount = 0
+            return
+        }
+        celebrationQueuedCount -= 1
+        launchConfetti()
+    }
+
+    private static let nfcDismissSettleMs = 250
+    /// Максимум ожидания барьеров от завершения взятия. На медленной первой сессии процесса инвалидация
+    /// NFC может прийти позже — тогда форс-старт уходит за шторку, а поздний барьер перезапускает дождь.
+    private static let celebrationDeadlineMs = 2500
 
     /// Тап FAB «Отметить КП»: строим скан-модель выбранной команды. Нет команды (`makeScanModel` →
     /// nil) — сканировать некуда, поэтому ведём в выбор команды вместо пустого шита.
     private func openScan() {
+        celebrationWaitTask?.cancel()
+        celebrationWaitTask = nil
+        celebrationDeadlineTask?.cancel()
+        celebrationDeadlineTask = nil
+        // Празднование предыдущего взятия ещё не долетело до экрана (ждёт барьеров или возврата
+        // сцены) — новый скан не должен тихо его выбросить, иначе за быструю серию КП кто-то не
+        // получит конфетти/звука за уже засчитанное взятие. Если дождь уже идёт на экране —
+        // не трогаем: `celebrating` НЕ считаем «должным» и не перезапускаем его — сброс в false с
+        // последующим `launchConfetti()` повторил бы звук хлопушек и обнулил уже видимую анимацию
+        // ради того же самого взятия, которое пользователь и так видит.
+        let needsForceStart = pendingCelebration || awaitingActiveScene
+        pendingCelebration = false
+        scanSheetDismissed = false
+        nfcSessionStopped = false
+        awaitingActiveScene = false
+        if needsForceStart, !reduceMotion {
+            Self.log.warning("новый скан до завершения предыдущего празднования — форс-старт, чтобы не потерять его")
+            launchConfetti()
+        }
         if let scan = appModel.makeScanModel() {
             scanModel = scan
         } else {

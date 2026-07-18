@@ -47,8 +47,9 @@ final class ScanModel: Identifiable {
     /// Сигнал автозакрытия оверлея (истечение окна / завершение / конец стрима). Вьюха его наблюдает.
     private(set) var closeRequested = false
     /// `true`, если оверлей закрылся по УСПЕШНОМУ завершению взятия (весь ростер present), а не по истечению
-    /// окна/концу стрима. Выставляется в `handleCompletionCheck()` перед `finalizeSession()`; читается ПОСЛЕ
-    /// dismiss (`MarksView` запускает конфетти) — истечение окна его НЕ выставляет.
+    /// окна/концу стрима. Выставляется в `handleCompletionCheck()`, которая на этом пути НЕ зовёт
+    /// `finalizeSession()` (см. её комментарий); читается ПОСЛЕ dismiss (`MarksView` запускает конфетти) —
+    /// истечение окна его НЕ выставляет.
     private(set) var didComplete = false
 
     /// Потокобезопасное зеркало «оверлей жив» для `NfcChipScanner.shouldRestart` (читается на делегатной
@@ -289,9 +290,14 @@ final class ScanModel: Identifiable {
 
     /// Единая точка автозакрытия: выставляет `closeRequested` (вьюха наблюдает) и гасит `liveness`, чтобы
     /// сканер на 60-с таймауте больше не пересоздавал сессию поверх закрывающегося оверлея.
+    /// Сканер останавливаем прямо здесь, не дожидаясь `onDisappear` шита (тот приходит только после
+    /// анимации dismiss): системная NFC-шторка начинает уезжать параллельно шиту и не висит над
+    /// «Отметками» (перекрывая конфетти — этап 11). Буферизованные чтения не теряются: `stop()` сканера
+    /// лишь финиширует его поток, форвардер и `streamTask` дренируют остаток как обычно.
     private func requestClose() {
         closeRequested = true
         liveness.set(false)
+        scanner?.stop()
     }
 
     /// Привязать прод-сканер (`AppModel.makeScanModel()`); вьюха стартует его `beginScanning()`.
@@ -304,6 +310,12 @@ final class ScanModel: Identifiable {
     func beginScanning() {
         guard let scanner else { return }
         start(scanner: scanner)
+    }
+
+    /// Барьер фактического ухода системной NFC-сессии. В отличие от `stop()`, который лишь вызывает
+    /// `invalidate()`, завершается по delegate-callback CoreNFC. Для фейков/превью — сразу.
+    func waitForScannerToStop() async {
+        await scanner?.waitUntilStopped()
     }
 
     /// Запросить разрешение на геолокацию заранее, при первом открытии оверлея (§GPS). Идемпотентно
@@ -481,8 +493,9 @@ final class ScanModel: Identifiable {
     // MARK: - Session-reduce + фидбек (порт `process` из ScanScreen)
 
     /// Свёртка события в UI-сессию + аудио/тактильный фидбек. `kp`/`member` двигают сессию; `badKp`/
-    /// `unboundChip` — только диагностика. На переходе incomplete→complete: обычный success, затем
-    /// фанфары через `fanfareDelayMs` и «Готово!»-бит (§10).
+    /// `unboundChip` — только диагностика. На переходе incomplete→complete: БЕЗ обычного success
+    /// (его роль играет системный «тык-тык» NFC-галочки), только фанфары через `fanfareDelayMs`
+    /// и «Готово!»-бит (§10).
     private func applyFeedback(_ event: ScanEvent, now: Int64) {
         switch event {
         case .unboundChip:
@@ -498,8 +511,15 @@ final class ScanModel: Identifiable {
             let wasComplete = isComplete(session: effective, rosterSize: roster.count)
             session = reduce(session: effective, event: event, now: now)
             let nowComplete = isComplete(session: session, rosterSize: roster.count)
-            feedback.play(feedbackFor(event: event))
-            if !wasComplete && nowComplete {
+            let completing = !wasComplete && nowComplete
+            // Завершающий чип (обычно последний участник, но и КП при полном буфере) молчит: при
+            // successHoldMs = 0 invalidate() приходит через миллисекунды, и системный «тык-тык»
+            // NFC-галочки сам подтверждает чип — наш бип поверх него давал звуковую кашу.
+            // Праздник взятия — фанфары через fanfareDelayMs, как раньше.
+            if !completing {
+                feedback.play(feedbackFor(event: event))
+            }
+            if completing {
                 scheduleFanfare()
                 beginCompletionHold()
             } else if !nowComplete {
@@ -562,10 +582,13 @@ final class ScanModel: Identifiable {
     private func handleCompletionCheck() {
         guard completed else { return }
         if isComplete(session: session, rosterSize: roster.count) {
-            // Успешное завершение (весь ростер present) — помечаем ПЕРЕД finalizeSession(), чтобы
-            // `MarksView` мог отличить его от истечения окна/конца стрима и запустить конфетти после dismiss.
+            // Успешное завершение (весь ростер present) — помечаем, чтобы `MarksView` мог отличить его
+            // от истечения окна/конца стрима и запустить конфетти после dismiss. `finalizeSession()` тут
+            // НЕ зовём: `session`/`completed` должны остаться как есть, иначе «Готово!» на CP-карточке
+            // тут же схлопывается в плейсхолдер «КП не отсканирован» ещё ДО того, как вьюха начнёт
+            // dismiss-анимацию (этап 11: при `successHoldMs = 0` сброс и `closeRequested` иначе бьют
+            // в один и тот же тик) — модель всё равно уходит на teardown вместе с шитом.
             didComplete = true
-            finalizeSession()
             requestClose()
         } else {
             completed = false
