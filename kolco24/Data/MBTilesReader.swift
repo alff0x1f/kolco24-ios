@@ -33,6 +33,30 @@ struct MBTilesReader {
         dbQueue = try DatabaseQueue(path: path, configuration: config)
     }
 
+    /// Похоже ли содержимое на валидный MBTiles: есть запрашиваемое отношение `tiles`
+    /// и в нём хотя бы один тайл. Читаемый sqlite без `tiles` (или с пустым) — НЕ
+    /// пригодная подложка: с `canReplaceMapContent = true` каждый тайл был бы
+    /// прозрачным и Apple-подложка подавлена → пустая карта без ретрая. Вызывающий
+    /// (`OverlayCache`) при `false` не строит дескриптор — карта деградирует в онлайн
+    /// Apple-подложку.
+    ///
+    /// Проверка схемо-агностична: сам `SELECT 1 FROM tiles LIMIT 1` несёт проверку —
+    /// `tiles` по стандарту MBTiles 1.3 может быть как таблицей, так и VIEW поверх
+    /// нормализованных `map`+`images` (так делают mb-util/MapTiler/GDAL/tilelive);
+    /// `tableExists`-предпроверка ложно отвергала бы view-схему. Отсутствие отношения
+    /// `tiles` → SQL-ошибка → перехват → `false`; пустое отношение → `false`.
+    /// Never-throw: любая ошибка → `false`. Дёшево (`LIMIT 1`).
+    func looksLikeValidMBTiles() -> Bool {
+        do {
+            return try dbQueue.read { db in
+                try Bool.fetchOne(db, sql: "SELECT 1 FROM tiles LIMIT 1") ?? false
+            }
+        } catch {
+            mbtilesLog.error("validity check failed: \(error)")
+            return false
+        }
+    }
+
     /// Данные тайла по XYZ-координатам. Внутри — TMS-флип строки (`tmsRow`).
     /// Отсутствующий тайл или ошибка чтения → `nil` (never-throw).
     func tileData(z: Int, x: Int, y: Int) -> Data? {

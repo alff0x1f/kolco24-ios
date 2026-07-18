@@ -197,6 +197,14 @@ final class MapModel {
     /// если уже `downloading`. Захватывает замыкание графа (не `self`) для самого скачивания.
     func downloadMap() {
         guard let raceId = boundRaceId, let urlString = mapUrl, let url = URL(string: urlString) else { return }
+        // HTTPS-only контракт плана: `NSAllowsLocalNetworking` пропускает cleartext http к LAN-хостам —
+        // защищаемся от нехранящейся-по-https `map_url` до старта скачивания (путь тот же, что у ошибки).
+        guard url.scheme?.lowercased() == "https" else {
+            let message = "Не удалось скачать карту гонки"
+            availability = .failed(message: message)
+            onToast(message)
+            return
+        }
         if case .downloading = availability { return }
         availability = .downloading(progress: 0)
         let download = env.downloadMapFile
@@ -210,18 +218,17 @@ final class MapModel {
                     }
                 }
                 guard let self, !Task.isCancelled, self.boundRaceId == raceId else { return }
-                // Снимаем `downloading` напрямую (не через `refreshAvailability` — тот
-                // короткозамыкается на активном `downloading`): файл на месте → `ready(path)`.
-                if self.env.mapFileExists(raceId) {
-                    self.availability = .ready(path: self.env.mapFilePath(raceId))
-                } else {
-                    self.availability = .notDownloaded
-                }
-            } catch is CancellationError {
-                // Отмена (смена команды / `cancelDownload`): сторэдж уже снёс temp, оставляем состояние
-                // тому, кто отменил (`cancelDownload` ставит `notDownloaded`, `rebind` — сбрасывает всё).
-                return
+                // Успех = `download` не бросил → файл атомарно поставлен на место, поэтому снимаем
+                // `downloading` прямо в `ready(path)` (не через `refreshAvailability` — тот
+                // короткозамыкается на активном `downloading`; отдельная проверка `mapFileExists`
+                // недостижима — download на неуспехе бросает).
+                self.availability = .ready(path: self.env.mapFilePath(raceId))
             } catch {
+                // Отмена (смена команды / `cancelDownload`): прод-путь (`URLSession`) бросает
+                // `URLError(.cancelled)`, а `Task.sleep` — `CancellationError`; оба ловим через
+                // `Task.isCancelled` (в отменённом download-таске он взведён). Сторэдж уже снёс temp,
+                // состояние оставляем отменившему (`cancelDownload` → `notDownloaded`, `rebind` — сброс).
+                if Task.isCancelled { return }
                 guard let self, self.boundRaceId == raceId else { return }
                 let message = "Не удалось скачать карту гонки"
                 self.availability = .failed(message: message)

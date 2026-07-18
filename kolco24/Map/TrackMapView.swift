@@ -51,8 +51,13 @@ struct TrackMapView: UIViewRepresentable {
         if let overlay {
             let tileOverlay = MBTilesOverlay(metadata: overlay.metadata, tileData: overlay.tileData)
             mapView.addOverlay(tileOverlay, level: .aboveLabels)
-            applyOverlayCamera(mapView, metadata: overlay.metadata)
-            context.coordinator.didSetInitialCamera = true
+            // Флаг ставим ТОЛЬКО если камера реально спозиционирована по bounds. Без валидных
+            // bounds `applyOverlayCamera` возвращает false → падаем в `applyData`, где камера
+            // подгоняется под трек/пины (иначе карта открылась бы в дефолтном регионе с данными
+            // команды за кадром).
+            if applyOverlayCamera(mapView, metadata: overlay.metadata) {
+                context.coordinator.didSetInitialCamera = true
+            }
         }
 
         applyData(mapView, coordinator: context.coordinator)
@@ -104,8 +109,11 @@ struct TrackMapView: UIViewRepresentable {
 
     /// Камера под оффлайн-подложку: регион по `bounds`, `cameraBoundary` по bbox, `cameraZoomRange`
     /// из зумов метаданных (аппроксимация зум→дистанция — device-only, без тестов).
-    private func applyOverlayCamera(_ mapView: MKMapView, metadata: MBTilesMetadata?) {
-        guard let bounds = metadata?.bounds else { return }
+    /// Возвращает `true`, только если камера реально спозиционирована (есть валидные `bounds`);
+    /// `false` → вызывающий должен подогнать камеру под трек/пины.
+    @discardableResult
+    private func applyOverlayCamera(_ mapView: MKMapView, metadata: MBTilesMetadata?) -> Bool {
+        guard let bounds = metadata?.bounds else { return false }
         let centerLat = (bounds.s + bounds.n) / 2
         let centerLon = (bounds.w + bounds.e) / 2
         let span = MKCoordinateSpan(
@@ -128,17 +136,18 @@ struct TrackMapView: UIViewRepresentable {
         )
         mapView.cameraBoundary = MKMapView.CameraBoundary(mapRect: rect)
 
-        if let minZoom = metadata?.minZoom, let maxZoom = metadata?.maxZoom, minZoom <= maxZoom {
-            // zoom→дистанция камеры (грубо): ширина мира на зуме z ≈ circ·cos(lat)/2^z.
-            let minDistance = cameraDistance(forZoom: maxZoom, latitude: centerLat)
-            let maxDistance = cameraDistance(forZoom: minZoom, latitude: centerLat)
-            if let range = MKMapView.CameraZoomRange(
-                minCenterCoordinateDistance: minDistance,
-                maxCenterCoordinateDistance: maxDistance
-            ) {
-                mapView.setCameraZoomRange(range, animated: false)
-            }
+        // Зумы санируем в 0…22 (`Core/Map`), min > max → дефолты — те же значения, что и в оверлее.
+        let zoom = sanitizedZoomRange(minZoom: metadata?.minZoom, maxZoom: metadata?.maxZoom)
+        // zoom→дистанция камеры (грубо): ширина мира на зуме z ≈ circ·cos(lat)/2^z.
+        let minDistance = cameraDistance(forZoom: zoom.max, latitude: centerLat)
+        let maxDistance = cameraDistance(forZoom: zoom.min, latitude: centerLat)
+        if let range = MKMapView.CameraZoomRange(
+            minCenterCoordinateDistance: minDistance,
+            maxCenterCoordinateDistance: maxDistance
+        ) {
+            mapView.setCameraZoomRange(range, animated: false)
         }
+        return true
     }
 
     /// Грубая оценка `centerCoordinateDistance` для зума `z` на широте `latitude`.

@@ -114,4 +114,89 @@ struct MBTilesReaderTests {
         #expect(reader.tileData(z: 2, x: 3, y: 1) == nil)
         #expect(reader.metadata() == nil)
     }
+
+    // MARK: - Валидность (Finding C2)
+
+    @Test func looksLikeValidMBTiles_withTiles_true() throws {
+        let path = try makeFixture(
+            tiles: [(z: 2, x: 3, tmsRow: 2, data: Data([0x01]))],
+            metadata: []
+        )
+        let reader = try MBTilesReader(path: path)
+        #expect(reader.looksLikeValidMBTiles())
+    }
+
+    @Test func looksLikeValidMBTiles_emptyTilesTable_false() throws {
+        // Таблица `tiles` есть, но пустая → не пригодная подложка.
+        let path = try makeFixture(tiles: [], metadata: [])
+        let reader = try MBTilesReader(path: path)
+        #expect(!reader.looksLikeValidMBTiles())
+    }
+
+    /// View-схема MBTiles 1.3: `tiles` — это VIEW поверх нормализованных
+    /// `map`+`images` (mb-util/MapTiler/GDAL/tilelive). Валидность/чтение/метаданные
+    /// должны работать схемо-агностично: `SELECT` против view проходит, y-flip тоже.
+    @Test func looksLikeValidMBTiles_viewBasedSchema_true() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mbtiles-view-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("view.mbtiles").path
+
+        // XYZ y = 1 at z = 2 → TMS row = 2^2 − 1 − 1 = 2.
+        let payload = Data([0xDE, 0xAD, 0xBE, 0xEF])
+        let queue = try DatabaseQueue(path: path)
+        try queue.write { db in
+            try db.execute(sql: "CREATE TABLE map (zoom_level INTEGER, tile_column INTEGER, tile_row INTEGER, tile_id TEXT)")
+            try db.execute(sql: "CREATE TABLE images (tile_id TEXT, tile_data BLOB)")
+            try db.execute(sql: """
+                CREATE VIEW tiles AS
+                SELECT map.zoom_level AS zoom_level,
+                       map.tile_column AS tile_column,
+                       map.tile_row AS tile_row,
+                       images.tile_data AS tile_data
+                FROM map JOIN images ON images.tile_id = map.tile_id
+                """)
+            try db.execute(sql: "CREATE TABLE metadata (name TEXT, value TEXT)")
+            try db.execute(
+                sql: "INSERT INTO images (tile_id, tile_data) VALUES (?, ?)",
+                arguments: ["t1", payload]
+            )
+            try db.execute(
+                sql: "INSERT INTO map (zoom_level, tile_column, tile_row, tile_id) VALUES (?, ?, ?, ?)",
+                arguments: [2, 3, 2, "t1"]
+            )
+            try db.execute(
+                sql: "INSERT INTO metadata (name, value) VALUES (?, ?)",
+                arguments: ["minzoom", "8"]
+            )
+            try db.execute(
+                sql: "INSERT INTO metadata (name, value) VALUES (?, ?)",
+                arguments: ["maxzoom", "15"]
+            )
+        }
+        try queue.close()
+
+        let reader = try MBTilesReader(path: path)
+        #expect(reader.looksLikeValidMBTiles())
+        #expect(reader.tileData(z: 2, x: 3, y: 1) == payload)
+        let meta = reader.metadata()
+        #expect(meta?.minZoom == 8)
+        #expect(meta?.maxZoom == 15)
+    }
+
+    @Test func looksLikeValidMBTiles_missingTilesTable_false() throws {
+        // Валидный sqlite без таблицы `tiles` → не подложка (never-throw → false).
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mbtiles-notiles-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("notiles.mbtiles").path
+        let queue = try DatabaseQueue(path: path)
+        try queue.write { db in
+            try db.execute(sql: "CREATE TABLE unrelated (x INTEGER)")
+        }
+        try queue.close()
+
+        let reader = try MBTilesReader(path: path)
+        #expect(!reader.looksLikeValidMBTiles())
+    }
 }

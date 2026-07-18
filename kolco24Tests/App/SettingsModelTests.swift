@@ -332,6 +332,30 @@ struct SettingsModelTests {
         #expect(noRace.mapFileSizeLabel == nil)
     }
 
+    /// `mapFileSizeLabel` покрывает нецелые ветки `formatBytesRu` (русская запятичная дробь) и мелкие
+    /// единицы — та самая причина, по которой это не `ByteCountFormatter` (локаленезависимый вывод).
+    @Test func mapFileSizeLabel_formatBranches() async throws {
+        let transport = FakeTransport()
+
+        func label(bytes: Int64) throws -> String? {
+            let env = try AppEnvironment.inMemory(
+                transport: transport.handle,
+                mapFileSize: { _ in bytes }
+            )
+            let appModel = AppModel(env: env)
+            return SettingsModel(env: env, appModel: appModel, raceId: 7, teamId: 5).mapFileSizeLabel
+        }
+
+        // Дробная МБ → русская запятая: 1_610_612 / 1024 / 1024 ≈ 1.536 → «1,5 МБ».
+        #expect(try label(bytes: 1_610_612) == "1,5 МБ")
+        // Байты (< 1024) → целое, единица «Б».
+        #expect(try label(bytes: 512) == "512 Б")
+        // Дробные КБ → «1,5 КБ» (1536 / 1024 == 1.5).
+        #expect(try label(bytes: 1536) == "1,5 КБ")
+        // Целые КБ → без дроби.
+        #expect(try label(bytes: 2048) == "2 КБ")
+    }
+
     /// `deleteRaceMap()` дёргает замыкание графа с raceId скоупа и гасит лейбл (ряд становится disabled).
     @Test func deleteRaceMap_invokesClosureAndClearsLabel() async throws {
         let transport = FakeTransport()

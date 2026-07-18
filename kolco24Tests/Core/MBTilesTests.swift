@@ -90,4 +90,56 @@ struct MBTilesTests {
         #expect(meta.minZoom == nil)
         #expect(meta.maxZoom == nil)  // "15.5" не целое → nil
     }
+
+    @Test func metadata_centerTooFewComponents_nil() {
+        // Один компонент (< 2) → center nil.
+        #expect(parseMBTilesMetadata(["center": "37.5"]).center == nil)
+    }
+
+    @Test func metadata_centerNotNumbers_nil() {
+        // Присутствует, но не числа → center nil.
+        #expect(parseMBTilesMetadata(["center": "a,b"]).center == nil)
+    }
+
+    // MARK: - Санация зум-диапазона
+
+    @Test func sanitizedZoom_validRange_passthrough() {
+        let z = sanitizedZoomRange(minZoom: 8, maxZoom: 15)
+        #expect(z.min == 8)
+        #expect(z.max == 15)
+    }
+
+    @Test func sanitizedZoom_nilFields_defaults() {
+        let z = sanitizedZoomRange(minZoom: nil, maxZoom: nil)
+        #expect(z.min == 0)
+        #expect(z.max == 19)
+    }
+
+    @Test func sanitizedZoom_negativeMin_clampedToZero() {
+        let z = sanitizedZoomRange(minZoom: -5, maxZoom: 12)
+        #expect(z.min == 0)
+        #expect(z.max == 12)
+    }
+
+    @Test func sanitizedZoom_absurdMax_clampedTo22() {
+        // Абсурдный max (сделал бы `1 << z` небезопасным) → зажимается в 22.
+        let z = sanitizedZoomRange(minZoom: 5, maxZoom: 9999)
+        #expect(z.min == 5)
+        #expect(z.max == 22)
+    }
+
+    @Test func sanitizedZoom_minGreaterThanMax_fallsBackToDefaults() {
+        // После зажима min > max → откат к дефолтам 0…19.
+        let z = sanitizedZoomRange(minZoom: 18, maxZoom: 3)
+        #expect(z.min == 0)
+        #expect(z.max == 19)
+    }
+
+    @Test func clampZoom_bounds() {
+        #expect(clampZoom(-1) == 0)
+        #expect(clampZoom(0) == 0)
+        #expect(clampZoom(22) == 22)
+        #expect(clampZoom(100) == 22)
+        #expect(clampZoom(10) == 10)
+    }
 }

@@ -57,12 +57,12 @@ struct MapModelTests {
 
     private func mark(
         id: String, race: Int, team: Int, cp: Int, number: Int, cost: Int,
-        takenAt: Int64 = 0, lat: Double? = nil, lon: Double? = nil
+        takenAt: Int64 = 0, trustedTakenAt: Int64? = nil, lat: Double? = nil, lon: Double? = nil
     ) -> Mark {
         Mark(id: id, raceId: race, teamId: team, checkpointId: cp, checkpointNumber: number,
              cost: cost, method: "nfc", cpUid: "UID\(cp)", cpCode: "K24", present: [1],
              expectedCount: 1, complete: true, takenAt: takenAt, updatedAt: takenAt,
-             locLat: lat, locLon: lon)
+             trustedTakenAt: trustedTakenAt, locLat: lat, locLon: lon)
     }
 
     /// Граф с инжектированными map-замыканиями поверх [fakes] и заданным download-поведением.
@@ -270,5 +270,110 @@ struct MapModelTests {
         #expect(model.trackPath.isEmpty)
         #expect(model.pins.isEmpty)
         #expect(model.availability == .noMapForRace)
+    }
+
+    // MARK: - Прогресс скачивания (промежуточное значение)
+
+    @Test func downloadReportsIntermediateProgress() async throws {
+        let fakes = MapFakes()
+        // Эмитим 0.5 и держим (не завершаем) — ловим промежуточное downloading(0.5).
+        let env = try makeEnv(fakes) { _, _, onProgress in
+            onProgress(0.5)
+            while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(5)) }
+        }
+        try await env.raceStore.insertAll([race(7, mapUrl: "https://cdn.test/7.mbtiles")])
+
+        let model = MapModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.availability == .notDownloaded }
+
+        model.downloadMap()
+        await waitUntil { model.availability == .downloading(progress: 0.5) }
+        #expect(model.availability == .downloading(progress: 0.5))
+        model.cancelDownload()
+    }
+
+    // MARK: - refreshAvailability не трогает активное downloading
+
+    @Test func refreshAvailabilityNoOpWhileDownloading() async throws {
+        let fakes = MapFakes()
+        let env = try makeEnv(fakes) { _, _, _ in
+            while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(5)) }
+        }
+        try await env.raceStore.insertAll([race(7, mapUrl: "https://cdn.test/7.mbtiles")])
+
+        let model = MapModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.availability == .notDownloaded }
+
+        model.downloadMap()
+        #expect(model.availability == .downloading(progress: 0))
+        // Даже если файл вдруг появился — refresh во время downloading — no-op.
+        fakes.setFile(7)
+        model.refreshAvailability()
+        try? await Task.sleep(for: .milliseconds(60))
+        #expect(model.availability == .downloading(progress: 0))
+        model.cancelDownload()
+    }
+
+    // MARK: - Отмена через URLError(.cancelled) (прод-путь URLSession)
+
+    @Test func cancelWithUrlErrorDoesNotToastOrFail() async throws {
+        let fakes = MapFakes()
+        // Прод URLSession при отмене бросает URLError(.cancelled), НЕ CancellationError.
+        let env = try makeEnv(fakes) { _, _, _ in
+            while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(5)) }
+            throw URLError(.cancelled)
+        }
+        try await env.raceStore.insertAll([race(7, mapUrl: "https://cdn.test/7.mbtiles")])
+
+        let model = MapModel(env: env, onToast: { fakes.recordToast($0) })
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.availability == .notDownloaded }
+
+        model.downloadMap()
+        #expect(model.availability == .downloading(progress: 0))
+        model.cancelDownload()
+        #expect(model.availability == .notDownloaded)
+
+        // Дать catch отработать: состояние/тост не должны измениться (нет ложного failed).
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(model.availability == .notDownloaded)
+        #expect(fakes.toasts.isEmpty)
+    }
+
+    // MARK: - HTTPS-only: не-https map_url отклоняется
+
+    @Test func downloadRejectsNonHttpsUrl() async throws {
+        let fakes = MapFakes()
+        // download-замыкание не должно вызваться вовсе.
+        let env = try makeEnv(fakes) { _, _, _ in Issue.record("download must not run for http url") }
+        try await env.raceStore.insertAll([race(7, mapUrl: "http://cdn.test/7.mbtiles")])
+
+        let model = MapModel(env: env, onToast: { fakes.recordToast($0) })
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.availability == .notDownloaded }
+
+        model.downloadMap()
+        #expect(model.availability == .failed(message: "Не удалось скачать карту гонки"))
+        #expect(fakes.toasts == ["Не удалось скачать карту гонки"])
+    }
+
+    // MARK: - Пин: timeMs предпочитает trustedTakenAt
+
+    @Test func pinTimeMsPrefersTrustedTakenAt() async throws {
+        let fakes = MapFakes()
+        let env = try makeEnv(fakes)
+        try await env.checkpointStore.insertCheckpoints([openCP(id: 1, race: 7, number: 5, cost: 9)])
+        // takenAt 100, но trustedTakenAt 555 — пин должен нести доверенное время.
+        try await env.markStore.upsert(mark(id: "m1", race: 7, team: 42, cp: 1, number: 5, cost: 9,
+                                             takenAt: 100, trustedTakenAt: 555, lat: 1, lon: 2))
+
+        let model = MapModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.marks.count == 1 && model.checkpoints.count == 1 }
+
+        let pin = try #require(model.pins.first)
+        #expect(pin.timeMs == 555)
     }
 }

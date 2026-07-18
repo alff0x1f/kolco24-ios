@@ -29,8 +29,10 @@ import SwiftUI
 struct MapTabView: View {
     @Environment(AppModel.self) private var appModel
     @State private var model: MapModel?
-    /// Активный оффлайн-дескриптор (`nil` → Apple-подложка). Пересобирается при смене `readyPath`.
-    @State private var overlay: MapOverlayDescriptor?
+    /// Мемо-кэш оффлайн-дескриптора (держит `MBTilesReader` живым, не переоткрывая `DatabaseQueue` на
+    /// каждый прогон `body`). Дескриптор выводится СИНХРОННО в `body` из `readyPath` — не через
+    /// `@State`+`onChange`, иначе `makeUIView` при смене `.id` видел бы устаревший `nil` (Finding H1).
+    @State private var overlayCache = OverlayCache()
     /// Точка входа во флоу выбора команды (пробрасывается хостом).
     var onChooseTeam: () -> Void = {}
 
@@ -38,6 +40,13 @@ struct MapTabView: View {
     private var readyPath: String? {
         if case let .ready(path) = model?.availability { return path }
         return nil
+    }
+
+    /// Активный оффлайн-дескриптор (`nil` → Apple-подложка). Выводится синхронно в `body`, поэтому
+    /// `makeUIView`/`updateUIView` всегда видят текущее значение — дескриптор для нового `readyPath`
+    /// готов ДО пересоздания `MKMapView` по `.id`.
+    private var overlay: MapOverlayDescriptor? {
+        overlayCache.descriptor(for: readyPath)
     }
 
     var body: some View {
@@ -50,9 +59,6 @@ struct MapTabView: View {
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
             }
             .onAppear { model?.refreshAvailability() }
-            .onChange(of: readyPath, initial: true) { _, path in
-                rebuildOverlay(path)
-            }
     }
 
     @ViewBuilder
@@ -160,14 +166,15 @@ struct MapTabView: View {
 
     /// Карточка активного скачивания: прогресс-бар, процент и крестик-отмена.
     private func downloadingCard(progress: Double, onCancel: @escaping () -> Void) -> some View {
-        HStack(spacing: 12) {
+        let clamped = min(max(progress, 0), 1)
+        return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Скачивание карты…")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.ink)
-                ProgressView(value: min(max(progress, 0), 1))
+                ProgressView(value: clamped)
                     .tint(Color.kolcoOrange)
-                Text("\(Int((min(max(progress, 0), 1)) * 100))%")
+                Text("\(Int(clamped * 100))%")
                     .font(.mono(12, weight: .semibold))
                     .foregroundStyle(Color.sub)
             }
@@ -186,23 +193,41 @@ struct MapTabView: View {
         .padding(.bottom, DS.hPad)
     }
 
-    // MARK: - Оффлайн-дескриптор
+}
 
-    /// Пересобирает оффлайн-дескриптор при смене готового пути. `MBTilesReader(path:)` — тип того же
-    /// модуля (GRDB не импортируется в корневую вьюху); замыкание `tileData` держит reader живым, пока
-    /// оверлей используется. Ошибка открытия файла → `nil` (карта деградирует в Apple-подложку).
-    private func rebuildOverlay(_ path: String?) {
-        guard let path else {
-            overlay = nil
-            return
+// MARK: - Оффлайн-дескриптор
+
+/// Мемо-кэш оффлайн-дескриптора: строит его лениво при смене готового пути и держит `MBTilesReader`
+/// живым, пока путь не изменился (иначе `DatabaseQueue` переоткрывался бы на каждый прогон `body`).
+/// `MBTilesReader(path:)` — тип того же модуля (GRDB не импортируется в корневую вьюху); замыкание
+/// `tileData` захватывает reader. Ошибка открытия файла → `nil` (карта деградирует в Apple-подложку).
+@MainActor
+private final class OverlayCache {
+    private var path: String?
+    private var reader: MBTilesReader?
+    private var cached: MapOverlayDescriptor?
+
+    /// Дескриптор для [path] (`nil` → нет подложки). Для того же пути возвращает мемоизированное
+    /// значение без переоткрытия файла.
+    func descriptor(for path: String?) -> MapOverlayDescriptor? {
+        if path == self.path { return cached }
+        self.path = path
+        // Читаемый sqlite без таблицы `tiles`/без тайлов — НЕ подложка: иначе
+        // `canReplaceMapContent` дал бы пустую подавленную карту без ретрая. При невалидности
+        // возвращаем `nil` → карта деградирует в онлайн Apple-подложку (Finding C2).
+        guard let path,
+              let reader = try? MBTilesReader(path: path),
+              reader.looksLikeValidMBTiles() else {
+            self.reader = nil
+            self.cached = nil
+            return nil
         }
-        guard let reader = try? MBTilesReader(path: path) else {
-            overlay = nil
-            return
-        }
-        overlay = MapOverlayDescriptor(
+        self.reader = reader
+        let descriptor = MapOverlayDescriptor(
             metadata: reader.metadata(),
             tileData: { z, x, y in reader.tileData(z: z, x: x, y: y) }
         )
+        self.cached = descriptor
+        return descriptor
     }
 }

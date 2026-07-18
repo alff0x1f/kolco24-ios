@@ -20,12 +20,43 @@ func tmsRow(z: Int, y: Int) -> Int {
     return (1 << z) - 1 - y
 }
 
+// MARK: - Санация зум-диапазона
+
+/// Нижняя/верхняя границы валидного тайлового зума. За пределами `maximumZ` сдвиг
+/// `1 << z` в `tmsRow` становится небезопасным (переполнение), поэтому недоверенные
+/// зумы из метаданных зажимаются в этот диапазон.
+let mbtilesMinValidZoom = 0
+let mbtilesMaxValidZoom = 22
+
+/// Дефолты, если зум в метаданных отсутствует или после зажима невалиден (min > max).
+private let mbtilesDefaultMinZoom = 0
+private let mbtilesDefaultMaxZoom = 19
+
+/// Зажать один зум в `0…22`.
+func clampZoom(_ z: Int) -> Int {
+    return min(max(z, mbtilesMinValidZoom), mbtilesMaxValidZoom)
+}
+
+/// Санировать зум-диапазон подложки из недоверенных метаданных: `nil` → дефолт,
+/// каждый зум зажимается в `0…22`; если после зажима min > max — откат к дефолтам
+/// (`0…19`). Используется и в `MBTilesOverlay` (границы `minimumZ`/`maximumZ`),
+/// и в камере `TrackMapView`, чтобы битые метаданные не делали подложку непригодной.
+func sanitizedZoomRange(minZoom: Int?, maxZoom: Int?) -> (min: Int, max: Int) {
+    let lo = clampZoom(minZoom ?? mbtilesDefaultMinZoom)
+    let hi = clampZoom(maxZoom ?? mbtilesDefaultMaxZoom)
+    if lo > hi { return (mbtilesDefaultMinZoom, mbtilesDefaultMaxZoom) }
+    return (lo, hi)
+}
+
 /// Распарсенные метаданные MBTiles. Все поля опциональны — отсутствующий/битый
 /// ключ даёт `nil`, а не бросок (never-throw).
 struct MBTilesMetadata: Equatable {
     /// Географические границы подложки: W, S, E, N (градусы).
     var bounds: (w: Double, s: Double, e: Double, n: Double)?
     /// Центр карты: lon, lat (+ опционально зум, который здесь игнорируется).
+    /// Парсится для полноты строки `metadata` и покрыт тестами, но пока не
+    /// потребляется рендерером (камера считается из `bounds` в `TrackMapView`) —
+    /// прецедент `chipModelFromVersion` в `Core/Nfc` (parse-for-completeness).
     var center: (lon: Double, lat: Double)?
     var minZoom: Int?
     var maxZoom: Int?

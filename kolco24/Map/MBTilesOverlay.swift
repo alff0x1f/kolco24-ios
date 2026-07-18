@@ -35,8 +35,11 @@ final class MBTilesOverlay: MKTileOverlay {
         super.init(urlTemplate: nil)
         canReplaceMapContent = true
         tileSize = CGSize(width: 256, height: 256)
-        minimumZ = metadata?.minZoom ?? 0
-        maximumZ = metadata?.maxZoom ?? 19
+        // Зумы из метаданных недоверены: зажимаем в 0…22 (иначе `1 << z` в `tmsRow`
+        // переполняется), min > max → дефолты 0…19 (`Core/Map` санация, покрыта тестами).
+        let zoom = sanitizedZoomRange(minZoom: metadata?.minZoom, maxZoom: metadata?.maxZoom)
+        minimumZ = zoom.min
+        maximumZ = zoom.max
     }
 
     override func loadTile(at path: MKTileOverlayPath, result: @escaping (Data?, Error?) -> Void) {

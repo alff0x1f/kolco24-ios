@@ -26,7 +26,7 @@ import os
 private let mapStorageLog = Logger(subsystem: "kolco24", category: "MapFileStorage")
 
 /// Ошибки скачивания подложки. `.httpError` несёт HTTP-статус (не 2xx).
-enum MapDownloadError: Error, Equatable {
+enum MapDownloadError: Error {
     case httpError(Int)
 }
 
