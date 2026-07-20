@@ -2,12 +2,13 @@
 //  AppDatabaseSchemaTests.swift
 //  kolco24Tests
 //
-//  Snapshot-тест схемы `"v1"` — замена Android `MigrationTest` (мигрировать нечего,
-//  iOS-база рождается сразу в финальной схеме Room v5). Сверяет инвентарь
+//  Snapshot-тест схемы — замена Android `MigrationTest`. `"v1"` — снимок финальной
+//  схемы Room v5 (стартовая точка iOS-базы), `"v2"` — iOS-only `races.mapUrl` (см.
+//  `migrationV1ToV2AddsMapUrlAndPreservesRows`). Сверяет инвентарь
 //  таблиц/колонок/индексов/PK, транскрибированный дословно из
-//  `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/5.json`, с тем, что реально
-//  создаёт миграция. Любое расхождение (тип, nullability, лишний SQL-`DEFAULT`,
-//  забытый индекс, порядок композитного PK) валит тест.
+//  `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/5.json` (+ колонка `mapUrl`
+//  от v2), с тем, что реально создают миграции. Любое расхождение (тип, nullability,
+//  лишний SQL-`DEFAULT`, забытый индекс, порядок композитного PK) валит тест.
 //
 
 import GRDB
@@ -48,6 +49,7 @@ struct AppDatabaseSchemaTests {
             Col("dateEnd", "TEXT", notNull: false),
             Col("place", "TEXT", notNull: true),
             Col("regStatus", "TEXT", notNull: true),
+            Col("mapUrl", "TEXT", notNull: false), // миграция v2 (iOS-only)
         ], indices: [:]),
 
         TableSpec(name: "sync_meta", columns: [
@@ -206,10 +208,10 @@ struct AppDatabaseSchemaTests {
     // MARK: - Тесты
 
     @Test func migrationRunsOnEmptyDatabase() throws {
-        // Не должно бросить: миграция "v1" отрабатывает на пустой базе.
+        // Не должно бросить: миграции "v1"+"v2" отрабатывают на пустой базе.
         let db = try AppDatabase.makeInMemory()
         let applied = try db.writer.read { try AppDatabase.migrator.appliedMigrations($0) }
-        #expect(applied == ["v1"])
+        #expect(applied == ["v1", "v2"])
     }
 
     @Test func tableInventoryMatchesRoomSchema() throws {
@@ -248,6 +250,47 @@ struct AppDatabaseSchemaTests {
                 }
             }
         }
+    }
+
+    @Test func migrationV1ToV2AddsMapUrlAndPreservesRows() throws {
+        // Обновление существующей установки: мигрируем таблицу races только до v1 (колонки mapUrl
+        // ещё нет), вставляем строки сырым SQL, затем догоняем до конца — строки живы, mapUrl == nil.
+        // `makeInMemory()` тут не годится — он мигрирует сразу до v2.
+        let queue = try DatabaseQueue()
+        try AppDatabase.migrator.migrate(queue, upTo: "v1")
+
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO races (id, name, slug, date, dateEnd, place, regStatus)
+                VALUES (1, 'R1', 'r1', '2026-01-01', NULL, 'P', 'open'),
+                       (2, 'R2', 'r2', '2026-02-01', '2026-02-02', 'P', 'sold_out')
+                """)
+        }
+
+        // v1 → v2: ALTER TABLE races ADD COLUMN mapUrl TEXT.
+        try AppDatabase.migrator.migrate(queue)
+
+        let applied = try queue.read { try AppDatabase.migrator.appliedMigrations($0) }
+        #expect(applied == ["v1", "v2"])
+
+        // Колонка появилась, старые строки пережили миграцию с mapUrl == nil.
+        let rows = try queue.read { db in
+            try Race.fetchAll(db, sql: "SELECT * FROM races ORDER BY id")
+        }
+        #expect(rows.map(\.id) == [1, 2])
+        #expect(rows[0].name == "R1")
+        #expect(rows[1].dateEnd == "2026-02-02")
+        #expect(rows.allSatisfy { $0.mapUrl == nil })
+
+        // Новую строку можно вставить уже с mapUrl (encode(to:) пишет колонку).
+        try queue.write { db in
+            try Race(id: 3, name: "R3", slug: "r3", date: "2026-03-01",
+                     place: "P", regStatus: "open", mapUrl: "https://cdn.test/3.mbtiles").insert(db)
+        }
+        let r3 = try queue.read { db in
+            try Race.fetchOne(db, sql: "SELECT * FROM races WHERE id = 3")
+        }
+        #expect(r3?.mapUrl == "https://cdn.test/3.mbtiles")
     }
 
     @Test func indexInventoryMatchesRoomSchema() throws {

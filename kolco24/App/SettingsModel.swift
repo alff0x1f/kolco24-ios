@@ -91,6 +91,25 @@ final class SettingsModel {
         Task { try? await store.deleteForTeam(teamId: teamId, raceId: raceId) }
     }
 
+    // MARK: - Карта гонки
+
+    /// Размер скачанной оффлайн-карты гонки для сабтайтла ряда «Удалить карту гонки» (напр. «12 МБ»);
+    /// `nil`, когда файла нет (ряд тогда disabled). Синхронный снимок из инжектированного `mapFileSize`
+    /// на момент создания модели (файл-как-флаг не наблюдаем) — обновляется вручную после удаления.
+    private(set) var mapFileSizeLabel: String?
+
+    /// Удалить оффлайн-карту гонки: дёргает замыкание графа в unstructured `Task` (захват ЗАМЫКАНИЯ, не
+    /// `self` — §6-идиома этапа 5), затем гасит лейбл (ряд становится disabled). Вкладка «Карта»
+    /// подхватит удаление в `refreshAvailability` при следующем появлении (файл-как-флаг не наблюдаем).
+    func deleteRaceMap() {
+        guard let raceId else { return }
+        let delete = env.deleteMapFile
+        Task { @MainActor [weak self] in
+            delete(raceId)
+            self?.mapFileSizeLabel = nil
+        }
+    }
+
     // MARK: - Отладка
 
     /// «Сбросить команду» — делегирует `AppModel.clearTeam()` (подписка сама переведёт в empty-состояние).
@@ -162,6 +181,12 @@ final class SettingsModel {
         } else {
             self.adminSubtitle = "Войти"
         }
+        // Синхронный снимок размера скачанной карты гонки (файл-как-флаг не наблюдаем — читаем на открытии).
+        if let raceId, let bytes = env.mapFileSize(raceId) {
+            self.mapFileSizeLabel = formatBytesRu(bytes)
+        } else {
+            self.mapFileSizeLabel = nil
+        }
         // Сид тумблера синхронно из держателя (стрим догонит асинхронно — без вспышки «выкл» на открытии).
         self.currentLease = env.leaseHolder.value
 
@@ -192,4 +217,26 @@ final class SettingsModel {
         leaseTask?.cancel()
         trackTask?.cancel()
     }
+}
+
+/// Человекочитаемый размер файла на русском (Б/КБ/МБ/ГБ, 1024-based). Локаленезависимо и детерминированно
+/// (в отличие от `ByteCountFormatter`) — сабтайтл «Удалить карту гонки» и тест читают один и тот же вывод.
+/// Целое для Б/точных значений, одна дробь для нецелых КБ+ (12582912 → «12 МБ», 1536 → «1,5 КБ»).
+private func formatBytesRu(_ bytes: Int64) -> String {
+    let units = ["Б", "КБ", "МБ", "ГБ"]
+    var value = Double(max(bytes, 0))
+    var idx = 0
+    while value >= 1024, idx < units.count - 1 {
+        value /= 1024
+        idx += 1
+    }
+    if idx == 0 {
+        return "\(Int(value)) \(units[idx])"
+    }
+    let rounded = (value * 10).rounded() / 10
+    if rounded == rounded.rounded() {
+        return "\(Int(rounded)) \(units[idx])"
+    }
+    // Русская запятичная дробь.
+    return String(format: "%.1f %@", rounded, units[idx]).replacingOccurrences(of: ".", with: ",")
 }

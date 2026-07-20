@@ -38,6 +38,8 @@ struct SettingsView: View {
 
     /// Подтверждение «Очистить трек?».
     @State private var showClearTrackConfirm = false
+    /// Подтверждение «Удалить карту гонки?».
+    @State private var showDeleteMapConfirm = false
     /// Какое отладочное действие ждёт подтверждения (nil = никакое).
     @State private var debugConfirm: DebugConfirmKind?
 
@@ -73,6 +75,16 @@ struct SettingsView: View {
             Button("Отмена", role: .cancel) {}
         } message: {
             Text("Все записанные точки этой команды будут удалены без возможности восстановления.")
+        }
+        .confirmationDialog(
+            "Удалить карту гонки?",
+            isPresented: $showDeleteMapConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Удалить", role: .destructive) { model.deleteRaceMap() }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Оффлайн-подложка будет удалена. Скачать заново можно на вкладке «Карта».")
         }
         .confirmationDialog(
             debugConfirm?.title ?? "",
@@ -158,6 +170,21 @@ struct SettingsView: View {
                     .tint(Color.kolcoOrange)
                 }
             }
+            .listRowBackground(Color.card)
+
+            Button {
+                showDeleteMapConfirm = true
+            } label: {
+                SettingsRow(
+                    systemImage: "trash",
+                    iconBg: Color.brandRed,
+                    label: "Удалить карту гонки",
+                    sub: model.mapFileSizeLabel ?? "Карта не скачана",
+                    tint: Color.brandRed
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(model.mapFileSizeLabel == nil)
             .listRowBackground(Color.card)
         } header: {
             Text("Данные")

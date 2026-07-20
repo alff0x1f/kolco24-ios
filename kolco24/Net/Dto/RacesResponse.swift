@@ -23,10 +23,12 @@ struct RaceDto: Codable, Equatable {
     let dateEnd: String?      // "YYYY-MM-DD" | nil
     let place: String
     let regStatus: String     // "upcoming" | "open" | "sold_out"
+    let mapUrl: String?       // прямой HTTPS-URL `.mbtiles` | nil (карты нет)
 
     enum CodingKeys: String, CodingKey {
         case id, name, slug, date, place
         case dateEnd = "date_end"
         case regStatus = "reg_status"
+        case mapUrl = "map_url"
     }
 }

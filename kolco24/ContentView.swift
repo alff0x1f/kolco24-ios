@@ -23,7 +23,7 @@ struct ContentView: View {
                 NavigationStack {
                     MarksView(
                         onChooseTeam: { showPicker = true },
-                        onBindChips: { selectedTab = 2 }
+                        onBindChips: { selectedTab = 3 }
                     )
                 }
                 .tabItem { Label("Отметки", systemImage: "flag.fill") }
@@ -32,10 +32,15 @@ struct ContentView: View {
                     .tabItem { Label("Легенда", systemImage: "map.fill") }
                     .tag(1)
                 NavigationStack {
+                    MapTabView(onChooseTeam: { showPicker = true })
+                }
+                .tabItem { Label("Карта", systemImage: "mappin.and.ellipse") }
+                .tag(2)
+                NavigationStack {
                     TeamView(onChooseTeam: { showPicker = true })
                 }
                 .tabItem { Label("Команда", systemImage: "person.3.fill") }
-                .tag(2)
+                .tag(3)
             }
             .tint(Color.kolcoOrange)
             .onChange(of: selectedTab) {

@@ -27,6 +27,14 @@ struct RaceStore {
             .values(in: dbWriter)
     }
 
+    /// Разовый снимок одной гонки по id (или `nil`, если строки нет) — источник `mapUrl` для машины
+    /// состояний `MapModel` (доступность оффлайн-подложки; `nil` гонка → `noMapForRace`).
+    func getById(_ id: Int) async throws -> Race? {
+        try await dbWriter.read { db in
+            try Race.fetchOne(db, sql: "SELECT * FROM races WHERE id = ?", arguments: [id])
+        }
+    }
+
     func insertAll(_ races: [Race]) async throws {
         try await dbWriter.write { db in
             for race in races {

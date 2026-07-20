@@ -124,6 +124,19 @@ final class AppEnvironment {
     /// Держит `import GRDB`/`Photo/` вне вьюх (grep-инвариант): вью получает только замыкание.
     let photoURL: @Sendable (String) -> URL?
 
+    // MARK: - Map (оффлайн-подложка гонки)
+    /// Дисковые операции над файлом подложки (`Map/MapFileStorage`), вынесенные в замыкания, чтобы
+    /// `MapModel` (задача 5) оставался тестируемым без сети/диска/MapKit. Прод — над `MapFileStorage`
+    /// (`Application Support/maps/<raceId>.mbtiles`); `inMemory` — контракт-безопасные no-op фейки.
+    /// `mapFileExists` — «карта скачана»; `mapFilePath` — абсолютный путь для `MBTilesReader`;
+    /// `mapFileSize` — байты для строки настроек; `deleteMapFile` — удаление; `downloadMapFile` —
+    /// скачивание с прогрессом (бросает при HTTP ≠ 2xx / сети / отмене).
+    let mapFileExists: @Sendable (Int) -> Bool
+    let mapFilePath: @Sendable (Int) -> String
+    let mapFileSize: @Sendable (Int) -> Int64?
+    let deleteMapFile: @Sendable (Int) -> Void
+    let downloadMapFile: @Sendable (URL, Int, @escaping @Sendable (Double) -> Void) async throws -> Void
+
     // MARK: - Этап 8 (GPS-трек, платформенный шов)
     /// Фабрика движка записи трека (`TrackEngine`-шов): прод — `CoreLocationTrackEngine` (единственный
     /// `import CoreLocation`), `inMemory` — `NoTrackEngine`-фейк (реальный GPS только на устройстве).
@@ -159,6 +172,11 @@ final class AppEnvironment {
         deleteFrame: @escaping @Sendable (String) -> Void = { _ in },
         sweepOrphanPhotoDirs: @escaping @Sendable (Set<String>) -> Void = { _ in },
         photoURL: @escaping @Sendable (String) -> URL? = { _ in nil },
+        mapFileExists: @escaping @Sendable (Int) -> Bool = { _ in false },
+        mapFilePath: @escaping @Sendable (Int) -> String = { _ in "" },
+        mapFileSize: @escaping @Sendable (Int) -> Int64? = { _ in nil },
+        deleteMapFile: @escaping @Sendable (Int) -> Void = { _ in },
+        downloadMapFile: @escaping @Sendable (URL, Int, @escaping @Sendable (Double) -> Void) async throws -> Void = { _, _, _ in },
         makeEngine: @escaping @Sendable () -> any TrackEngine = { NoTrackEngine() },
         hasLocationAccess: @escaping @Sendable () -> Bool = { true },
         isReducedAccuracy: @escaping @Sendable () -> Bool = { false },
@@ -174,6 +192,11 @@ final class AppEnvironment {
         self.deleteFrame = deleteFrame
         self.sweepOrphanPhotoDirs = sweepOrphanPhotoDirs
         self.photoURL = photoURL
+        self.mapFileExists = mapFileExists
+        self.mapFilePath = mapFilePath
+        self.mapFileSize = mapFileSize
+        self.deleteMapFile = deleteMapFile
+        self.downloadMapFile = downloadMapFile
         self.makeEngine = makeEngine
         self.hasLocationAccess = hasLocationAccess
         self.isReducedAccuracy = isReducedAccuracy
@@ -354,6 +377,9 @@ final class AppEnvironment {
         // (тот же корень, что `kolco24.db`). `PhotoPaths.decode` уже отфильтровал небезопасные пути
         // до вызова reader'а, так что `absoluteURL` получает только `marks/<id>/<uuid>.jpg`.
         let photoStorage = try PhotoStorage.makeShared()
+        // Оффлайн-подложка гонки: `MapFileStorage` под тем же `Application Support`
+        // (`maps/<raceId>.mbtiles`, рядом с `kolco24.db`). Foundation-only адаптер.
+        let mapStorage = try MapFileStorage.makeShared()
         // Этап 8: один удерживаемый `CoreLocationTrackEngine` — источник и фиксов (`makeEngine`), и
         // чтений авторизации (`hasLocationAccess`/`isReducedAccuracy` над удерживаемым `CLLocationManager`;
         // одноразовый инстанс в замыкании врал бы `.notDetermined`). Запись держит один движок за раз;
@@ -384,6 +410,14 @@ final class AppEnvironment {
             deleteFrame: { rel in photoStorage.deleteFrame(relPath: rel) },
             sweepOrphanPhotoDirs: { ids in photoStorage.sweepOrphanDirs(liveMarkIds: ids) },
             photoURL: { rel in photoStorage.absoluteURL(relPath: rel) },
+            // Map: дисковые операции над файлом подложки + скачивание.
+            mapFileExists: { raceId in mapStorage.exists(raceId: raceId) },
+            mapFilePath: { raceId in mapStorage.fileURL(raceId: raceId).path },
+            mapFileSize: { raceId in mapStorage.fileSize(raceId: raceId) },
+            deleteMapFile: { raceId in mapStorage.delete(raceId: raceId) },
+            downloadMapFile: { url, raceId, onProgress in
+                try await mapStorage.download(from: url, raceId: raceId, onProgress: onProgress)
+            },
             makeEngine: { trackEngine },
             hasLocationAccess: { trackEngine.hasLocationAccess() },
             isReducedAccuracy: { trackEngine.isReducedAccuracy() },
@@ -405,6 +439,11 @@ final class AppEnvironment {
         deleteFrame: @escaping @Sendable (String) -> Void = { _ in },
         sweepOrphanPhotoDirs: @escaping @Sendable (Set<String>) -> Void = { _ in },
         photoURL: @escaping @Sendable (String) -> URL? = { _ in nil },
+        mapFileExists: @escaping @Sendable (Int) -> Bool = { _ in false },
+        mapFilePath: @escaping @Sendable (Int) -> String = { _ in "" },
+        mapFileSize: @escaping @Sendable (Int) -> Int64? = { _ in nil },
+        deleteMapFile: @escaping @Sendable (Int) -> Void = { _ in },
+        downloadMapFile: @escaping @Sendable (URL, Int, @escaping @Sendable (Double) -> Void) async throws -> Void = { _, _, _ in },
         makeEngine: @escaping @Sendable () -> any TrackEngine = { NoTrackEngine() },
         hasLocationAccess: @escaping @Sendable () -> Bool = { true },
         isReducedAccuracy: @escaping @Sendable () -> Bool = { false },
@@ -454,6 +493,11 @@ final class AppEnvironment {
             deleteFrame: deleteFrame,
             sweepOrphanPhotoDirs: sweepOrphanPhotoDirs,
             photoURL: photoURL,
+            mapFileExists: mapFileExists,
+            mapFilePath: mapFilePath,
+            mapFileSize: mapFileSize,
+            deleteMapFile: deleteMapFile,
+            downloadMapFile: downloadMapFile,
             makeEngine: makeEngine,
             hasLocationAccess: hasLocationAccess,
             isReducedAccuracy: isReducedAccuracy,

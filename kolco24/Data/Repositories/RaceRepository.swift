@@ -106,7 +106,8 @@ private extension RaceDto {
             date: date,
             dateEnd: dateEnd,
             place: place,
-            regStatus: regStatus
+            regStatus: regStatus,
+            mapUrl: mapUrl
         )
     }
 }

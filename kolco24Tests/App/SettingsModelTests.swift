@@ -18,6 +18,20 @@ import Foundation
 import Testing
 @testable import kolco24
 
+/// Потокобезопасный рекордер id-удалений (замыкание `deleteMapFile` — `@Sendable`, зовётся из `Task`).
+private final class DeletedRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _ids: [Int] = []
+    func record(_ id: Int) {
+        lock.lock(); defer { lock.unlock() }
+        _ids.append(id)
+    }
+    var ids: [Int] {
+        lock.lock(); defer { lock.unlock() }
+        return _ids
+    }
+}
+
 @MainActor
 struct SettingsModelTests {
 
@@ -294,6 +308,72 @@ struct SettingsModelTests {
 
         await waitUntil { appModel.selectedTeamState == .none }
         #expect(appModel.selectedTeamState == .none)
+    }
+
+    // MARK: - Карта гонки
+
+    /// Файл карты присутствует → `mapFileSizeLabel` форматирует размер («12 МБ»); отсутствует → `nil`.
+    @Test func mapFileSizeLabel_presentAndAbsent() async throws {
+        let transport = FakeTransport()
+        // Файл на 12 МБ для гонки 7, для остальных — нет.
+        let envWithFile = try AppEnvironment.inMemory(
+            transport: transport.handle,
+            mapFileSize: { raceId in raceId == 7 ? 12 * 1024 * 1024 : nil }
+        )
+        let appModel = AppModel(env: envWithFile)
+        let present = SettingsModel(env: envWithFile, appModel: appModel, raceId: 7, teamId: 5)
+        #expect(present.mapFileSizeLabel == "12 МБ")
+
+        let absent = SettingsModel(env: envWithFile, appModel: appModel, raceId: 99, teamId: 5)
+        #expect(absent.mapFileSizeLabel == nil)
+
+        // Без выбранной гонки — тоже nil (замыкание даже не зовётся).
+        let noRace = SettingsModel(env: envWithFile, appModel: appModel, raceId: nil, teamId: nil)
+        #expect(noRace.mapFileSizeLabel == nil)
+    }
+
+    /// `mapFileSizeLabel` покрывает нецелые ветки `formatBytesRu` (русская запятичная дробь) и мелкие
+    /// единицы — та самая причина, по которой это не `ByteCountFormatter` (локаленезависимый вывод).
+    @Test func mapFileSizeLabel_formatBranches() async throws {
+        let transport = FakeTransport()
+
+        func label(bytes: Int64) throws -> String? {
+            let env = try AppEnvironment.inMemory(
+                transport: transport.handle,
+                mapFileSize: { _ in bytes }
+            )
+            let appModel = AppModel(env: env)
+            return SettingsModel(env: env, appModel: appModel, raceId: 7, teamId: 5).mapFileSizeLabel
+        }
+
+        // Дробная МБ → русская запятая: 1_610_612 / 1024 / 1024 ≈ 1.536 → «1,5 МБ».
+        #expect(try label(bytes: 1_610_612) == "1,5 МБ")
+        // Байты (< 1024) → целое, единица «Б».
+        #expect(try label(bytes: 512) == "512 Б")
+        // Дробные КБ → «1,5 КБ» (1536 / 1024 == 1.5).
+        #expect(try label(bytes: 1536) == "1,5 КБ")
+        // Целые КБ → без дроби.
+        #expect(try label(bytes: 2048) == "2 КБ")
+    }
+
+    /// `deleteRaceMap()` дёргает замыкание графа с raceId скоупа и гасит лейбл (ряд становится disabled).
+    @Test func deleteRaceMap_invokesClosureAndClearsLabel() async throws {
+        let transport = FakeTransport()
+        let deleted = DeletedRecorder()
+        let env = try AppEnvironment.inMemory(
+            transport: transport.handle,
+            mapFileSize: { _ in 5 * 1024 * 1024 },
+            deleteMapFile: { raceId in deleted.record(raceId) }
+        )
+        let appModel = AppModel(env: env)
+        let model = SettingsModel(env: env, appModel: appModel, raceId: 7, teamId: 5)
+        #expect(model.mapFileSizeLabel == "5 МБ")
+
+        model.deleteRaceMap()
+
+        await waitUntil { model.mapFileSizeLabel == nil }
+        #expect(model.mapFileSizeLabel == nil)
+        #expect(deleted.ids == [7])
     }
 
     // MARK: - Тема (прокси AppModel)
