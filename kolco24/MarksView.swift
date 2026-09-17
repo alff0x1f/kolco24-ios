@@ -461,8 +461,10 @@ struct MarksView: View {
                         }
                     }
                     .padding(.bottom, 14)
+                }
 
-                    NFCStripView()
+                if !NfcAvailability.isReadingAvailable {
+                    NfcUnavailableStripView()
                         .padding(.horizontal, DS.hPad)
                         .padding(.bottom, 14)
                 }
@@ -878,31 +880,18 @@ private struct LightboxContext: Identifiable {
     let initialIndex: Int
 }
 
-// MARK: - NFC Strip
-private struct NFCStripView: View {
-    @State private var pulse = false
-
+// MARK: - NFC Unavailable Strip
+/// Предупреждение о НЕдоступном NFC-чтении (симулятор / iPad / MDM-запрет; на iPhone NFC настройками
+/// не выключается). Постоянная полоска «NFC активен» убрана осознанно — молчим, пока проблем нет.
+private struct NfcUnavailableStripView: View {
     var body: some View {
         HStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(Color.good.opacity(0.3))
-                    .frame(width: 8, height: 8)
-                    .scaleEffect(pulse ? 2.6 : 0.8)
-                    .opacity(pulse ? 0 : 0.5)
-                Circle()
-                    .fill(Color.good)
-                    .frame(width: 6, height: 6)
-            }
-            .frame(width: 8, height: 8)
-            .onAppear {
-                withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) {
-                    pulse = true
-                }
-            }
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.amber)
             (
-                Text("NFC активен").fontWeight(.semibold).foregroundStyle(Color.ink) +
-                Text(" · приложите телефон к КП или чипу команды").foregroundStyle(Color.sub)
+                Text("NFC недоступен").fontWeight(.semibold).foregroundStyle(Color.ink) +
+                Text(" · отметка чипом не сработает, отмечайтесь фото").foregroundStyle(Color.sub)
             )
             .font(.system(size: 12))
             .lineLimit(2)
