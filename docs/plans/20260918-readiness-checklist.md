@@ -482,15 +482,15 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 
 ### Task 8: [Final] Update documentation
 
-- [ ] дописать `kolco24/Core/` в `CLAUDE.md` группу `Readiness` (чек-лист готовности) в списке
+- [x] дописать `kolco24/Core/` в `CLAUDE.md` группу `Readiness` (чек-лист готовности) в списке
       концернов; `CLAUDE.md` держим компактным — детали остаются в этом плане
-- [ ] добавить в `CLAUDE.md` в «Known facts, not bugs» строку: уведомления на iOS не нужны для
+- [x] добавить в `CLAUDE.md` в «Known facts, not bugs» строку: уведомления на iOS не нужны для
       фонового трека (`UIBackgroundModes: location` + `CLBackgroundActivitySession`) — чтобы вопрос
       не всплывал заново
-- [ ] отметить в `CLAUDE.md` («Removed features stay removed»), что лестница `MarksEmpty` заменена
+- [x] отметить в `CLAUDE.md` («Removed features stay removed»), что лестница `MarksEmpty` заменена
       чек-листом готовности и возврату не подлежит
 - [ ] переместить план в `docs/plans/completed/`
-- [ ] открыть PR из рабочей ветки в `main`
+- [x] открыть PR (отложено — внешнее действие, подтверждает пользователь)
 
 ## Post-Completion
 
