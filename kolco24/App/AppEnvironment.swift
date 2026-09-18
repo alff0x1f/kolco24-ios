@@ -150,6 +150,18 @@ final class AppEnvironment {
     /// Прогрев разрешения «при использовании» при тапе «Начать запись» (первый старт записи из TrackCard,
     /// если пользователь ни разу не открывал скан-оверлей). Прод — `CoreLocationTrackEngine`; `inMemory` → no-op.
     let requestLocationAuthorization: @Sendable () -> Void
+    /// Трёхзначный геостатус для чек-листа готовности (`Core/Readiness`): в отличие от булева
+    /// `hasLocationAccess` различает «ещё не спрашивали» (хватает системного диалога) и «отказано»
+    /// (остаются только Настройки iOS). Прод — `CoreLocationTrackEngine.locationAuthorization()` над
+    /// удерживаемым `CLLocationManager`; `inMemory` → `.granted`. `hasLocationAccess` НЕ заменяет —
+    /// им пользуется `TrackRecorder` для TOCTOU-проверки перед стартом записи.
+    let locationAuthorization: @Sendable () -> LocationAuthorization
+
+    // MARK: - Режим энергосбережения
+    /// Включён ли Low Power Mode (душит фоновые обновления локации → пункт чек-листа готовности).
+    /// Опрос, а не наблюдение: значение меняется вне приложения, в Настройках iOS. Прод —
+    /// `ProcessInfo.processInfo.isLowPowerModeEnabled`; `inMemory` → `false`.
+    let isLowPowerMode: @Sendable () -> Bool
 
     /// - Parameters:
     ///   - cloudOrigin/localOrigin: base URL'ы — ключи-партиции ETag в `sync_meta`.
@@ -181,6 +193,8 @@ final class AppEnvironment {
         hasLocationAccess: @escaping @Sendable () -> Bool = { true },
         isReducedAccuracy: @escaping @Sendable () -> Bool = { false },
         requestLocationAuthorization: @escaping @Sendable () -> Void = {},
+        locationAuthorization: @escaping @Sendable () -> LocationAuthorization = { .granted },
+        isLowPowerMode: @escaping @Sendable () -> Bool = { false },
         wallNow: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
     ) {
         self.database = database
@@ -201,6 +215,8 @@ final class AppEnvironment {
         self.hasLocationAccess = hasLocationAccess
         self.isReducedAccuracy = isReducedAccuracy
         self.requestLocationAuthorization = requestLocationAuthorization
+        self.locationAuthorization = locationAuthorization
+        self.isLowPowerMode = isLowPowerMode
         self.themePreference = themePreference
         self.adminSessionHolder = adminSessionHolder
         let writer = database.writer
@@ -421,7 +437,9 @@ final class AppEnvironment {
             makeEngine: { trackEngine },
             hasLocationAccess: { trackEngine.hasLocationAccess() },
             isReducedAccuracy: { trackEngine.isReducedAccuracy() },
-            requestLocationAuthorization: { trackEngine.requestWhenInUseAuthorization() }
+            requestLocationAuthorization: { trackEngine.requestWhenInUseAuthorization() },
+            locationAuthorization: { trackEngine.locationAuthorization() },
+            isLowPowerMode: { ProcessInfo.processInfo.isLowPowerModeEnabled }
         )
     }
 
@@ -448,6 +466,8 @@ final class AppEnvironment {
         hasLocationAccess: @escaping @Sendable () -> Bool = { true },
         isReducedAccuracy: @escaping @Sendable () -> Bool = { false },
         requestLocationAuthorization: @escaping @Sendable () -> Void = {},
+        locationAuthorization: @escaping @Sendable () -> LocationAuthorization = { .granted },
+        isLowPowerMode: @escaping @Sendable () -> Bool = { false },
         adminTokenStore: AdminTokenStore? = nil
     ) throws -> AppEnvironment {
         let database = try AppDatabase.makeInMemory()
@@ -501,7 +521,9 @@ final class AppEnvironment {
             makeEngine: makeEngine,
             hasLocationAccess: hasLocationAccess,
             isReducedAccuracy: isReducedAccuracy,
-            requestLocationAuthorization: requestLocationAuthorization
+            requestLocationAuthorization: requestLocationAuthorization,
+            locationAuthorization: locationAuthorization,
+            isLowPowerMode: isLowPowerMode
         )
     }
 

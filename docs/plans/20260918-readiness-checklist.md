@@ -340,20 +340,22 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 
 **Files:**
 - Modify: `kolco24/App/AppEnvironment.swift`
-- Modify: `kolco24Tests/App/MarksModelTests.swift` (если тестовый инициализатор вызывается позиционно)
+- Create: `kolco24Tests/App/AppEnvironmentInjectsTests.swift`
 
-- [ ] добавить свойства `let isLowPowerMode: @Sendable () -> Bool` и
+- [x] добавить свойства `let isLowPowerMode: @Sendable () -> Bool` и
       `let locationAuthorization: @Sendable () -> LocationAuthorization` рядом с `hasLocationAccess`
       (~строки 147-152) с doc-комментариями
-- [ ] прокинуть в прод-фабрику (~строка 414): `{ ProcessInfo.processInfo.isLowPowerModeEnabled }` и
+- [x] прокинуть в прод-фабрику (~строка 414): `{ ProcessInfo.processInfo.isLowPowerModeEnabled }` и
       `{ trackEngine.locationAuthorization() }`
-- [ ] добавить параметры в `private init` (`:175-183`) и **единственный** блок присваиваний (`:195-203`)
-- [ ] добавить параметры с дефолтами `{ false }` / `{ .granted }` в **отдельный** список `inMemory()`
+- [x] добавить параметры в `private init` (`:175-183`) и **единственный** блок присваиваний (`:195-203`)
+- [x] добавить параметры с дефолтами `{ false }` / `{ .granted }` в **отдельный** список `inMemory()`
       (`:442-450`) и в его проброс в `private init` (`:496-504`) — итого четыре места правки
-- [ ] проверить, что порядок конструирования графа не нарушен (leaseHolder → repos → syncCoordinator;
+- [x] проверить, что порядок конструирования графа не нарушен (leaseHolder → repos → syncCoordinator;
       adminSessionHolder → clients)
-- [ ] прогнать существующие тесты — ни один вызов `AppEnvironment` не должен сломаться
-- [ ] тесты — зелено до Task 4
+- [x] прогнать существующие тесты — ни один вызов `AppEnvironment` не должен сломаться
+- [x] тесты — зелено до Task 4 (существующие вызовы `inMemory` не тронуты — Swift требует меток,
+      позиционных вызовов в сюите нет; вместо правки `MarksModelTests` заведён отдельный
+      `AppEnvironmentInjectsTests` на сам шов: дефолты + проброс + опрос)
 
 ### Task 4: Сбор сигналов в `MarksModel`
 
