@@ -54,6 +54,9 @@ struct MapTabView: View {
             .background(Color.paper)
             .navigationTitle("Карта")
             .navigationBarTitleDisplayMode(.inline)
+            // Keep tab icons legible over both Apple maps and arbitrary offline tiles.
+            .toolbarBackground(Color.card, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
             .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeMapModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
@@ -91,7 +94,6 @@ struct MapTabView: View {
         // Смена пути подложки пересоздаёт `MKMapView` — иначе оффлайн-оверлей, добавляемый в `makeUIView`
         // однократно, не подхватился бы при докачивании карты во время открытой вкладки.
         .id(readyPath ?? "")
-        .ignoresSafeArea(edges: .bottom)
         .overlay { availabilityOverlay(model.availability, model: model) }
     }
 
