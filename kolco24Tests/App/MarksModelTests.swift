@@ -6,9 +6,9 @@
 //  с нуля поверх РЕАЛЬНЫХ store'ов над `AppDatabase.makeInMemory()` (конвенция этапа 2). Сеть не
 //  участвует — derived считаются из локальных строк (взятия/КП/агрегаты/привязки). Проверяем:
 //  тайлы/метрики от засеянных marks+checkpoints (живая цена и фолбэк на снимок, полные/неполные
-//  взятия), нотис hidden-taken при locked, лестницу empty-состояний (нет команды / не привязаны /
-//  готов), подавление до первой эмиссии (`marksLoading`) и **stale-guard** (взятия команды A не
-//  засчитаны команде B после rebind до её эмиссии — порт `safeMarks`).
+//  взятия), нотис hidden-taken при locked и **stale-guard** (взятия команды A не засчитаны команде B
+//  после rebind до её эмиссии — порт `safeMarks`). Интеграционные случаи чек-листа готовности
+//  (команда, привязки, подавление до первой эмиссии) живут в `MarksModelReadinessTests`.
 //
 //  observation эмитит асинхронно — состояние ждём поллингом с таймаутом.
 //
@@ -39,14 +39,6 @@ struct MarksModelTests {
         Mark(id: id, raceId: race, teamId: team, checkpointId: cp, checkpointNumber: number,
              cost: cost, method: method, cpUid: "UID\(cp)", cpCode: "K24", present: [1],
              expectedCount: 1, complete: complete, takenAt: takenAt, updatedAt: takenAt)
-    }
-
-    private func binding(team: Int, num: Int, uid: String = "AA", pnum: Int) -> MemberChipBinding {
-        MemberChipBinding(teamId: team, numberInTeam: num, nfcUid: uid, participantNumber: pnum)
-    }
-
-    private func members(_ nums: [Int]) -> [TeamMemberItem] {
-        nums.map { TeamMemberItem(name: "Участник \($0)", numberInTeam: $0) }
     }
 
     private func makeEnv() throws -> AppEnvironment {
@@ -141,57 +133,6 @@ struct MarksModelTests {
         await waitUntil { model.checkpoints.count == 2 && model.marks.count == 2 }
 
         #expect(model.hiddenTakenTokens == ["?-03"])   // взят locked КП3; открытый КП1 не в нотисе
-    }
-
-    // MARK: - Лестница empty-состояний
-
-    @Test func emptyLadder_noTeamChoosesTeam() async throws {
-        let env = try makeEnv()
-        let model = MarksModel(env: env)
-
-        model.rebind(teamId: nil, raceId: nil)
-        // Нет команды → не грузим, сразу chooseTeam.
-        #expect(model.marksLoading == false)
-        #expect(model.emptyState(hasTeam: false, members: []) == .chooseTeam)
-    }
-
-    @Test func emptyLadder_unboundNudgesBindThenReady() async throws {
-        let env = try makeEnv()
-        try await env.memberChipBindingStore.upsert(binding(team: 5, num: 1, pnum: 100))
-
-        let model = MarksModel(env: env)
-        let roster = members([1, 2])
-        model.rebind(teamId: 5, raceId: 7)
-        await waitUntil { model.bindings.count == 1 && model.marksLoading == false }
-
-        // 1 из 2 с чипом → нудж привязки.
-        #expect(model.boundCount(members: roster) == 1)
-        #expect(model.emptyState(hasTeam: true, members: roster) == .bindChips)
-
-        try await env.memberChipBindingStore.upsert(binding(team: 5, num: 2, uid: "BB", pnum: 200))
-        await waitUntil { model.boundCount(members: roster) == 2 }
-        // Все привязаны → готов.
-        #expect(model.emptyState(hasTeam: true, members: roster) == .ready)
-        // Пустой ростер тоже готов (не блокируем нудж-веткой).
-        #expect(model.emptyState(hasTeam: true, members: []) == .ready)
-    }
-
-    // MARK: - Подавление до первой эмиссии (marksLoading)
-
-    @Test func loadingSuppressesEmptyUntilFirstEmission() async throws {
-        let env = try makeEnv()
-        let model = MarksModel(env: env)
-
-        model.rebind(teamId: 42, raceId: 7)
-        // Синхронно после rebind: команда есть, observation ещё не эмитил → loading, empty подавлен.
-        #expect(model.marksLoading == true)
-        #expect(model.emptyState(hasTeam: true, members: members([1])) == .none)
-
-        // После первой (пустой) эмиссии observation loading снимается — показываем реальное состояние
-        // (пустой ростер → готов; с непривязанным участником было бы `.bindChips`).
-        await waitUntil { model.marksLoading == false }
-        #expect(model.emptyState(hasTeam: true, members: []) == .ready)
-        #expect(model.emptyState(hasTeam: true, members: members([1])) == .bindChips)
     }
 
     // MARK: - Stale-guard (взятия команды A не засчитаны B до её эмиссии)

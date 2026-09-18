@@ -13,8 +13,8 @@
 //  в шаге с «Легендой» после серверной правки цены (порт `checkpointCosts[id] ?: it.cost`).
 //
 //  `marksLoading` (порт `loading` из `MarksScreen.kt`): true, пока observation взятий не эмитировал
-//  первую порцию для команды — подавляет мигание ложного empty-состояния на холодном старте. При
-//  отсутствии команды загрузки нет (сразу `chooseTeam`).
+//  первую порцию для команды — вьюха на это время не рисует ничего, подавляя мигание чек-листа на
+//  холодном старте. При отсутствии команды загрузки нет (чек-лист показывается сразу).
 //
 //  Сверх наблюдений модель собирает чек-лист готовности к старту (`readiness(team:members:clock:)`,
 //  ядро — `Core/Readiness/ReadinessChecklist`). Геостатус, Low Power Mode и наличие файла подложки —
@@ -229,23 +229,12 @@ final class MarksModel {
     /// (in-memory окружение).
     func photoURL(_ relPath: String) -> URL? { env.photoURL(relPath) }
 
-    // MARK: - Лестница empty-состояний
+    // MARK: - Привязка чипов
 
     /// Число участников ростера с привязанным чипом (только текущие слоты — устаревшие записи
     /// удалённых участников игнорируются). Делегирует общий Core-хелпер `boundCount(members:bindings:)`.
     func boundCount(members: [TeamMemberItem]) -> Int {
         kolco24.boundCount(members: members, bindings: bindings)
-    }
-
-    /// Состояние пустого экрана: `loading` подавляет мигание; нет команды → `chooseTeam`; не все чипы
-    /// привязаны → `bindChips`; иначе → `ready`. Порт ветвления `MarksEmpty` (NFC-ветки — этап 5).
-    func emptyState(hasTeam: Bool, members: [TeamMemberItem]) -> MarksEmptyState {
-        marksEmptyState(
-            loading: marksLoading,
-            hasTeam: hasTeam,
-            memberCount: members.count,
-            boundCount: boundCount(members: members)
-        )
     }
 
     // MARK: - Чек-лист готовности к старту

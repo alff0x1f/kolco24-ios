@@ -4,13 +4,12 @@
 //
 //  Чистая Android-free derived-логика вкладки «Отметки». Kotlin-источник:
 //  чистые функции `ui/marks/MarksScreen.kt` (`marksToTiles`, `tileFill`/`TileFill`,
-//  `hiddenTakenTokens`, `tokensLabel`, лестница empty-состояний `MarksEmpty`,
+//  `hiddenTakenTokens`, `tokensLabel`,
 //  фото-часть: `photoPaths`/`photoCount` на тайле, `lightboxPhotos`,
 //  `PhotoReviewSummary`/`photoReviewSummary` — этап 7). Никакого UIKit/SwiftUI.
 //
-//  Ветки NFC-доступности лестницы empty-состояний (`nfcDisabled`/`nfcAvailable`)
-//  опущены осознанно — все поддерживаемые iPhone имеют NFC, роутинг «нет NFC →
-//  фото» на iOS неприменим.
+//  Лестница empty-состояний `MarksEmpty` не портирована: её заменил чек-лист
+//  готовности к старту (`Core/Readiness/ReadinessChecklist`).
 //
 //  Цвета тайла представлены как ARGB `UInt32` (Kotlin `Color(0xFFRRGGBB)` — value
 //  class над Long); маппинг в пиксельный цвет — во вьюхе (этап 7).
@@ -197,34 +196,6 @@ func tokensLabel(_ tokens: [String], max: Int = 3) -> String {
         return tokens.joined(separator: ", ")
     }
     return tokens.prefix(max).joined(separator: ", ") + ", …"
-}
-
-/// Состояние пустого экрана «Отметок» (урезанный порт `MarksEmpty`; NFC-ветки —
-/// этап 5). `none` подавляет мигание empty-state до первой эмиссии observation.
-enum MarksEmptyState {
-    /// Загрузка / нет данных — ничего не показываем.
-    case none
-    /// Команда не выбрана — CTA выбора команды.
-    case chooseTeam
-    /// Не все участники с чипом — нудж привязки.
-    case bindChips
-    /// Готов к отметке.
-    case ready
-}
-
-/// Лестница пустых состояний. `loading` подавляет мигание; нет команды → выбор
-/// команды; не привязаны чипы (`memberCount > 0 && boundCount < memberCount`) →
-/// нудж привязки; иначе → готов. Порт ветвления `MarksEmpty` без NFC-веток.
-func marksEmptyState(
-    loading: Bool,
-    hasTeam: Bool,
-    memberCount: Int,
-    boundCount: Int
-) -> MarksEmptyState {
-    if loading { return .none }
-    if !hasTeam { return .chooseTeam }
-    if memberCount > 0 && boundCount < memberCount { return .bindChips }
-    return .ready
 }
 
 /// Заливка тайла и (нелюминантный, фиксированный) цвет текста, читаемый на ней.

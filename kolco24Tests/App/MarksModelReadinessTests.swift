@@ -7,6 +7,8 @@
 //  чего таблица дать не может: чтение `mapUrl` из РЕАЛЬНОЙ БД (`AppDatabase.makeInMemory()`,
 //  конвенция — БД не фейкаем), stale-guard при `rebind` на другую гонку, синхронный опрос устройства
 //  (`refreshDeviceState`) и перечитывание файла подложки БЕЗ `rebind` (возврат с вкладки «Карта»).
+//  Сюда же переехали интеграционные случаи снятой лестницы `MarksEmpty` («нет команды», «привязаны
+//  не все чипы», «подавление до первой эмиссии») — переписанные на `readiness(team:members:clock:)`.
 //
 //  observation/one-shot чтения асинхронные — состояние ждём поллингом с таймаутом.
 //
@@ -32,6 +34,10 @@ struct MarksModelReadinessTests {
 
     private func members(_ nums: [Int]) -> [TeamMemberItem] {
         nums.map { TeamMemberItem(name: "Участник \($0)", numberInTeam: $0) }
+    }
+
+    private func binding(team: Int, num: Int, uid: String = "AA", pnum: Int) -> MemberChipBinding {
+        MemberChipBinding(teamId: team, numberInTeam: num, nfcUid: uid, participantNumber: pnum)
     }
 
     private func waitUntil(timeout: Duration = .seconds(3), _ condition: () -> Bool) async {
@@ -166,6 +172,75 @@ struct MarksModelReadinessTests {
 
         model.refreshDeviceState()
         #expect(model.mapReadiness == .ready)
+    }
+
+    // MARK: - Команда и привязки (интеграционные случаи снятой лестницы `MarksEmpty`)
+
+    /// Нет команды: загрузки нет вовсе, а `team` и `chips` — оба `blocked` (без команды отметка
+    /// физически не сработает). У `chips` при этом нет действия — сначала нужно выбрать команду.
+    @Test func readiness_noTeamBlocksTeamAndChips() async throws {
+        let env = try AppEnvironment.inMemory(transport: FakeTransport().handle)
+        let model = MarksModel(env: env)
+
+        model.rebind(teamId: nil, raceId: nil)
+        #expect(model.marksLoading == false)
+
+        let items = model.readiness(team: nil, members: [], clock: .ok)
+        #expect(item(items, .team)?.status == .blocked)
+        #expect(item(items, .team)?.action == .chooseTeam)
+        #expect(item(items, .chips)?.status == .blocked)
+        #expect(item(items, .chips)?.detail == "Сначала выберите команду")
+        #expect(item(items, .chips)?.action == nil)
+    }
+
+    /// Привязки приезжают из РЕАЛЬНОЙ БД через observation: 1 из 2 → `blocked` с «1 из 2», после
+    /// второй привязки → `done`. Пустой ростер тоже `done` (нечего привязывать).
+    @Test func readiness_unboundChipsBlockUntilAllBound() async throws {
+        let env = try AppEnvironment.inMemory(transport: FakeTransport().handle)
+        try await env.memberChipBindingStore.upsert(binding(team: 5, num: 1, pnum: 100))
+
+        let model = MarksModel(env: env)
+        let roster = members([1, 2])
+        model.rebind(teamId: 5, raceId: 7)
+        await waitUntil { model.bindings.count == 1 && model.marksLoading == false }
+
+        let squad = team(id: 5, race: 7, name: "Ф-мажор")
+        #expect(model.boundCount(members: roster) == 1)
+        var chips = item(model.readiness(team: squad, members: roster, clock: .ok), .chips)
+        #expect(chips?.status == .blocked)
+        #expect(chips?.detail == "1 из 2")
+        #expect(chips?.action == .bindChips)
+
+        try await env.memberChipBindingStore.upsert(binding(team: 5, num: 2, uid: "BB", pnum: 200))
+        await waitUntil { model.boundCount(members: roster) == 2 }
+
+        chips = item(model.readiness(team: squad, members: roster, clock: .ok), .chips)
+        #expect(chips?.status == .done)
+        #expect(chips?.detail == "2 из 2")
+        // Пустой ростер не блокируем — привязывать нечего.
+        #expect(item(model.readiness(team: squad, members: [], clock: .ok), .chips)?.status == .done)
+    }
+
+    // MARK: - Подавление до первой эмиссии (marksLoading)
+
+    /// Лестницу гасил её собственный флаг `loading`, теперь мигание подавляет сама вьюха — ветка
+    /// `model.marksLoading == true` не рисует ничего. Модель обязана взводить флаг синхронно в
+    /// `rebind` и снимать после первой эмиссии, иначе чек-лист моргнёт ложным «чипы не привязаны».
+    @Test func marksLoadingSuppressesChecklistUntilFirstEmission() async throws {
+        let env = try AppEnvironment.inMemory(transport: FakeTransport().handle)
+        try await env.memberChipBindingStore.upsert(binding(team: 42, num: 1, pnum: 100))
+
+        let model = MarksModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        // Синхронно после rebind: команда есть, observation ещё не эмитил — вьюха молчит.
+        #expect(model.marksLoading == true)
+        #expect(model.bindings.isEmpty)
+
+        await waitUntil { model.marksLoading == false && model.bindings.count == 1 }
+        // Флаг снят — показываем уже настоящее состояние привязок, а не пустой снимок.
+        let squad = team(id: 42, race: 7, name: "Ф-мажор")
+        #expect(item(model.readiness(team: squad, members: members([1]), clock: .ok), .chips)?.status == .done)
+        #expect(item(model.readiness(team: squad, members: members([1, 2]), clock: .ok), .chips)?.status == .blocked)
     }
 }
 

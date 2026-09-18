@@ -7,8 +7,7 @@
 //
 //  Фото-кейсы `MarksMappingTest.kt` (`photoPaths`/`photoCount`, `lightboxPhotos*`,
 //  `photoReviewSummary*`) зеркалированы отдельно в `MarksDisplayPhotoTests.swift`
-//  (этап 7). Лестница empty-состояний — бонус по урезанной логике (NFC-ветки
-//  опущены осознанно: все поддерживаемые iPhone имеют NFC).
+//  (этап 7).
 //
 
 import Foundation
@@ -319,26 +318,5 @@ struct MarksDisplayTests {
             #expect(tileFill(c, darkTheme: false).fill == tileFill(c, darkTheme: true).fill)
             #expect(tileFill(c, darkTheme: false).text == tileFill(c, darkTheme: true).text)
         }
-    }
-
-    // MARK: - БОНУС-тесты (лестница empty-состояний, урезанная — NFC-ветки этапа 5)
-
-    @Test func marksEmptyState_loadingSuppressesEverything() {
-        #expect(marksEmptyState(loading: true, hasTeam: false, memberCount: 0, boundCount: 0) == .none)
-        #expect(marksEmptyState(loading: true, hasTeam: true, memberCount: 3, boundCount: 0) == .none)
-    }
-
-    @Test func marksEmptyState_noTeamChoosesTeam() {
-        #expect(marksEmptyState(loading: false, hasTeam: false, memberCount: 0, boundCount: 0) == .chooseTeam)
-    }
-
-    @Test func marksEmptyState_unboundMembersNudgeBinding() {
-        #expect(marksEmptyState(loading: false, hasTeam: true, memberCount: 3, boundCount: 1) == .bindChips)
-        #expect(marksEmptyState(loading: false, hasTeam: true, memberCount: 3, boundCount: 0) == .bindChips)
-    }
-
-    @Test func marksEmptyState_allBoundOrNoRosterIsReady() {
-        #expect(marksEmptyState(loading: false, hasTeam: true, memberCount: 3, boundCount: 3) == .ready)
-        #expect(marksEmptyState(loading: false, hasTeam: true, memberCount: 0, boundCount: 0) == .ready)
     }
 }

@@ -434,24 +434,24 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 - Modify: `kolco24Tests/Core/MarksDisplayTests.swift`
 - Modify: `kolco24Tests/App/MarksModelTests.swift`
 
-- [ ] удалить `private struct MarksEmptyLadder` из `MarksView.swift` (~строка 539)
-- [ ] удалить `enum MarksEmptyState` и `func marksEmptyState` из `MarksDisplay.swift` (строки 202-227)
+- [x] удалить `private struct MarksEmptyLadder` из `MarksView.swift` (~строка 539)
+- [x] удалить `enum MarksEmptyState` и `func marksEmptyState` из `MarksDisplay.swift` (строки 202-227)
       вместе с абзацем шапки-комментария про урезанный порт `MarksEmpty`
-- [ ] удалить `func emptyState(hasTeam:members:)` из `MarksModel.swift` (~строка 206) и упоминание
+- [x] удалить `func emptyState(hasTeam:members:)` из `MarksModel.swift` (~строка 206) и упоминание
       лестницы в шапке-комментарии файла
-- [ ] **не удалять** `MarksModel.boundCount(members:)` — у него свои `BoundCountTests` и он нужен
+- [x] **не удалять** `MarksModel.boundCount(members:)` — у него свои `BoundCountTests` и он нужен
       чек-листу
-- [ ] удалить четыре теста `marksEmptyState_*` из `MarksDisplayTests.swift` (строки 324-344, вместе с
+- [x] удалить четыре теста `marksEmptyState_*` из `MarksDisplayTests.swift` (строки 324-344, вместе с
       заголовком `// MARK: - БОНУС-тесты`) и соответствующую строку из шапки-комментария файла — их
       покрытие перешло в `ReadinessChecklistTests` (Task 1)
-- [ ] **перенести, а не выбросить, три интеграционных случая из
+- [x] **перенести, а не выбросить, три интеграционных случая из
       `kolco24Tests/App/MarksModelTests.swift`** (вызовы `model.emptyState(...)` на строках 155, 169,
       174, 176, 188, 193, 194): «нет команды», «не все чипы привязаны», «подавление до первой эмиссии»
       переписываются на `model.readiness(team:members:clock:)` и переезжают в
       `MarksModelReadinessTests.swift`. Чистая таблица `ReadinessChecklistTests` их **не** заменяет —
       там нет реальной БД. Без этого шага тестовая цель не компилируется
-- [ ] проверить `grep -rn "MarksEmptyState\|marksEmptyState\|MarksEmptyLadder"` — пусто
-- [ ] прогнать тесты — зелено до Task 7
+- [x] проверить `grep -rn "MarksEmptyState\|marksEmptyState\|MarksEmptyLadder"` — пусто
+- [x] прогнать тесты — зелено до Task 7
 
 ### Task 7: Verify acceptance criteria
 
