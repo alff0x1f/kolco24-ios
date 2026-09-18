@@ -299,25 +299,25 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 - Create: `kolco24/Core/Readiness/ReadinessChecklist.swift`
 - Create: `kolco24Tests/Core/ReadinessChecklistTests.swift`
 
-- [ ] создать `kolco24/Core/Readiness/ReadinessChecklist.swift` с типами `ReadinessStatus`,
+- [x] создать `kolco24/Core/Readiness/ReadinessChecklist.swift` с типами `ReadinessStatus`,
       `ReadinessItemId`, `ReadinessAction`, `ReadinessItem`, `MapReadiness`, `LocationAuthorization`,
       `ReadinessInput` (только `import Foundation`)
-- [ ] реализовать `readinessItems(_:) -> [ReadinessItem]` по таблице правил из Technical Details:
+- [x] реализовать `readinessItems(_:) -> [ReadinessItem]` по таблице правил из Technical Details:
       фиксированный порядок, русские тексты в стиле существующих строк проекта
-- [ ] реализовать скрытие пунктов: `map == .notApplicable` и `lowPowerMode == false` не попадают в массив
-- [ ] написать тесты: нет команды → `team`/`chips` в `blocked`; 3 из 4 чипов → `chips` `blocked` с
+- [x] реализовать скрытие пунктов: `map == .notApplicable` и `lowPowerMode == false` не попадают в массив
+- [x] написать тесты: нет команды → `team`/`chips` в `blocked`; 3 из 4 чипов → `chips` `blocked` с
       detail «3 из 4»; все привязаны → `chips` `done`
-- [ ] написать тесты геолокации: `.granted` + полная точность → `done`; `.notDetermined` → `warning` +
+- [x] написать тесты геолокации: `.granted` + полная точность → `done`; `.notDetermined` → `warning` +
       `.requestLocation`; `.denied` → `warning` + `.openSettings`; `.granted` + reduced → `warning` +
       `.openSettings`
-- [ ] написать тесты скрытия: `map == .notApplicable` → нет пункта `map`; `lowPowerMode == false` →
+- [x] написать тесты скрытия: `map == .notApplicable` → нет пункта `map`; `lowPowerMode == false` →
       нет пункта `power`; `lowPowerMode == true` → есть, `warning`
-- [ ] написать тесты часов и легенды: `.ok` → `done`; `.noSync`/`.skewed` → `warning` с разными detail;
+- [x] написать тесты часов и легенды: `.ok` → `done`; `.noSync`/`.skewed` → `warning` с разными detail;
       `checkpointCount == 0` → `warning` + `.refresh`
-- [ ] написать тест «всё готово»: 7 пунктов при включённом Low Power Mode и карте `.ready`, все `done`
+- [x] написать тест «всё готово»: 7 пунктов при включённом Low Power Mode и карте `.ready`, все `done`
       кроме `power`; и 5 пунктов при `notApplicable` + выключенном Low Power Mode, все `done`
-- [ ] проверить grep-инвариант: в `Core/Readiness/` нет ничего кроме `Foundation`
-- [ ] прогнать тесты — зелено до Task 2
+- [x] проверить grep-инвариант: в `Core/Readiness/` нет ничего кроме `Foundation`
+- [x] прогнать тесты — зелено до Task 2
 
 ### Task 2: Трёхзначный геостатус в `CoreLocationTrackEngine`
 
