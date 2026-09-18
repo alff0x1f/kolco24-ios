@@ -455,24 +455,30 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] все семь пунктов из таблицы Overview реализованы и показываются
-- [ ] пункт карты отсутствует на гонке без `mapUrl`; пункт энергосбережения отсутствует при
-      выключенном Low Power Mode
-- [ ] чек-лист исчезает после первого взятия КП (`tiles.isEmpty == false`) и не мигает на холодном
-      старте (`marksLoading`)
-- [ ] порядок пунктов не меняется при смене статусов
-- [ ] `blocked` только у `team` и `chips`
-- [ ] grep-инварианты целы:
-      `grep -rn "import" kolco24/Core/Readiness/` → только `Foundation`;
-      `grep -rn "import" kolco24/App/MarksModel.swift` → только `Foundation`/`Observation`;
-      `grep -rln "CoreLocation" kolco24/` → только `Location/`;
-      `grep -rln "import UIKit" kolco24/` → **только** `DesignTokens.swift` и `Audio/ScanFeedbackPlayer.swift`;
-      `grep -rn "UIApplication" kolco24/` → новых вхождений нет вообще
-- [ ] полная сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination
-      'platform=iOS Simulator,name=iPhone 16' build`
-- [ ] полная сюита: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination
-      'platform=iOS Simulator,name=iPhone 16'`
-- [ ] e2e-тестов в проекте нет — пропускаем осознанно
+- [x] все семь пунктов из таблицы Overview реализованы и показываются (`readinessItems` строит
+      `team`/`chips`/`location`/`legend`/`map`/`clock`/`power`; `MarksView.swift:473-489` рендерит)
+- [x] пункт карты отсутствует на гонке без `mapUrl`; пункт энергосбережения отсутствует при
+      выключенном Low Power Mode (`mapItem`/`powerItem` возвращают `nil`; тесты
+      `noMapUrl_hidesMapItem`, `lowPowerModeOff_hidesPowerItem`)
+- [x] чек-лист исчезает после первого взятия КП (`tiles.isEmpty == false`) и не мигает на холодном
+      старте (`marksLoading`) — ветка `MarksView.swift:473`, guard `!model.marksLoading` на `:476`
+- [x] порядок пунктов не меняется при смене статусов (сортировок нет ни в ядре, ни во вьюхе; тест
+      `orderIsStableRegardlessOfStatuses`)
+- [x] `blocked` только у `team` и `chips` (три вхождения `status: .blocked` — все в
+      `teamItem`/`chipsItem`; тест `blockedOnlyForTeamAndChips`)
+- [x] grep-инварианты целы (прогнаны буквально):
+      `grep -rn "import" kolco24/Core/Readiness/` → одна строка `import Foundation`;
+      `grep -rn "^import" kolco24/App/MarksModel.swift` → `Foundation`, `Observation`;
+      `grep -rn "^import CoreLocation" kolco24/` → только `Location/` (3 файла).
+      [deviation] исходная формулировка `grep -rln "CoreLocation"` даёт ещё 7 файлов, но это
+      **комментарии/имена типов**, а не импорты (так было и до плана); проверен реальный
+      инвариант — строка импорта;
+      `grep -rln "import UIKit" kolco24/` → ровно `DesignTokens.swift` и `Audio/ScanFeedbackPlayer.swift`;
+      `grep -rn "UIApplication" kolco24/` → пусто
+- [x] полная сборка: `** BUILD SUCCEEDED **` (destination по UDID — форма `name=iPhone 16`
+      неоднозначна на машине, фоллбэк санкционирован `CLAUDE.md`)
+- [x] полная сюита: `** TEST SUCCEEDED **`
+- [x] e2e-тестов в проекте нет — пропускаем осознанно (не автоматизируется)
 
 ### Task 8: [Final] Update documentation
 
