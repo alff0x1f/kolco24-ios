@@ -398,32 +398,32 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 - Modify: `kolco24/MarksView.swift`
 - Modify: `kolco24/ContentView.swift`
 
-- [ ] добавить `var onOpenMap: () -> Void = {}` в `MarksView` рядом с `onChooseTeam`/`onBindChips`
-- [ ] в `ContentView` прокинуть `onOpenMap: { selectedTab = 2 }` по образцу
+- [x] добавить `var onOpenMap: () -> Void = {}` в `MarksView` рядом с `onChooseTeam`/`onBindChips`
+- [x] в `ContentView` прокинуть `onOpenMap: { selectedTab = 2 }` по образцу
       `onBindChips: { selectedTab = 3 }` (`ContentView.swift:26`)
-- [ ] создать `private struct ReadinessCard: View`: шапка «ГОТОВНОСТЬ К СТАРТУ» `mono(10,.bold)`
+- [x] создать `private struct ReadinessCard: View`: шапка «ГОТОВНОСТЬ К СТАРТУ» `mono(10,.bold)`
       tracking 1.3 + счётчик «N / M» + полоска прогресса 3pt цветом `blocked → brandRed`,
       `warning → amber`, всё `done → good`
-- [ ] реализовать строку пункта в стиле `MiscRowView`: иконка статуса, title `ink`, detail `sub`,
+- [x] реализовать строку пункта в стиле `MiscRowView`: иконка статуса, title `ink`, detail `sub`,
       стрелка и `Button` только если есть `action`; выполненные пункты остаются видимыми,
       приглушёнными
-- [ ] реализовать свёрнутое состояние: все `done` → одна зелёная строка «Всё готово к старту» +
+- [x] реализовать свёрнутое состояние: все `done` → одна зелёная строка «Всё готово к старту» +
       подсказка про приложение телефона к чипу
-- [ ] заменить `MarksEmptyLadder` на `ReadinessCard` в ветке `tiles.isEmpty` (`MarksView.swift:437`),
+- [x] заменить `MarksEmptyLadder` на `ReadinessCard` в ветке `tiles.isEmpty` (`MarksView.swift:437`),
       сохранив подавление мигания при `model?.marksLoading == true` (ничего не рисуем)
-- [ ] подключить действия: `.chooseTeam`/`.bindChips` → существующие замыкания; `.requestLocation` →
+- [x] подключить действия: `.chooseTeam`/`.bindChips` → существующие замыкания; `.requestLocation` →
       `model?.requestLocationAccess()`; `.openSettings` → `@Environment(\.openURL)` +
       `URL(string: "app-settings:")` (**не** `UIApplication.openSettingsURLString` — образец
       `PhotoCaptureView.swift:224`, иначе ломается grep-инвариант «UIKit только в `DesignTokens` и
       `Audio/`»); `.refresh` → `Task { await appModel.refreshAll() }` (метод `async`,
       `AppModel.swift:622`); `.openMap` → `onOpenMap()`
-- [ ] вызвать `model?.refreshDeviceState()` из `.task`, из `onAppear` (возврат с вкладки «Карта» не
+- [x] вызвать `model?.refreshDeviceState()` из `.task`, из `onAppear` (возврат с вкладки «Карта» не
       меняет `scenePhase`) и из `onChange(of: scenePhase)` при `phase == .active` (`MarksView` уже
       наблюдает `scenePhase`: `@Environment` на строке 62, `onChange` на 112)
-- [ ] проверить, что `FloatingCTAView` и `NfcUnavailableStripView` не затронуты
-- [ ] обновить/добавить SwiftUI-превью карточки под `#if DEBUG` в стиле соседних превью файла
-- [ ] тестов на вьюху нет (конвенция проекта — UI-тестов нет); собрать проект и прогнать сюиту —
-      зелено до Task 6
+- [x] проверить, что `FloatingCTAView` и `NfcUnavailableStripView` не затронуты
+- [x] обновить/добавить SwiftUI-превью карточки под `#if DEBUG` в стиле соседних превью файла
+- [x] тестов на вьюху нет (конвенция проекта — UI-тестов нет; не автоматизируется); собрать проект и
+      прогнать сюиту — зелено до Task 6
 
 ### Task 6: Удалить `MarksEmptyLadder` и `marksEmptyState`
 

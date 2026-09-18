@@ -3,8 +3,9 @@
 //  kolco24
 //
 //  Вкладка «Отметки» на реальных данных. Порт ПОВЕДЕНИЯ `ui/marks/MarksScreen.kt`: метрики + сетка
-//  тайлов взятий выбранной команды из БД, лестница пустых состояний (выбери команду / привяжи чипы /
-//  готов). Данные и derived — из `MarksModel` (наблюдение взятий/КП/агрегатов/привязок).
+//  тайлов взятий выбранной команды из БД. Пока не взято ни одного КП, вместо сетки показывается
+//  чек-лист готовности к старту (`ReadinessCard`, iOS-only; заменил урезанную лестницу `MarksEmpty`).
+//  Данные и derived — из `MarksModel` (наблюдение взятий/КП/агрегатов/привязок).
 //
 //  Тайл на complete-взятие (oldest-first), существующий дизайн (`NFCTileView`/`PhotoTileView`).
 //  `ScanSheet` теперь на реальных данных (этап 5, `ScanModel`); `PhotoTile`/лайтбокс — заглушка (этап 7).
@@ -71,6 +72,12 @@ struct MarksView: View {
     var onChooseTeam: () -> Void = {}
     /// Переход на вкладку «Команда» для привязки чипов (нудж пустого состояния).
     var onBindChips: () -> Void = {}
+    /// Переход на вкладку «Карта» (пункт чек-листа «Карта не скачана» — весь UI скачивания там).
+    var onOpenMap: () -> Void = {}
+    /// Ссылка в Настройки iOS — схемой `app-settings:`, осознанно без UIKit-константы
+    /// `openSettingsURLString` (grep-инвариант «UIKit только в `DesignTokens` и `Audio/`»;
+    /// образец — `PhotoCaptureView`).
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         content
@@ -93,6 +100,12 @@ struct MarksView: View {
             .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeMarksModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
+                model?.refreshDeviceState()
+            }
+            .onAppear {
+                // Возврат с соседней вкладки (например, скачали подложку на «Карте») не меняет
+                // `scenePhase` и не перезапускает `.task` — опрашиваем устройство и здесь.
+                model?.refreshDeviceState()
             }
             .task(id: celebrationRun) {
                 // Страховочный сброс на 2× длительности — на случай, если рендер так и не случился
@@ -112,6 +125,11 @@ struct MarksView: View {
             .onChange(of: scenePhase, initial: true) { _, phase in
                 Self.log.debug("scenePhase → \(String(describing: phase))")
                 sceneIsActive = phase == .active
+                if phase == .active {
+                    // Возврат из Настроек iOS / системного диалога: геодоступ, точность и Low Power
+                    // Mode меняются вне приложения — только опросом, observation тут нет.
+                    model?.refreshDeviceState()
+                }
                 if phase == .active, awaitingActiveScene {
                     // Шторка реально ушла (сцена снова активна) — отложенный залп запускаем видимо.
                     // Через `launchConfetti()` (sceneIsActive уже true — гард пройдёт), а не дублируя
@@ -390,6 +408,25 @@ struct MarksView: View {
         }
     }
 
+    /// Действия строк чек-листа. Вся логика статусов — в `readinessItems`; здесь только маршрутизация.
+    private func handleReadinessAction(_ action: ReadinessAction) {
+        switch action {
+        case .chooseTeam:
+            onChooseTeam()
+        case .bindChips:
+            onBindChips()
+        case .requestLocation:
+            // Через модель, а не `AppModel`: там `env` приватен и обёртки нет.
+            model?.requestLocationAccess()
+        case .openSettings:
+            if let url = URL(string: "app-settings:") { openURL(url) }
+        case .refresh:
+            Task { await appModel.refreshAll() }
+        case .openMap:
+            onOpenMap()
+        }
+    }
+
     @ViewBuilder
     private var content: some View {
         switch appModel.selectedTeamState {
@@ -409,7 +446,6 @@ struct MarksView: View {
         let members = team?.members.sorted { $0.numberInTeam < $1.numberInTeam } ?? []
         let tiles = model?.tiles ?? []
         let hidden = model?.hiddenTakenTokens ?? []
-        let emptyState = model?.emptyState(hasTeam: team != nil, members: members) ?? .none
 
         return ScrollView {
             VStack(spacing: 0) {
@@ -435,14 +471,20 @@ struct MarksView: View {
                 }
 
                 if tiles.isEmpty {
-                    MarksEmptyLadder(
-                        state: emptyState,
-                        boundCount: model?.boundCount(members: members) ?? 0,
-                        memberCount: members.count,
-                        onChooseTeam: onChooseTeam,
-                        onBindChips: onBindChips
-                    )
-                    .padding(.top, 24)
+                    // Подавление мигания на холодном старте: до первой эмиссии observation взятий
+                    // (`marksLoading`) не рисуем ничего — иначе чек-лист мелькнёт и исчезнет.
+                    if let model, !model.marksLoading {
+                        ReadinessCard(
+                            items: model.readiness(
+                                team: team,
+                                members: members,
+                                clock: appModel.clockStatus
+                            ),
+                            onAction: handleReadinessAction
+                        )
+                        .padding(.horizontal, DS.hPad)
+                        .padding(.bottom, 14)
+                    }
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 4), spacing: 2) {
                         ForEach(Array(tiles.enumerated()), id: \.offset) { _, tile in
@@ -532,6 +574,190 @@ private struct HiddenKpNotice: View {
         .background(Color.card)
         .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
         .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+    }
+}
+
+// MARK: - Readiness Card (чек-лист готовности к старту)
+// Показывается вместо сетки, пока не взято ни одного КП. Вьюха НЕ ветвит логику: массив пунктов
+// целиком приходит из `readinessItems` (`Core/Readiness/`), а производные шапки считаются ИЗ САМОГО
+// массива — знаменатель это его длина (скрытые пункты карты/энергосбережения её меняют), а не 7.
+private struct ReadinessCard: View {
+    let items: [ReadinessItem]
+    let onAction: (ReadinessAction) -> Void
+
+    private var doneCount: Int { items.filter { $0.status == .done }.count }
+    private var allDone: Bool { !items.isEmpty && doneCount == items.count }
+
+    /// Худший статус списка: есть `blocked` → красный, иначе есть `warning` → янтарь, иначе зелёный.
+    private var accent: Color {
+        if items.contains(where: { $0.status == .blocked }) { return .brandRed }
+        if items.contains(where: { $0.status == .warning }) { return .amber }
+        return .good
+    }
+
+    var body: some View {
+        Group {
+            if allDone {
+                readyRow
+            } else {
+                checklist
+            }
+        }
+        .background(Color.card)
+        .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+        .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+    }
+
+    /// Всё выполнено — карточка сжимается в одну зелёную строку с подсказкой про отметку.
+    private var readyRow: some View {
+        HStack(spacing: 12) {
+            ReadinessStatusIcon(status: .done)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Всё готово к старту")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.ink)
+                Text("Приложите телефон к метке КП — отметка появится здесь.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.sub)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.hPad)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var checklist: some View {
+        VStack(spacing: 0) {
+            header
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                if index > 0 {
+                    Rectangle()
+                        .fill(Color.hairline)
+                        .frame(height: 0.5)
+                        .padding(.leading, DS.hPad + 30 + 12)
+                }
+                ReadinessRow(item: item, onAction: onAction)
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: accent.opacity(0.3), radius: 4)
+                Text("Готовность к старту")
+                    .font(.mono(10, weight: .bold))
+                    .foregroundStyle(Color.sub)
+                    .textCase(.uppercase)
+                    .tracking(1.3)
+                Spacer(minLength: 8)
+                Text("\(doneCount) / \(items.count)")
+                    .font(.mono(10, weight: .bold))
+                    .foregroundStyle(Color.sub)
+            }
+            // Полоска прогресса 3pt цветом худшего статуса.
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.ink.opacity(0.08))
+                    Capsule()
+                        .fill(accent)
+                        .frame(width: geo.size.width * progressFraction)
+                }
+            }
+            .frame(height: 3)
+        }
+        .padding(.horizontal, DS.hPad)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+    }
+
+    private var progressFraction: CGFloat {
+        guard !items.isEmpty else { return 0 }
+        return CGFloat(doneCount) / CGFloat(items.count)
+    }
+}
+
+/// Строка чек-листа в стиле `MiscRowView` (`TeamView`): иконка-статус, заголовок, подпись, стрелка.
+/// Стрелка и `Button` — только у пункта с действием; выполненные остаются видимыми, приглушёнными
+/// (исчезающие галочки не дают проверить «всё ли есть» одним взглядом).
+private struct ReadinessRow: View {
+    let item: ReadinessItem
+    let onAction: (ReadinessAction) -> Void
+
+    var body: some View {
+        if let action = item.action {
+            Button { onAction(action) } label: { rowBody(showsChevron: true) }
+                .buttonStyle(.plain)
+        } else {
+            rowBody(showsChevron: false)
+        }
+    }
+
+    private func rowBody(showsChevron: Bool) -> some View {
+        HStack(spacing: 12) {
+            ReadinessStatusIcon(status: item.status)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.ink)
+                if !item.detail.isEmpty {
+                    Text(item.detail)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color.sub)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.sub.opacity(0.45))
+            }
+        }
+        .opacity(item.status == .done ? 0.55 : 1)
+        .padding(.horizontal, DS.hPad)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Квадратная иконка статуса — тот же «плиточный» глиф, что у `MiscRowView`, но цвет несёт смысл.
+private struct ReadinessStatusIcon: View {
+    let status: ReadinessStatus
+
+    private var glyph: String {
+        switch status {
+        case .done: return "checkmark"
+        case .warning: return "exclamationmark"
+        case .blocked: return "xmark"
+        }
+    }
+
+    private var tint: Color {
+        switch status {
+        case .done: return .good
+        case .warning: return .amber
+        case .blocked: return .brandRed
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7)
+                .fill(tint)
+                .frame(width: 30, height: 30)
+                .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+            Image(systemName: glyph)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+        }
     }
 }
 
@@ -1024,5 +1250,50 @@ private struct PhotoFlowPreviewHost: View {
 
 #Preview("Photo picker") {
     PhotoFlowPreviewHost()
+}
+
+/// Смешанный чек-лист: чипы привязаны не всем (`blocked`), примерная локация, карта не скачана,
+/// сдвиг часов и включённое энергосбережение — все три статуса и обе формы строки сразу.
+private let previewReadinessMixed = readinessItems(
+    ReadinessInput(
+        hasTeam: true,
+        teamTitle: "Ф-мажор",
+        memberCount: 4,
+        boundCount: 2,
+        locationAuthorization: .granted,
+        isReducedAccuracy: true,
+        checkpointCount: 34,
+        map: .missing,
+        clock: .skewed(skewMs: 95_000),
+        lowPowerMode: true
+    )
+)
+
+/// Всё выполнено + гонка без подложки и выключенный Low Power Mode → свёрнутая зелёная строка.
+private let previewReadinessReady = readinessItems(
+    ReadinessInput(
+        hasTeam: true,
+        teamTitle: "Ф-мажор",
+        memberCount: 4,
+        boundCount: 4,
+        locationAuthorization: .granted,
+        isReducedAccuracy: false,
+        checkpointCount: 34,
+        map: .notApplicable,
+        clock: .ok,
+        lowPowerMode: false
+    )
+)
+
+#Preview("Чек-лист готовности") {
+    ScrollView {
+        VStack(spacing: 14) {
+            ReadinessCard(items: previewReadinessMixed, onAction: { _ in })
+            ReadinessCard(items: previewReadinessReady, onAction: { _ in })
+        }
+        .padding(.horizontal, DS.hPad)
+        .padding(.vertical, 20)
+    }
+    .background(Color.paper)
 }
 #endif
