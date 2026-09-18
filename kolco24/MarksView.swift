@@ -421,7 +421,15 @@ struct MarksView: View {
         case .openSettings:
             if let url = URL(string: "app-settings:") { openURL(url) }
         case .refresh:
-            Task { await appModel.refreshAll() }
+            // После синка перечитываем устройство: `races.map_url` мог прийти именно этим запросом, а
+            // ни `.task`, ни `scenePhase` тут не срабатывают — без опроса пункт карты не появился бы.
+            // §6: задача держит модели, а не вьюху — уход с экрана не должен обрывать начатое.
+            let appModel = appModel
+            let marksModel = model
+            Task {
+                await appModel.refreshAll()
+                marksModel?.refreshDeviceState()
+            }
         case .openMap:
             onOpenMap()
         }
@@ -471,19 +479,17 @@ struct MarksView: View {
                 }
 
                 if tiles.isEmpty {
-                    // Подавление мигания на холодном старте: до первой эмиссии observation взятий
-                    // (`marksLoading`) не рисуем ничего — иначе чек-лист мелькнёт и исчезнет.
-                    if let model, !model.marksLoading {
-                        ReadinessCard(
-                            items: model.readiness(
-                                team: team,
-                                members: members,
-                                clock: appModel.clockStatus
-                            ),
-                            onAction: handleReadinessAction
-                        )
-                        .padding(.horizontal, DS.hPad)
-                        .padding(.bottom, 14)
+                    // Подавление мигания на холодном старте: решение «рисовать или молчать» принимает
+                    // модель (`readinessCard` → `nil`, пока не приехал хотя бы один из источников
+                    // карточки), вьюха его не дублирует.
+                    if let items = model?.readinessCard(
+                        team: team,
+                        members: members,
+                        clock: appModel.clockStatus
+                    ) {
+                        ReadinessCard(items: items, onAction: handleReadinessAction)
+                            .padding(.horizontal, DS.hPad)
+                            .padding(.bottom, 14)
                     }
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 4), spacing: 2) {
@@ -514,7 +520,11 @@ struct MarksView: View {
             .padding(.top, 8)
         }
         .background(Color.paper)
-        .refreshable { await appModel.refreshAll() }
+        .refreshable {
+            await appModel.refreshAll()
+            // Тот же повод, что в `.refresh` чек-листа: синк мог впервые записать `races.map_url`.
+            model?.refreshDeviceState()
+        }
     }
 }
 
@@ -581,26 +591,30 @@ private struct HiddenKpNotice: View {
 // Показывается вместо сетки, пока не взято ни одного КП. Вьюха НЕ ветвит логику: массив пунктов
 // целиком приходит из `readinessItems` (`Core/Readiness/`), а производные шапки считаются ИЗ САМОГО
 // массива — знаменатель это его длина (скрытые пункты карты/энергосбережения её меняют), а не 7.
+// Единственное исключение — свёрнутая строка полной готовности (`readyRow`): у неё нет своего
+// `ReadinessItemId`, поэтому её текст живёт здесь, а не в ядре.
 private struct ReadinessCard: View {
     let items: [ReadinessItem]
     let onAction: (ReadinessAction) -> Void
 
-    private var doneCount: Int { items.filter { $0.status == .done }.count }
-    private var allDone: Bool { !items.isEmpty && doneCount == items.count }
-
-    /// Худший статус списка: есть `blocked` → красный, иначе есть `warning` → янтарь, иначе зелёный.
-    private var accent: Color {
-        if items.contains(where: { $0.status == .blocked }) { return .brandRed }
-        if items.contains(where: { $0.status == .warning }) { return .amber }
-        return .good
+    /// Счётчик, худший статус и признак полной готовности считает ядро (`readinessSummary`) —
+    /// вьюхе остаётся только цвет. Считаем ОДИН раз за отрисовку и прокидываем вниз (как
+    /// `MetricsCard` предвычисляет свои значения), а не computed-свойством на каждое обращение.
+    private func accent(_ summary: ReadinessSummary) -> Color {
+        switch summary.worst {
+        case .blocked: return .brandRed
+        case .warning: return .amber
+        case .done: return .good
+        }
     }
 
     var body: some View {
-        Group {
-            if allDone {
+        let summary = readinessSummary(items)
+        return Group {
+            if summary.allDone {
                 readyRow
             } else {
-                checklist
+                checklist(summary)
             }
         }
         .background(Color.card)
@@ -628,9 +642,9 @@ private struct ReadinessCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var checklist: some View {
+    private func checklist(_ summary: ReadinessSummary) -> some View {
         VStack(spacing: 0) {
-            header
+            header(summary)
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if index > 0 {
                     Rectangle()
@@ -644,8 +658,12 @@ private struct ReadinessCard: View {
         .padding(.bottom, 4)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func header(_ summary: ReadinessSummary) -> some View {
+        // Знаменатель `summary.total` — длина массива, так что делить на ноль здесь нечем (пустой
+        // массив в UI недостижим, а `readinessSummary` его уже трактует как «не готово»).
+        let fraction = summary.total > 0 ? CGFloat(summary.done) / CGFloat(summary.total) : 0
+        let accent = accent(summary)
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Circle()
                     .fill(accent)
@@ -657,7 +675,7 @@ private struct ReadinessCard: View {
                     .textCase(.uppercase)
                     .tracking(1.3)
                 Spacer(minLength: 8)
-                Text("\(doneCount) / \(items.count)")
+                Text("\(summary.done) / \(summary.total)")
                     .font(.mono(10, weight: .bold))
                     .foregroundStyle(Color.sub)
             }
@@ -667,7 +685,7 @@ private struct ReadinessCard: View {
                     Capsule().fill(Color.ink.opacity(0.08))
                     Capsule()
                         .fill(accent)
-                        .frame(width: geo.size.width * progressFraction)
+                        .frame(width: geo.size.width * fraction)
                 }
             }
             .frame(height: 3)
@@ -675,11 +693,6 @@ private struct ReadinessCard: View {
         .padding(.horizontal, DS.hPad)
         .padding(.top, 14)
         .padding(.bottom, 10)
-    }
-
-    private var progressFraction: CGFloat {
-        guard !items.isEmpty else { return 0 }
-        return CGFloat(doneCount) / CGFloat(items.count)
     }
 }
 
@@ -701,18 +714,24 @@ private struct ReadinessRow: View {
 
     private func rowBody(showsChevron: Bool) -> some View {
         HStack(spacing: 12) {
-            ReadinessStatusIcon(status: item.status)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.title)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.ink)
-                if !item.detail.isEmpty {
-                    Text(item.detail)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Color.sub)
-                        .fixedSize(horizontal: false, vertical: true)
+            // Приглушаем ТОЛЬКО иконку и тексты: приглушённая стрелка читалась бы как «строка
+            // неактивна», а выполненные пункты (команда, чипы, карта) остаются кликабельными —
+            // через них удобно перепроверить состав и подложку.
+            HStack(spacing: 12) {
+                ReadinessStatusIcon(status: item.status)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color.ink)
+                    if !item.detail.isEmpty {
+                        Text(item.detail)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color.sub)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
+            .opacity(item.status == .done ? 0.55 : 1)
             Spacer(minLength: 0)
             if showsChevron {
                 Image(systemName: "chevron.right")
@@ -720,7 +739,6 @@ private struct ReadinessRow: View {
                     .foregroundStyle(Color.sub.opacity(0.45))
             }
         }
-        .opacity(item.status == .done ? 0.55 : 1)
         .padding(.horizontal, DS.hPad)
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)

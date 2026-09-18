@@ -121,10 +121,12 @@ YAGNI; сборка в `AppModel` — потребовала бы всегда-�
 
 1. **`Core/Readiness/ReadinessChecklist.swift`** — чистая функция `readinessItems(ReadinessInput) ->
    [ReadinessItem]`. Ноль фреймворков, вся логика статусов, скрытия пунктов и русских текстов здесь,
-   полностью покрывается табличными тестами.
+   полностью покрывается табличными тестами. Плюс (по итогам ревью) производные шапки
+   `readinessSummary(_:)` и гейт первой отрисовки `readinessCardVisible(...)` — тоже чистые.
 2. **`AppEnvironment`** — два новых инжекта: `isLowPowerMode` и трёхзначный `locationAuthorization`.
-3. **`MarksModel`** — собирает снимок: три существующих observation'а + one-shot `mapReadiness` +
-   синхронный опрос устройства (`refreshDeviceState()`), отдаёт `readiness(...)`.
+3. **`MarksModel`** — собирает снимок: три существующих observation'а + `mapUrl` из БД (читается в
+   `rebind` и перечитывается на каждом опросе) + синхронный опрос устройства (`refreshDeviceState()`),
+   отдаёт `readinessCard(...)` (и `readiness(...)` без гейта — для тестов).
 4. **`MarksView`** — `ReadinessCard` вместо `MarksEmptyLadder`; `ContentView` добавляет `onOpenMap`.
 
 **Ключевые решения:**
@@ -146,9 +148,13 @@ YAGNI; сборка в `AppModel` — потребовала бы всегда-�
   качает → возвращается, а пункт всё ещё красный (переключение вкладки не меняет `scenePhase`, а
   `.task` отрабатывает один раз за жизнь вьюхи). `MapModel` решает это тем же способом —
   `refreshAvailability()` зовётся из `MapTabView` на появлении («файл-как-флаг не наблюдаем»,
-  `MapModel.swift:151-158`). Поэтому `mapUrl` читается из БД один раз в `rebind`, а **проверка
-  наличия файла** (`env.mapFileExists`, синхронное замыкание — дёшево) входит в `refreshDeviceState()`,
-  который зовётся из `.task`, `onAppear` и на `scenePhase == .active`.
+  `MapModel.swift:151-158`). Поэтому опрос (`refreshDeviceState()`, зовётся из `.task`, `onAppear` и на
+  `scenePhase == .active`) перечитывает **обе** составляющие пункта карты.
+  ⚠️ Уточнено на ревью (round 2): изначально предполагалось читать `mapUrl` один раз в `rebind` и опрашивать
+  только наличие файла. В коде `refreshDeviceState()` перечитывает `mapUrl` из БД **безусловно** (паритет с
+  `MapModel.refreshAvailability`), а не «пока он `nil`»: сервер шлёт `""` как «карты нет», и гард по значению
+  выключил бы опрос навсегда. `loadMapUrl` нормализует `""` в `nil` и пересчитывает `mapReadiness`, только если
+  строка гонки реально изменилась; единственный гард — флаг `isLoadingMapUrl` (чтение уже в полёте).
 - **Ссылка в Настройки — через `@Environment(\.openURL)` и схему `app-settings:`**, а не
   `UIApplication.openSettingsURLString`: ровно так уже сделано в `PhotoCaptureView.swift:224`, и это
   сохраняет grep-инвариант «UIKit только в `DesignTokens` и `Audio/`».
@@ -157,9 +163,23 @@ YAGNI; сборка в `AppModel` — потребовала бы всегда-�
   рядом с `refreshDeviceState()` — `AppModel` не трогаем.
 - **Выполненные пункты остаются видимыми**, приглушёнными. Пользователь просил «удобно проверить,
   что всё есть» — исчезающие галочки этого не дают, а семь строк — короткий список.
+- **Гейт первой отрисовки — пять сигналов, а не `marksLoading`.** ⚠️ Уточнено на ревью (round 2), дополнено
+  в round 4: карточка рисует ТРИ независимых observation'а (взятия, привязки, КП гонки), опрошенное состояние
+  устройства и одиночное чтение `races.map_url` из БД, а порядка между ними нет, поэтому гейт по одному
+  `marksLoading` пропускал кадр с пустым снимком (красное «Чипы привязаны не всем · 0 из N» у полностью
+  привязанной команды), а гейт без пятого сигнала — ложное свёрнутое «Всё готово к старту», через миг
+  разворачивающееся строкой «Карта не скачана». Решение вынесено в чистую
+  `readinessCardVisible(marksLoading:bindingsLoading:checkpointsLoading:deviceStatePolled:mapUrlResolved:)`
+  (`Core/Readiness/`), которую зовёт `MarksModel.readinessCard(...)`; вьюха только разворачивает `nil`.
+  `mapUrlResolved` взводится один раз за привязку (`raceId == nil` — синхронно в `rebind`, иначе в теле
+  `loadMapUrl` ДО раннего выхода «строка не изменилась», иначе гонка без подложки не открыла бы гейт вовсе).
+- **Умерший observation не запирает гейт.** ⚠️ Round 4: `catch` каждого потока наблюдения снимает свой
+  `*Loading` (с проверкой актуальности привязки), иначе сбой БД оставлял бы флаг `true` навсегда —
+  карточка не показалась бы до перезапуска приложения, а ветка «нет взятий» осталась бы пустой без CTA.
+  Ошибки — значения: показать чек-лист с предупреждением и CTA «обновить» лучше, чем не показать ничего.
 - **`MarksEmptyLadder` и `marksEmptyState` удаляются полностью** (Task 6). Новый чек-лист их
   подменяет: «нет команды» → `blocked`-пункт `team`, «не привязаны чипы» → `blocked`-пункт `chips`,
-  «готов» → свёрнутая зелёная строка. Подавление мигания (`marksLoading`) переезжает в ветку вьюхи.
+  «готов» → свёрнутая зелёная строка. Подавление мигания переезжает в модель и ядро (см. ниже).
   Это осознанный отход от парности с Kotlin `MarksEmpty` — на iOS лестница и так была урезана (NFC-ветки
   выброшены), и держать мёртвый код ради зеркала смысла нет. Четыре теста `marksEmptyState_*` в
   `MarksDisplayTests.swift` удаляются, их покрытие переходит в `ReadinessChecklistTests`.
@@ -188,9 +208,6 @@ struct ReadinessItem: Equatable, Identifiable {
 /// Доступность оффлайн-подложки для чек-листа (read-only срез `MapAvailability`).
 enum MapReadiness { case notApplicable, missing, ready }
 
-/// Трёхзначный геостатус (в отличие от bool `hasLocationAccess`).
-enum LocationAuthorization { case notDetermined, denied, granted }
-
 struct ReadinessInput {
     let hasTeam: Bool
     let teamTitle: String          // `Team.teamname` для detail; "" если нет
@@ -207,23 +224,38 @@ struct ReadinessInput {
 func readinessItems(_ input: ReadinessInput) -> [ReadinessItem]
 ```
 
+Трёхзначный геостатус `enum LocationAuthorization { case notDetermined, denied, granted }` (в отличие от bool
+`hasLocationAccess`) ⚠️ по итогам ревью (round 3) живёт **не** здесь, а в `kolco24/Core/Track/CurrentLocation.swift`:
+его отдаёт `Location/CoreLocationTrackEngine.locationAuthorization()`, то есть это тип платформенной способности,
+а не часть чек-листа, и `Location/` не должен зависеть от `Core/Readiness/` ради собственного возвращаемого типа.
+В `ReadinessChecklist.swift` на его месте остался однострочный комментарий-указатель.
+
 Правила формирования (все в этой функции, вьюха их не дублирует):
 
 | Пункт | `done` когда | Иначе | Действие |
 |-------|-------------|-------|----------|
 | `team` | `hasTeam` | `blocked` | `.chooseTeam` |
-| `chips` | `memberCount > 0 && boundCount >= memberCount`, либо `memberCount == 0` | `blocked`, detail «N из M» | `.bindChips` |
+| `chips` | `memberCount > 0 && boundCount >= memberCount` | `blocked`, detail «N из M»; `memberCount == 0` → `blocked` «Состав команды не загружен» | `.bindChips`; при `hasTeam == false` — `nil`; при пустом ростере — `.refresh` |
 | `location` | `.granted && !isReducedAccuracy` | `warning`; `.notDetermined` → `.requestLocation`, `.denied` или reduced → `.openSettings` | см. слева |
 | `legend` | `checkpointCount > 0` | `warning` | `.refresh` |
 | `map` | `.ready` | `.missing` → `warning` + `.openMap`; `.notApplicable` → **пункт отсутствует в массиве** | `.openMap` |
 | `clock` | `clock == .ok` | `warning` (`.noSync` и `.skewed` — разные detail) | `nil` |
-| `power` | — | `lowPowerMode == false` → **пункт отсутствует**; `true` → `warning` | `.openSettings` |
+| `power` | — | `lowPowerMode == false` → **пункт отсутствует**; `true` → `warning` | `nil` |
 
 Пункты `chips` и `location` при `hasTeam == false` всё равно присутствуют (список стабильной длины
-внутри одного состояния выбора), но `chips` тогда `blocked` с detail «сначала выберите команду».
+внутри одного состояния выбора), но `chips` тогда `blocked` с detail «сначала выберите команду» и
+**без действия** — привязка до выбора команды тупиковая, CTA несёт строка `team`.
 
-Производные для шапки считаются во вьюхе **из самого массива**: `done`-счётчик, знаменатель
-`items.count` (не захардкоженная 7 — скрытые пункты меняют длину), худший статус.
+⚠️ Уточнено на ревью: пустой ростер (`memberCount == 0`) — тоже `blocked`, а не `done`:
+`ScanModel.process` жёстко отбивает скан при пустом составе («команда не выбрана»), так что зелёная
+галочка обещала бы невозможное; действие — `.refresh`. И у `power` действия нет: `app-settings:`
+открывает страницу самого приложения, а Low Power Mode живёт в Настройках → Аккумулятор, публичного
+URL туда у iOS нет — путь назван прямо в detail.
+
+Производные для шапки считает **из самого массива** чистая `readinessSummary(_:) -> ReadinessSummary`
+(`done`-счётчик, знаменатель `items.count` — не захардкоженная 7, скрытые пункты меняют длину, худший
+статус, `allDone`). ⚠️ Уточнено на ревью: живёт в ядре, а не во вьюхе (это логика, а не вёрстка, и
+покрывается таблицей); вьюхе остаётся только маппинг статуса в цвет.
 
 ### `AppEnvironment`
 
@@ -243,19 +275,34 @@ private(set) var mapReadiness: MapReadiness = .notApplicable
 private(set) var locationAuth: LocationAuthorization = .granted
 private(set) var isReducedAccuracy: Bool = false
 private(set) var lowPowerMode: Bool = false
+// Гейт первой отрисовки (round 2): рядом с существующим `marksLoading`.
+private(set) var bindingsLoading: Bool = false
+private(set) var checkpointsLoading: Bool = false
+private(set) var deviceStatePolled: Bool = false
+private(set) var mapUrlResolved: Bool = false   // round 4: пятый (не-observation) сигнал гейта
 
-func refreshDeviceState()      // синхронный опрос env: гео, Low Power Mode, наличие файла карты
+func refreshDeviceState()      // синхронный опрос env: гео, точность, Low Power Mode, файл карты
+                               // + безусловное перечитывание `mapUrl` из БД (см. ниже)
 func requestLocationAccess()   // → env.requestLocationAuthorization() (AppModel.env приватен)
+// Без гейта — прямой вход только для тестов, которым нужен массив без подавления.
 func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [ReadinessItem]
+// Продовый вход: nil, пока `readinessCardVisible(...)` не пропустит все пять сигналов
+// (marksLoading / bindingsLoading / checkpointsLoading / deviceStatePolled / mapUrlResolved).
+func readinessCard(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [ReadinessItem]?
 ```
 
-Доступность карты считается в два приёма:
+Доступность карты считается из двух составляющих — `mapUrl` гонки и наличия файла подложки, — и **обе**
+перечитываются на каждом опросе:
 
-1. **`mapUrl` из БД — один раз в `rebind(teamId:raceId:)`**, задачей `mapReadinessTask`: синхронный
-   сброс `mapUrl = nil` и `mapReadiness = .notApplicable` до `await` (stale-guard), затем
-   `raceStore.getById(raceId)`, проверка `!Task.isCancelled && boundRaceId == raceId`, сохранение
-   `mapUrl` в `@ObservationIgnored`-поле и первый пересчёт. Отмена в `deinit` рядом с остальными
-   задачами.
+1. **`mapUrl` из БД** — задачей `mapUrlTask` (`loadMapUrl(_:)`), которая стартует и из
+   `rebind(teamId:raceId:)`, и из `refreshDeviceState()`. В `rebind` — синхронный сброс `mapUrl = nil` и
+   `mapReadiness = .notApplicable` до `await` (stale-guard), затем `raceStore.getById(raceId)`, проверка
+   `!Task.isCancelled && boundRaceId == raceId`. Отмена в `deinit` рядом с остальными задачами.
+   ⚠️ Уточнено на ревью (round 2): опрос перечитывает `mapUrl` **безусловно**, а не «пока он `nil`» —
+   значение-гард сломался бы на `""` (сервер шлёт пустую строку как «карты нет»: она не `nil`, и опрос
+   выключился бы навсегда) и не заметил бы отозванной/подменённой подложки. `loadMapUrl` нормализует `""` в
+   `nil`, единственный гард — флаг `isLoadingMapUrl` (чтение уже в полёте), а пересчёт делается, только если
+   строка гонки реально изменилась — иначе `FileManager` дёргался бы дважды за опрос.
 2. **Наличие файла — при каждом `refreshDeviceState()`**: `mapUrl` пуст → `.notApplicable`, иначе
    `env.mapFileExists(raceId)` → `.ready` / `.missing`. Без этого пункт застревает в «не скачана»
    после возврата с вкладки «Карта» (см. Solution Overview).
@@ -318,6 +365,11 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
       кроме `power`; и 5 пунктов при `notApplicable` + выключенном Low Power Mode, все `done`
 - [x] проверить grep-инвариант: в `Core/Readiness/` нет ничего кроме `Foundation`
 - [x] прогнать тесты — зелено до Task 2
+
+⚠️ По итогам ревью файл вырос против первоначального списка: добавлены `readinessSummary(_:)` /
+`ReadinessSummary` (производные шапки — логика, а не вёрстка) и гейт первой отрисовки
+`readinessCardVisible(...)`. `LocationAuthorization` наоборот уехал в `Core/Track/CurrentLocation.swift`
+(это тип платформенной способности — см. Technical Details).
 
 ### Task 2: Трёхзначный геостатус в `CoreLocationTrackEngine`
 
@@ -392,6 +444,13 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 - [x] проверить grep-инвариант: в `MarksModel.swift` только `Foundation` + `Observation`
 - [x] прогнать тесты — зелено до Task 5
 
+⚠️ Доработано на ревью (round 2–3), итоговое поведение отличается от формулировок выше:
+чтение `mapUrl` вынесено в `loadMapUrl(_:)` и зовётся не только из `rebind`, но и из каждого
+`refreshDeviceState()` **безусловно** (гард — только флаг `isLoadingMapUrl`), `""` нормализуется в `nil`,
+а пересчёт `mapReadiness` делается лишь при реально изменившейся строке гонки; задача переименована
+`mapReadinessTask` → `mapUrlTask`. Добавлены флаги `bindingsLoading`/`checkpointsLoading`/`deviceStatePolled`
+и продовый вход `readinessCard(...)` поверх `readiness(...)` (гейт `readinessCardVisible`).
+
 ### Task 5: `ReadinessCard` в `MarksView` и проводка вкладки
 
 **Files:**
@@ -425,6 +484,11 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 - [x] тестов на вьюху нет (конвенция проекта — UI-тестов нет; не автоматизируется); собрать проект и
       прогнать сюиту — зелено до Task 6
 
+⚠️ Уточнено на ревью (round 2): подавления мигания в ветке вьюхи не осталось — вьюха вызывает
+`model?.readinessCard(...)` и просто не рисует ничего на `nil`; условие живёт в модели и ядре.
+Также `.refreshable` и действие `.refresh` доопрашивают устройство (`refreshDeviceState()` после
+`refreshAll()`) — иначе pull-to-refresh не подхватывал изменившийся геостатус.
+
 ### Task 6: Удалить `MarksEmptyLadder` и `marksEmptyState`
 
 **Files:**
@@ -456,15 +520,16 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 ### Task 7: Verify acceptance criteria
 
 - [x] все семь пунктов из таблицы Overview реализованы и показываются (`readinessItems` строит
-      `team`/`chips`/`location`/`legend`/`map`/`clock`/`power`; `MarksView.swift:473-489` рендерит)
+      `team`/`chips`/`location`/`legend`/`map`/`clock`/`power`; `MarksView.swift:478-489` рендерит)
 - [x] пункт карты отсутствует на гонке без `mapUrl`; пункт энергосбережения отсутствует при
       выключенном Low Power Mode (`mapItem`/`powerItem` возвращают `nil`; тесты
       `noMapUrl_hidesMapItem`, `lowPowerModeOff_hidesPowerItem`)
 - [x] чек-лист исчезает после первого взятия КП (`tiles.isEmpty == false`) и не мигает на холодном
-      старте (`marksLoading`) — ветка `MarksView.swift:473`, guard `!model.marksLoading` на `:476`
+      старте — ветка `MarksView.swift:478`, гейт из пяти сигналов в `readinessCardVisible(...)`,
+      вьюха просто не рисует ничего на `readinessCard(...) == nil` (`:482`)
 - [x] порядок пунктов не меняется при смене статусов (сортировок нет ни в ядре, ни во вьюхе; тест
       `orderIsStableRegardlessOfStatuses`)
-- [x] `blocked` только у `team` и `chips` (три вхождения `status: .blocked` — все в
+- [x] `blocked` только у `team` и `chips` (четыре вхождения `status: .blocked` — все в
       `teamItem`/`chipsItem`; тест `blockedOnlyForTeamAndChips`)
 - [x] grep-инварианты целы (прогнаны буквально):
       `grep -rn "import" kolco24/Core/Readiness/` → одна строка `import Foundation`;
@@ -490,7 +555,7 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 - [x] отметить в `CLAUDE.md` («Removed features stay removed»), что лестница `MarksEmpty` заменена
       чек-листом готовности и возврату не подлежит
 - [ ] переместить план в `docs/plans/completed/`
-- [x] открыть PR (отложено — внешнее действие, подтверждает пользователь)
+- [ ] открыть PR (внешнее действие — подтверждает пользователь)
 
 ## Post-Completion
 

@@ -39,6 +39,22 @@ struct ReadinessChecklistTests {
         )
     }
 
+    /// «Всё плохо»: каждый пункт в худшем из возможных для него статусов и ни один не скрыт —
+    /// общая фикстура для проверок порядка, множества `blocked` и худшего статуса сводки.
+    private var worstInput: ReadinessInput {
+        input(
+            hasTeam: false,
+            teamTitle: "",
+            memberCount: 0,
+            boundCount: 0,
+            locationAuthorization: .denied,
+            checkpointCount: 0,
+            map: .missing,
+            clock: .noSync,
+            lowPowerMode: true
+        )
+    }
+
     private func item(_ items: [ReadinessItem], _ id: ReadinessItemId) -> ReadinessItem? {
         items.first { $0.id == id }
     }
@@ -52,6 +68,8 @@ struct ReadinessChecklistTests {
         #expect(item(items, .team)?.action == .chooseTeam)
         #expect(item(items, .chips)?.status == .blocked)
         #expect(item(items, .chips)?.detail == "Сначала выберите команду")
+        // Действия у `chips` нет намеренно: привязка до выбора команды — тупик, CTA несёт строка `team`.
+        #expect(item(items, .chips)?.action == nil)
     }
 
     @Test func teamSelected_showsTeamTitleAsDetail() {
@@ -77,10 +95,20 @@ struct ReadinessChecklistTests {
         #expect(item(items, .chips)?.detail == "4 из 4")
     }
 
-    @Test func emptyRoster_countsAsDone() {
+    /// Пустой ростер — НЕ «готово»: `ScanModel.process` отбивает скан при пустом составе, поэтому
+    /// зелёная галочка обещала бы невозможное. Блокируем с CTA «обновить данные».
+    @Test func emptyRoster_blocksChipsWithRefresh() {
         let items = readinessItems(input(memberCount: 0, boundCount: 0))
 
-        #expect(item(items, .chips)?.status == .done)
+        let chips = item(items, .chips)
+        #expect(chips?.status == .blocked)
+        #expect(chips?.title == "Состав команды не загружен")
+        #expect(chips?.action == .refresh)
+    }
+
+    /// Привязок больше, чем слотов ростера (устаревшая запись удалённого участника) — всё равно `done`.
+    @Test func boundCountAboveMemberCount_isDone() {
+        #expect(item(readinessItems(input(memberCount: 2, boundCount: 3)), .chips)?.status == .done)
     }
 
     // MARK: - Геолокация
@@ -144,7 +172,10 @@ struct ReadinessChecklistTests {
 
         let power = item(items, .power)
         #expect(power?.status == .warning)
-        #expect(power?.action == .openSettings)
+        // Действия нет: `app-settings:` ведёт на страницу приложения, а Low Power Mode живёт в
+        // Настройках → Аккумулятор, публичного URL туда нет — стрелка была бы тупиком.
+        #expect(power?.action == nil)
+        #expect(power?.detail.contains("Аккумулятор") == true)
     }
 
     // MARK: - Часы и легенда
@@ -190,34 +221,71 @@ struct ReadinessChecklistTests {
     }
 
     @Test func orderIsStableRegardlessOfStatuses() {
-        let worst = readinessItems(input(
-            hasTeam: false,
-            teamTitle: "",
-            memberCount: 0,
-            boundCount: 0,
-            locationAuthorization: .denied,
-            checkpointCount: 0,
-            map: .missing,
-            clock: .noSync,
-            lowPowerMode: true
-        ))
+        let worst = readinessItems(worstInput)
 
         #expect(worst.map(\.id) == [.team, .chips, .location, .legend, .map, .clock, .power])
     }
 
     @Test func blockedOnlyForTeamAndChips() {
-        let worst = readinessItems(input(
-            hasTeam: false,
-            teamTitle: "",
-            memberCount: 0,
-            boundCount: 0,
-            locationAuthorization: .denied,
-            checkpointCount: 0,
-            map: .missing,
-            clock: .noSync,
-            lowPowerMode: true
-        ))
+        let worst = readinessItems(worstInput)
 
         #expect(worst.filter { $0.status == .blocked }.map(\.id) == [.team, .chips])
+    }
+
+    // MARK: - Сводка шапки (`readinessSummary`)
+
+    @Test func summary_countsDoneAgainstArrayLength() {
+        let summary = readinessSummary(readinessItems(input(map: .ready, lowPowerMode: true)))
+
+        #expect(summary.total == 7)          // знаменатель — длина массива, не константа 7
+        #expect(summary.done == 6)           // всё, кроме энергосбережения
+        #expect(summary.allDone == false)
+    }
+
+    @Test func summary_worstStatusPrefersBlockedOverWarning() {
+        let blocked = readinessSummary(readinessItems(worstInput))
+        let warning = readinessSummary(readinessItems(input(checkpointCount: 0)))
+        let good = readinessSummary(readinessItems(input(map: .notApplicable)))
+
+        #expect(blocked.worst == .blocked)
+        #expect(warning.worst == .warning)
+        #expect(good.worst == .done)
+    }
+
+    @Test func summary_allDoneCollapsesOnlyWhenEveryItemIsDone() {
+        #expect(readinessSummary(readinessItems(input(map: .notApplicable))).allDone == true)
+        #expect(readinessSummary(readinessItems(input(map: .missing))).allDone == false)
+        // Пустой массив (в UI недостижим) не считается готовностью — сворачивать нечего.
+        #expect(readinessSummary([]).allDone == false)
+        #expect(readinessSummary([]).worst == .done)
+    }
+
+    // MARK: - Гейт первой отрисовки
+
+    /// Карточку прячет ЛЮБОЙ не приехавший источник по отдельности — в частности снимок привязок,
+    /// даже когда взятия уже эмитировали (гейт только по взятиям давал бы красное «0 из N»).
+    @Test func cardVisible_hiddenUntilEverySourceArrived() {
+        #expect(readinessCardVisible(marksLoading: false, bindingsLoading: false,
+                                     checkpointsLoading: false, deviceStatePolled: true,
+                                     mapUrlResolved: true) == true)
+        // Взятия пришли, привязки — ещё нет: именно этот кадр мигал красным.
+        #expect(readinessCardVisible(marksLoading: false, bindingsLoading: true,
+                                     checkpointsLoading: false, deviceStatePolled: true,
+                                     mapUrlResolved: true) == false)
+        #expect(readinessCardVisible(marksLoading: true, bindingsLoading: false,
+                                     checkpointsLoading: false, deviceStatePolled: true,
+                                     mapUrlResolved: true) == false)
+        #expect(readinessCardVisible(marksLoading: false, bindingsLoading: false,
+                                     checkpointsLoading: true, deviceStatePolled: true,
+                                     mapUrlResolved: true) == false)
+        // До первого опроса устройства поля держат дефолты — зелёная «Геолокация разрешена» была бы ложью.
+        #expect(readinessCardVisible(marksLoading: false, bindingsLoading: false,
+                                     checkpointsLoading: false, deviceStatePolled: false,
+                                     mapUrlResolved: true) == false)
+        // `mapUrl` ещё не прочитан: без этого сигнала карточка сворачивалась в зелёное «Всё готово к
+        // старту» и через миг разворачивалась строкой «Карта не скачана».
+        #expect(readinessCardVisible(marksLoading: false, bindingsLoading: false,
+                                     checkpointsLoading: false, deviceStatePolled: true,
+                                     mapUrlResolved: false) == false)
     }
 }

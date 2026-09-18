@@ -7,7 +7,9 @@
 //
 //  Вся логика статусов, скрытия пунктов и русских текстов живёт здесь: вьюха ничего не
 //  ветвит и не дублирует, а производные шапки (счётчик «N / M», худший статус) считает из
-//  самого массива — скрытые пункты меняют его длину.
+//  самого массива — скрытые пункты меняют его длину. Единственное исключение — свёрнутая
+//  строка полной готовности (`ReadinessCard.readyRow`): у неё нет своего `ReadinessItemId`,
+//  поэтому её текст остался во вьюхе.
 //
 //  Порядок пунктов фиксирован и **не** сортируется по статусу: прыгающие строки хуже одного
 //  пункта ниже по списку.
@@ -72,13 +74,8 @@ enum MapReadiness: Equatable {
     case ready
 }
 
-/// Трёхзначный геостатус — в отличие от bool `hasLocationAccess`, который схлопывает
-/// `.notDetermined` и `.denied` в `false` и потому всегда выбрасывал бы в Настройки.
-enum LocationAuthorization: Equatable {
-    case notDetermined
-    case denied
-    case granted
-}
+// `LocationAuthorization` (вход строки геодоступа) живёт в `Core/Track/CurrentLocation` —
+// это общий тип платформенной способности, а не часть чек-листа: его отдаёт `Location/`.
 
 /// Снимок входов чек-листа: всё, что нужно для построения массива.
 struct ReadinessInput {
@@ -147,14 +144,23 @@ private func chipsItem(_ input: ReadinessInput) -> ReadinessItem {
             action: nil
         )
     }
-    if input.memberCount == 0 || input.boundCount >= input.memberCount {
+    // Пустой ростер — НЕ «готово»: `ScanModel.process` жёстко отбивает скан при пустом составе
+    // («команда не выбрана»), так что зелёная галочка здесь обещала бы невозможное.
+    guard input.memberCount > 0 else {
+        return ReadinessItem(
+            id: .chips,
+            status: .blocked,
+            title: "Состав команды не загружен",
+            detail: "Без участников отметка не сработает — обновите данные",
+            action: .refresh
+        )
+    }
+    if input.boundCount >= input.memberCount {
         return ReadinessItem(
             id: .chips,
             status: .done,
             title: "Чипы привязаны",
-            detail: input.memberCount == 0
-                ? "В команде нет участников"
-                : "\(input.boundCount) из \(input.memberCount)",
+            detail: "\(input.boundCount) из \(input.memberCount)",
             action: .bindChips
         )
     }
@@ -276,13 +282,66 @@ private func clockItem(_ input: ReadinessInput) -> ReadinessItem {
     }
 }
 
+// Действия нет намеренно: `app-settings:` открывает страницу САМОГО приложения (геодоступ, камера),
+// а Low Power Mode живёт в Настройках → Аккумулятор, куда публичного URL у iOS нет. Стрелка вела бы
+// в тупик, поэтому пункт информационный — как `clock`, — а путь назван прямо в detail.
 private func powerItem(_ input: ReadinessInput) -> ReadinessItem? {
     guard input.lowPowerMode else { return nil }
     return ReadinessItem(
         id: .power,
         status: .warning,
         title: "Включено энергосбережение",
-        detail: "Фоновая запись трека может прерываться — выключите в Настройках",
-        action: .openSettings
+        detail: "Фоновая запись трека может прерываться — выключите в Настройках → Аккумулятор",
+        action: nil
     )
+}
+
+// MARK: - Производные шапки карточки
+
+/// Сводка по массиву для шапки: счётчик «N / M», худший статус (цвет точки и полоски) и признак
+/// полной готовности (карточка сворачивается в одну зелёную строку). Живёт здесь, а не во вьюхе:
+/// это логика (приоритет `blocked` > `warning` > `done`), а не вёрстка, и она покрывается таблицей.
+struct ReadinessSummary: Equatable {
+    let done: Int
+    let total: Int
+    let worst: ReadinessStatus
+    let allDone: Bool
+}
+
+func readinessSummary(_ items: [ReadinessItem]) -> ReadinessSummary {
+    let done = items.filter { $0.status == .done }.count
+    let worst: ReadinessStatus
+    if items.contains(where: { $0.status == .blocked }) {
+        worst = .blocked
+    } else if items.contains(where: { $0.status == .warning }) {
+        worst = .warning
+    } else {
+        worst = .done
+    }
+    return ReadinessSummary(
+        done: done,
+        total: items.count,
+        worst: worst,
+        // Пустой массив — не «всё готово»: сворачивать в зелёную строку нечего.
+        allDone: !items.isEmpty && done == items.count
+    )
+}
+
+// MARK: - Гейт первой отрисовки
+
+/// Можно ли уже рисовать карточку. Карточка читает ПЯТЬ независимых асинхронных источников: три
+/// observation'а (взятия, привязки, КП гонки), синхронный опрос устройства и одиночное чтение
+/// `races.map_url` из БД. Порядка между ними нет, поэтому гейт по части источников пропускал бы кадр
+/// с неполным снимком — красное «Чипы привязаны не всем · 0 из N» у полностью привязанной команды или
+/// ложно-зелёное «Всё готово к старту», которое через миг разворачивается строкой «Карта не скачана».
+/// Чистая функция (а не `if` в модели), чтобы проверяться таблицей: каждый «ещё не пришёл» по
+/// отдельности обязан прятать карточку.
+func readinessCardVisible(
+    marksLoading: Bool,
+    bindingsLoading: Bool,
+    checkpointsLoading: Bool,
+    deviceStatePolled: Bool,
+    mapUrlResolved: Bool
+) -> Bool {
+    !marksLoading && !bindingsLoading && !checkpointsLoading && deviceStatePolled && mapUrlResolved
 }

@@ -119,6 +119,10 @@ server 200.
 - **Upload drains**: `actor` + `inFlight` tryLock, shared generic `drainUploadLoop` (batch 500,
   `accepted ∩ batch` empty → `.error` anti-loop), Local then Cloud independent, outcome precedence
   `error > offline > ok > nil`.
+- **Device-state polling**: geo authorization, Low Power Mode and map-file-as-flag are polled synchronously
+  (`MarksModel.refreshDeviceState`, `MapModel.refreshAvailability`), never observed — wire the call from
+  `.task`, `onAppear` **and** `scenePhase == .active` (a tab switch changes neither). `hasLocationAccess`
+  (Bool, `TrackRecorder` TOCTOU) and `locationAuthorization` (three-valued, checklist) both stay — don't collapse.
 - Stores/repos are `struct`s (no protocols/fakes for the DB); complex DAO SQL is transcribed verbatim from
   Kotlin for line-by-line checkability.
 
