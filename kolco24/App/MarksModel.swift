@@ -16,6 +16,14 @@
 //  первую порцию для команды — подавляет мигание ложного empty-состояния на холодном старте. При
 //  отсутствии команды загрузки нет (сразу `chooseTeam`).
 //
+//  Сверх наблюдений модель собирает чек-лист готовности к старту (`readiness(team:members:clock:)`,
+//  ядро — `Core/Readiness/ReadinessChecklist`). Геостатус, Low Power Mode и наличие файла подложки —
+//  **синхронный опрос** замыканий `env` (`refreshDeviceState()`), а не observation: они меняются вне
+//  приложения (Настройки iOS) или на другой вкладке, БД о них ничего не знает. `mapUrl` гонки читается
+//  из БД один раз в `rebind`, а вот существование файла перечитывается на каждом опросе — `rebind`
+//  рано выходит на неизменённой паре, а вкладки в `TabView` живут вечно, иначе пункт застрял бы в
+//  «карта не скачана» после возврата с вкладки «Карта» (тот же приём, что `MapModel.refreshAvailability`).
+//
 //  `import SwiftUI` запрещён (grep-инвариант) — хватает `Observation`. Stale-guard (порт
 //  `safeMarks`/`safeCheckpoints` из `MainActivity.kt`): между отменой старого observation и первой
 //  эмиссией нового массивы очищаются синхронно, чтобы взятия прежней команды не участвовали в derived.
@@ -40,11 +48,24 @@ final class MarksModel {
     /// сразу `false` (нечего грузить — показываем `chooseTeam`).
     private(set) var marksLoading: Bool = false
 
+    /// Доступность оффлайн-подложки для чек-листа: `.notApplicable`, пока у гонки нет `mapUrl`.
+    /// Пересчитывается из `mapUrl` (БД, один раз в `rebind`) + `env.mapFileExists` (каждый опрос).
+    private(set) var mapReadiness: MapReadiness = .notApplicable
+    /// Трёхзначный геостатус последнего опроса устройства.
+    private(set) var locationAuth: LocationAuthorization = .granted
+    /// «Дана примерная локация» последнего опроса устройства.
+    private(set) var isReducedAccuracy: Bool = false
+    /// Low Power Mode последнего опроса устройства.
+    private(set) var lowPowerMode: Bool = false
+
     @ObservationIgnored private let env: AppEnvironment
     @ObservationIgnored private var marksTask: Task<Void, Never>?
     @ObservationIgnored private var checkpointsTask: Task<Void, Never>?
     @ObservationIgnored private var legendMetaTask: Task<Void, Never>?
     @ObservationIgnored private var bindingsTask: Task<Void, Never>?
+    @ObservationIgnored private var mapReadinessTask: Task<Void, Never>?
+    /// `mapUrl` текущей гонки (one-shot чтение в `rebind`); пусто/`nil` → пункта карты нет.
+    @ObservationIgnored private var mapUrl: String?
     /// Команда/гонка активных наблюдений — для идемпотентности `rebind` на той же паре.
     @ObservationIgnored private var boundTeamId: Int?
     @ObservationIgnored private var boundRaceId: Int?
@@ -58,6 +79,7 @@ final class MarksModel {
         checkpointsTask?.cancel()
         legendMetaTask?.cancel()
         bindingsTask?.cancel()
+        mapReadinessTask?.cancel()
     }
 
     // MARK: - Жизненный цикл
@@ -74,10 +96,14 @@ final class MarksModel {
         checkpointsTask?.cancel()
         legendMetaTask?.cancel()
         bindingsTask?.cancel()
+        mapReadinessTask?.cancel()
         marks = []
         checkpoints = []
         legendMeta = nil
         bindings = [:]
+        // Stale-guard чек-листа: подложка прежней гонки не должна дожить до эмиссии новой.
+        mapUrl = nil
+        mapReadiness = .notApplicable
         marksLoading = teamId != nil
         boundTeamId = teamId
         boundRaceId = raceId
@@ -101,6 +127,16 @@ final class MarksModel {
                         self.legendMeta = meta
                     }
                 } catch {}
+            }
+
+            // `mapUrl` — не observation, а one-shot чтение (образец `MapModel.refreshAvailability`):
+            // колонка правится только синком, а пункт чек-листа всё равно перечитывает файл опросом.
+            mapReadinessTask = Task { [weak self] in
+                guard let self else { return }
+                let race = (try? await self.env.raceStore.getById(raceId)) ?? nil
+                guard !Task.isCancelled, self.boundRaceId == raceId else { return }
+                self.mapUrl = race?.mapUrl
+                self.recomputeMapReadiness()
             }
         }
 
@@ -209,6 +245,53 @@ final class MarksModel {
             hasTeam: hasTeam,
             memberCount: members.count,
             boundCount: boundCount(members: members)
+        )
+    }
+
+    // MARK: - Чек-лист готовности к старту
+
+    /// Синхронный опрос устройства: геостатус, точность, Low Power Mode и наличие файла подложки.
+    /// Зовётся вьюхой из `.task`, `onAppear` (возврат с соседней вкладки не меняет `scenePhase`) и на
+    /// `scenePhase == .active` (возврат из Настроек iOS). Все четыре замыкания `env` синхронные и
+    /// дешёвые — ни `await`, ни observation здесь не нужны.
+    func refreshDeviceState() {
+        locationAuth = env.locationAuthorization()
+        isReducedAccuracy = env.isReducedAccuracy()
+        lowPowerMode = env.isLowPowerMode()
+        recomputeMapReadiness()
+    }
+
+    /// Пункт карты: нет `mapUrl` → пункта нет вовсе; иначе файл-как-флаг с диска.
+    private func recomputeMapReadiness() {
+        guard let raceId = boundRaceId, let url = mapUrl, !url.isEmpty else {
+            mapReadiness = .notApplicable
+            return
+        }
+        mapReadiness = env.mapFileExists(raceId) ? .ready : .missing
+    }
+
+    /// Системный диалог геодоступа. Живёт здесь, а не в `AppModel`: там `env` приватен и обёртки нет,
+    /// а `MarksModel` граф и так держит.
+    func requestLocationAccess() {
+        env.requestLocationAuthorization()
+    }
+
+    /// Чек-лист готовности: снимок наблюдений (привязки, КП) + опрошенное состояние устройства +
+    /// переданные вьюхой команда/ростер/статус часов. Вся логика статусов — в `readinessItems`.
+    func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [ReadinessItem] {
+        readinessItems(
+            ReadinessInput(
+                hasTeam: team != nil,
+                teamTitle: team?.teamname ?? "",
+                memberCount: members.count,
+                boundCount: boundCount(members: members),
+                locationAuthorization: locationAuth,
+                isReducedAccuracy: isReducedAccuracy,
+                checkpointCount: checkpoints.count,
+                map: mapReadiness,
+                clock: clock,
+                lowPowerMode: lowPowerMode
+            )
         )
     }
 }

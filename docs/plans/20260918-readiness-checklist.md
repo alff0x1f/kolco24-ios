@@ -363,34 +363,34 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 - Modify: `kolco24/App/MarksModel.swift`
 - Create: `kolco24Tests/App/MarksModelReadinessTests.swift`
 
-- [ ] добавить `private(set) var mapReadiness: MapReadiness = .notApplicable` и
+- [x] добавить `private(set) var mapReadiness: MapReadiness = .notApplicable` и
       `@ObservationIgnored private var mapReadinessTask: Task<Void, Never>?`; отмена в `deinit`
-- [ ] в `rebind(teamId:raceId:)` запустить чтение `mapUrl` со stale-guard: синхронный сброс `mapUrl`
+- [x] в `rebind(teamId:raceId:)` запустить чтение `mapUrl` со stale-guard: синхронный сброс `mapUrl`
       и `mapReadiness = .notApplicable` **до** `await`, `raceStore.getById(raceId)`, проверка
       `!Task.isCancelled && boundRaceId == raceId`, сохранение `mapUrl` в `@ObservationIgnored`-поле
       (образец — `MapModel.refreshAvailability`, `MapModel.swift:166`)
-- [ ] добавить `private(set) var locationAuth`, `isReducedAccuracy`, `lowPowerMode` и синхронный
+- [x] добавить `private(set) var locationAuth`, `isReducedAccuracy`, `lowPowerMode` и синхронный
       `func refreshDeviceState()`, опрашивающий замыкания `env`
-- [ ] **проверку наличия файла карты положить внутрь `refreshDeviceState()`**, а не только в `rebind`:
+- [x] **проверку наличия файла карты положить внутрь `refreshDeviceState()`**, а не только в `rebind`:
       `mapUrl` пуст → `.notApplicable`, иначе `env.mapFileExists(raceId)` → `.ready`/`.missing`.
       `rebind` рано выходит на неизменённой паре (`MarksModel.swift:70`), а вкладка живёт вечно —
       иначе пункт застрянет в «не скачана» после возврата с вкладки «Карта»
-- [ ] добавить `func requestLocationAccess()`, зовущий `env.requestLocationAuthorization()` —
+- [x] добавить `func requestLocationAccess()`, зовущий `env.requestLocationAuthorization()` —
       `AppModel.env` приватен (`AppModel.swift:64`), вьюха не может дотянуться иначе
-- [ ] добавить `func readiness(team:members:clock:) -> [ReadinessItem]`, собирающий `ReadinessInput` и
+- [x] добавить `func readiness(team:members:clock:) -> [ReadinessItem]`, собирающий `ReadinessInput` и
       вызывающий `readinessItems` (рядом с существующим `emptyState`)
-- [ ] обновить шапку-комментарий файла: новые сигналы и почему опрос, а не observation
-- [ ] написать тесты `mapReadiness` над `AppDatabase.makeInMemory()`: гонка с `mapUrl` и
+- [x] обновить шапку-комментарий файла: новые сигналы и почему опрос, а не observation
+- [x] написать тесты `mapReadiness` над `AppDatabase.makeInMemory()`: гонка с `mapUrl` и
       `mapFileExists == false` → `.missing`; та же с `true` → `.ready`; гонка без `mapUrl` →
       `.notApplicable`
-- [ ] написать тест stale-guard: после `rebind` на другую гонку `mapReadiness` сброшен синхронно, до
+- [x] написать тест stale-guard: после `rebind` на другую гонку `mapReadiness` сброшен синхронно, до
       первой эмиссии новой гонки
-- [ ] написать тест `refreshDeviceState`: подменённые замыкания `env` попадают в опубликованные
+- [x] написать тест `refreshDeviceState`: подменённые замыкания `env` попадают в опубликованные
       свойства, а те — в `readiness(...)`
-- [ ] написать тест перечитывания карты: `mapFileExists` возвращает `false` → `.missing`; замыкание
+- [x] написать тест перечитывания карты: `mapFileExists` возвращает `false` → `.missing`; замыкание
       начинает возвращать `true` → после `refreshDeviceState()` (без `rebind`) стало `.ready`
-- [ ] проверить grep-инвариант: в `MarksModel.swift` только `Foundation` + `Observation`
-- [ ] прогнать тесты — зелено до Task 5
+- [x] проверить grep-инвариант: в `MarksModel.swift` только `Foundation` + `Observation`
+- [x] прогнать тесты — зелено до Task 5
 
 ### Task 5: `ReadinessCard` в `MarksView` и проводка вкладки
 
