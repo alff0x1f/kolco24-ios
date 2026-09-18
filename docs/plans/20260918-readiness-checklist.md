@@ -324,17 +324,17 @@ func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [R
 **Files:**
 - Modify: `kolco24/Location/CoreLocationTrackEngine.swift`
 
-- [ ] добавить `func locationAuthorization() -> LocationAuthorization` рядом с `hasLocationAccess()`
+- [x] добавить `func locationAuthorization() -> LocationAuthorization` рядом с `hasLocationAccess()`
       (~строка 146), читающий `manager.authorizationStatus` с удерживаемого менеджера:
       `.notDetermined` → `.notDetermined`; `.authorizedWhenInUse`/`.authorizedAlways` → `.granted`;
       `.denied`/`.restricted`/default → `.denied`
-- [ ] **не удалять** `hasLocationAccess()` — его использует `TrackRecorder` для TOCTOU-проверки
-- [ ] дописать doc-комментарий в стиле соседних хелперов (почему менеджер удерживаемый, а не
+- [x] **не удалять** `hasLocationAccess()` — его использует `TrackRecorder` для TOCTOU-проверки
+- [x] дописать doc-комментарий в стиле соседних хелперов (почему менеджер удерживаемый, а не
       одноразовый в замыкании)
-- [ ] проверить grep-инвариант: `CoreLocation` по-прежнему только в `Location/`
-- [ ] тестов нет — платформенный адаптер device-only (конвенция проекта); поведение покрывается через
+- [x] проверить grep-инвариант: `CoreLocation` по-прежнему только в `Location/`
+- [x] тестов нет — платформенный адаптер device-only (конвенция проекта); поведение покрывается через
       чистый seam в Task 1 и через подмену замыкания в Task 4
-- [ ] собрать проект — зелено до Task 3
+- [x] собрать проект — зелено до Task 3
 
 ### Task 3: Новые инжекты в `AppEnvironment`
 
