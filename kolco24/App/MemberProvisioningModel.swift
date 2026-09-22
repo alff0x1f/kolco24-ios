@@ -44,7 +44,8 @@ final class MemberProvisioningModel: Identifiable {
     /// Стабильный id (навигация/`Identifiable`).
     nonisolated let id = UUID()
 
-    /// Браслет, записанный в этой сессии (лента пилюль «№101 · A1B2»). `id` — UID (дедуп ленты).
+    /// Пара «браслет → номер»: записанный в этой сессии браслет (лента пилюль «№101 · A1B2»,
+    /// `id` — UID, дедуп ленты) либо номер, введённый для браслета (`lastRequested`).
     struct FreshBracelet: Equatable, Identifiable {
         let uid: String
         let number: Int
@@ -84,7 +85,7 @@ final class MemberProvisioningModel: Identifiable {
     @ObservationIgnored private var poolUids: Set<String> = []
     /// Последний введённый номер для UID (префилл при повторном `needsNumber` того же браслета после
     /// сбоя bind — чтобы не подставить устаревший автоинкремент).
-    @ObservationIgnored private var lastRequested: (uid: String, number: Int)?
+    @ObservationIgnored private var lastRequested: FreshBracelet?
     /// UID последнего успешно записанного браслета. Сканер после каждого чтения `restartPolling()` —
     /// браслет, оставленный на телефоне, детектится снова, как только кончится дебаунс; без этого
     /// фильтра он бы пере-привязался и пере-записался (прерванная перезапись зануляет заголовок).
@@ -234,7 +235,7 @@ final class MemberProvisioningModel: Identifiable {
     /// Возобновляет сканирование (тап 2 требует открытой шторки).
     func confirmNumber(_ n: Int) {
         guard case let .needsNumber(uid) = provisionState, n >= 1 else { return }
-        lastRequested = (uid, n)
+        lastRequested = FreshBracelet(uid: uid, number: n)
         startBind(uid: uid, number: n)
         resumeScanning()
     }
@@ -273,7 +274,7 @@ final class MemberProvisioningModel: Identifiable {
                 for try await tags in observation {
                     guard let self, !Task.isCancelled else { return }
                     self.poolUids = Set(tags.map(\.nfcUid))
-                    self.poolSize = tags.count
+                    self.poolSize = self.poolUids.count
                     self.loaded = true
                 }
             } catch {}
@@ -315,10 +316,10 @@ final class MemberProvisioningModel: Identifiable {
         lastWrittenUid = nil
         writeHint = nil
         if reading.readFailed {
-            provisionState = .failed(reason: "Не удалось прочитать, приложите снова")
+            provisionState = .failed(reason: ProvisionMessage.readFailedTapAgain)
             feedback.play(.failure)
         } else if reading.code != nil {
-            provisionState = .failed(reason: "Это чип КП, а не браслет")
+            provisionState = .failed(reason: ProvisionMessage.kpChipNotBracelet)
             feedback.play(.failure)
         } else if isKnown(uid) {
             startBind(uid: uid, number: nil)
@@ -358,7 +359,7 @@ final class MemberProvisioningModel: Identifiable {
                 let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: code)
                 scanner?.setPendingWrite(uid: uid, record: record)
                 provisionState = .waitingForWrite(uid: uid, number: response.number)
-                writeHint = memberWriteAgainHint
+                writeHint = ProvisionMessage.memberWriteAgainHint
             } catch {
                 provisionState = .failed(reason: "Неверный код от сервера")
                 feedback.play(.failure)
@@ -392,8 +393,12 @@ final class MemberProvisioningModel: Identifiable {
             writeHint = nil
             provisionState = .failed(reason: reason)
             feedback.play(.failure)
+        case .readFailed:
+            // Pre-write чтение не удалось — ничего не записано, pending-write сохранён.
+            writeHint = ProvisionMessage.readFailedTapAgain
+            feedback.play(.failure)
         case .failed, .unsupported, .none:
-            writeHint = "Не удалось записать, приложите снова"
+            writeHint = ProvisionMessage.writeFailedTapAgain
             feedback.play(.failure)
         }
     }

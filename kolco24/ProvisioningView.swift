@@ -184,7 +184,7 @@ struct ProvisioningView: View {
                      title: "Привязка на сервере…", subtitle: nil, spinning: true)
         case .waitingForWrite:
             scanCard(icon: "square.and.arrow.down", tint: Color.kolcoOrange,
-                     title: model.writeHint ?? "Приложите чип ещё раз",
+                     title: model.writeHint ?? ProvisionMessage.kpWriteAgainHint,
                      subtitle: "Тап 2 — запись кода на чип")
         case let .success(number):
             scanCard(icon: "checkmark.circle.fill", tint: Color.good,

@@ -661,6 +661,22 @@ struct MemberProvisioningModelTests {
         model.stop()
     }
 
+    @Test func writeTap_preWriteReadFailed_readHint_keepsPending() async throws {
+        let env = try makeEnv()
+        try await seedPool(env, [("U1", 101)])
+        let feedback = RecordingFeedback()
+        let (model, scanner) = await started(env: env, bind: MemberBindStub(ok(number: 101)), feedback: feedback)
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { isWaitingForWrite(model) }
+        scanner.emit(reading(uid: "U1", writeResult: .readFailed))
+        await waitUntil { model.writeHint == "Не удалось прочитать, приложите снова" }
+        #expect(model.provisionState == .waitingForWrite(uid: "U1", number: 101))
+        #expect(scanner.pendingUid == "U1")
+        #expect(feedback.failureCount == 1)
+        model.stop()
+    }
+
     @Test(arguments: [ChipWriteResult.unsupported, nil])
     func writeTap_unsupportedOrNoResult_keepsPending_noSuccess(result: ChipWriteResult?) async throws {
         let env = try makeEnv()

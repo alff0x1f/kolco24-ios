@@ -530,4 +530,10 @@ struct ChipRecordTests {
         let pending = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
         #expect(writeGuardDecision(currentPages: nil, record: pending) == .readFailed)
     }
+
+    @Test func wrongChipTypeMessage_perType() {
+        #expect(wrongChipTypeMessage(type: CHIP_TYPE_KP) == "Это чип КП, а не браслет")
+        #expect(wrongChipTypeMessage(type: CHIP_TYPE_PARTICIPANT) == "Это браслет участника")
+        #expect(wrongChipTypeMessage(type: 0x7) == "Чип другого типа")
+    }
 }

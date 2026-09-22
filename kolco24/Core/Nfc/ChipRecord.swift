@@ -82,17 +82,23 @@ func buildChipRecord(type: Int, code: Data) throws -> Data {
 /// ``CHIP_FORMAT_VERSION`` (guard от несовместимости вперёд) или ниббл типа не
 /// равен [type]. Хвостовой паддинг допускается. Чистая.
 func parseChipRecord(pages: Data, type expectedType: Int) -> Data? {
-    if pages.count < CHIP_RECORD_BYTES { return nil }
+    guard chipRecordType(pages) == expectedType else { return nil }
     let bytes = [UInt8](pages)
+    return Data(bytes[PAGE_SIZE..<(PAGE_SIZE + CHIP_CODE_BYTES)])
+}
+
+/// Ниббл типа валидной K24-записи в [bytes] (длина ≥ ``CHIP_RECORD_BYTES``, магик, версия
+/// ``CHIP_FORMAT_VERSION``), иначе `nil`. Общая проверка заголовка для ``parseChipRecord(pages:type:)``,
+/// ``writeGuardDecision(currentPages:record:)`` и ``writeRecord``. Чистая.
+private func chipRecordType(_ data: Data) -> Int? {
+    if data.count < CHIP_RECORD_BYTES { return nil }
+    let bytes = [UInt8](data)
     for i in MAGIC.indices where bytes[i] != MAGIC[i] {
         return nil
     }
     let packed = Int(bytes[MAGIC.count])
-    let version = (packed >> 4) & 0x0F
-    let type = packed & 0x0F
-    if version != CHIP_FORMAT_VERSION { return nil }
-    if type != expectedType { return nil }
-    return Data(bytes[PAGE_SIZE..<(PAGE_SIZE + CHIP_CODE_BYTES)])
+    if (packed >> 4) & 0x0F != CHIP_FORMAT_VERSION { return nil }
+    return packed & 0x0F
 }
 
 /// Ридер КП: ``parseChipRecord(pages:type:)`` с ``CHIP_TYPE_KP`` — запись браслета
@@ -166,6 +172,10 @@ enum ChipWriteResult: Equatable {
     /// I/O-ошибка или NAK в середине записи (метку убрали, защита, чужой чип и т.п.).
     case failed(message: String)
 
+    /// Запись НЕ начиналась: pre-write чтение текущих страниц не удалось
+    /// (``ChipWriteGuard/readFailed``) — pending-write остаётся, хост просит приложить снова.
+    case readFailed
+
     /// Запись НЕ начиналась: на чипе уже K24-запись ДРУГОГО типа (КП вместо браслета или наоборот) —
     /// ``writeGuardDecision(currentPages:record:)``. Повтор бессмыслен: хост бросает текущий чип.
     case wrongType(reason: String)
@@ -184,22 +194,15 @@ enum ChipWriteGuard: Equatable {
 }
 
 /// Чистое решение guard'а: [currentPages] — результат ``readRecordPages(_:)`` (`nil` = ошибка чтения),
-/// [record] — вооружённая 20-байтовая запись. Валидная K24-запись (магик + версия) с ниббл-типом,
-/// отличным от типа [record], → `wrongType` («Это чип КП» / «Это браслет участника» / «Чип другого
-/// типа»); `nil`-страницы → `readFailed`; иначе `allow`.
+/// [record] — вооружённая 20-байтовая запись (как в ``writeRecord``). Валидная K24-запись (магик +
+/// версия) с ниббл-типом, отличным от типа [record], → `wrongType` (``wrongChipTypeMessage(type:)``);
+/// `nil`-страницы → `readFailed`; иначе `allow`.
 func writeGuardDecision(currentPages: Data?, record: Data) -> ChipWriteGuard {
+    precondition(record.count == CHIP_RECORD_BYTES, "record must be \(CHIP_RECORD_BYTES) bytes")
     guard let currentPages else { return .readFailed }
-    let recordBytes = [UInt8](record)
-    guard recordBytes.count > MAGIC.count else { return .allow }
-    let pendingType = Int(recordBytes[MAGIC.count] & 0x0F)
-    for type in 0...15 where type != pendingType {
-        if parseChipRecord(pages: currentPages, type: type) != nil {
-            switch type {
-            case CHIP_TYPE_KP: return .wrongType(reason: "Это чип КП, а не браслет")
-            case CHIP_TYPE_PARTICIPANT: return .wrongType(reason: "Это браслет участника")
-            default: return .wrongType(reason: "Чип другого типа")
-            }
-        }
+    let pendingType = [UInt8](record)[MAGIC.count] & 0x0F
+    if let onChip = chipRecordType(currentPages), onChip != Int(pendingType) {
+        return .wrongType(reason: wrongChipTypeMessage(type: onChip))
     }
     return .allow
 }
@@ -274,8 +277,9 @@ func writeRecord(_ t: NfcTransport, record: Data) -> ChipWriteResult {
         // Через `[UInt8]`: `Data` может иметь ненулевой `startIndex`.
         let recordBytes = [UInt8](record)
         let expected = Data(recordBytes[PAGE_SIZE..<CHIP_RECORD_BYTES])
-        let recordType = Int(recordBytes[MAGIC.count] & 0x0F)
-        let readBack = readRecordPages(t).flatMap { parseChipRecord(pages: $0, type: recordType) }
+        let readBack = chipRecordType(record).flatMap { recordType in
+            readRecordPages(t).flatMap { parseChipRecord(pages: $0, type: recordType) }
+        }
         if readBack == nil || readBack != expected {
             return .failed(message: "Чтение после записи не совпало")
         }

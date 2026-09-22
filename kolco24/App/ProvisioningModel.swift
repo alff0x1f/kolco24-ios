@@ -258,14 +258,14 @@ final class ProvisioningModel: Identifiable {
             // Сбой чтения: браслет с плохим контактом выглядел бы пустым чипом — bind не начинаем.
             if reading.readFailed {
                 writeHint = nil
-                provisionState = .failed(reason: "Не удалось прочитать, приложите снова")
+                provisionState = .failed(reason: ProvisionMessage.readFailedTapAgain)
                 feedback.play(.failure)
                 return
             }
             // Браслет с записанным кодом участника — не перезаписываем его записью КП.
             if reading.memberCode != nil {
                 writeHint = nil
-                provisionState = .failed(reason: "Это браслет участника")
+                provisionState = .failed(reason: ProvisionMessage.memberBracelet)
                 feedback.play(.failure)
                 return
             }
@@ -306,7 +306,7 @@ final class ProvisioningModel: Identifiable {
                 pendingWriteNumber = response.number
                 scanner?.setPendingWrite(uid: uid, record: record)
                 provisionState = .waitingForWrite(uid: uid, code: response.code)
-                writeHint = "Приложите чип ещё раз"
+                writeHint = ProvisionMessage.kpWriteAgainHint
             } catch {
                 provisionState = .failed(reason: "Неверный код от сервера")
                 feedback.play(.failure)
@@ -339,8 +339,12 @@ final class ProvisioningModel: Identifiable {
             writeHint = nil
             provisionState = .failed(reason: reason)
             feedback.play(.failure)
+        case .readFailed:
+            // Pre-write чтение не удалось — ничего не записано, pending-write сохранён.
+            writeHint = ProvisionMessage.readFailedTapAgain
+            feedback.play(.failure)
         case .failed, .unsupported, .none:
-            writeHint = "Не удалось записать, приложите снова"
+            writeHint = ProvisionMessage.writeFailedTapAgain
             feedback.play(.failure)
         }
     }

@@ -177,7 +177,7 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
             let result: ChipWriteResult
             switch writeGuardDecision(currentPages: readRecordPages(transport), record: pendingRecord) {
             case .allow: result = writeRecord(transport, record: pendingRecord)
-            case .readFailed: result = .failed(message: "Не удалось прочитать чип")
+            case .readFailed: result = .readFailed
             case let .wrongType(reason): result = .wrongType(reason: reason)
             }
             return TagReading(code: nil, uid: uid, sample: sample, writeResult: result)

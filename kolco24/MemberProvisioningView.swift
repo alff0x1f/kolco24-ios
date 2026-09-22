@@ -112,7 +112,7 @@ struct MemberProvisioningView: View {
                      subtitle: number.map { "Номер \($0)" }, spinning: true)
         case let .waitingForWrite(_, number):
             scanCard(icon: "square.and.arrow.down", tint: Color.kolcoOrange,
-                     title: model.writeHint ?? memberWriteAgainHint,
+                     title: model.writeHint ?? ProvisionMessage.memberWriteAgainHint,
                      subtitle: "Тап 2 — запись кода, участник №\(number)")
         case let .success(number):
             scanCard(icon: "checkmark.circle.fill", tint: Color.good,

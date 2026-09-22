@@ -450,4 +450,24 @@ struct ProvisioningModelTests {
         #expect(feedback.failureCount == 1)
         model.stop()
     }
+    @Test func writeTap_preWriteReadFailed_readHint_keepsPending() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5)])
+        let feedback = RecordingFeedback()
+        let model = makeModel(env: env, bind: BindStub(okResponse(code: goodCodeHex)), feedback: feedback)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { !model.checkpoints.isEmpty }
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { if case .waitingForWrite = model.provisionState { return true }; return false }
+        scanner.emit(reading(uid: "U1", writeResult: .readFailed))
+        await waitUntil { model.writeHint == "Не удалось прочитать, приложите снова" }
+        if case .waitingForWrite = model.provisionState {} else {
+            Issue.record("ожидался waitingForWrite после pre-write readFailed, получено \(model.provisionState)")
+        }
+        #expect(scanner.pendingUid == "U1")
+        #expect(feedback.failureCount == 1)
+        model.stop()
+    }
 }
