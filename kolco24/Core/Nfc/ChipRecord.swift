@@ -10,6 +10,11 @@
 //  `readChipCode`/`readChipVersion`, GET_VERSION-транзакция) не портируется —
 //  CoreNFC-адаптер будет в этапе 5.
 //
+//  Типизированный разбор: один формат `K24` несёт два типа — КП (`0x1`) и браслет
+//  участника (`0x2`). ``parseChipRecord(pages:type:)`` принимает ожидаемый тип; сырые
+//  страницы отдаёт ``readRecordPages(_:)``, так что сканер разбирает их дважды без
+//  лишнего transceive. ``writeRecord`` сверяет read-back по типу из заголовка записи.
+//
 //  Порт-ловушка знаковых байтов закрыта `HexBytes` + работой на `UInt8`/`Data`.
 //
 
@@ -30,10 +35,12 @@ let CHIP_CODE_BYTES = PAGE_SIZE * 4
 /// 24-битный магик 'K' '2' '4' (бренд Kolco24) — сентинел «это наш чип» в байтах 0..2 страницы 4.
 private let MAGIC: [UInt8] = [0x4B, 0x32, 0x34]
 
-/// Младший ниббл типа: КП (checkpoint) — единственное записываемое значение.
+/// Младший ниббл типа: КП (checkpoint). Единственный тип, который читают ридеры КП
+/// (``parseChipRecord(pages:)``, ``readRecord(_:)``).
 let CHIP_TYPE_KP = 0x1
 
-/// Младший ниббл типа: участник — зарезервировано/не используется (будущий этап).
+/// Младший ниббл типа: браслет участника — серверный секретный код, записывается из
+/// админки («Записать браслет участника»); читается через ``parseChipRecord(pages:type:)``.
 let CHIP_TYPE_PARTICIPANT = 0x2
 
 /// Старший ниббл версии формата.
@@ -71,10 +78,10 @@ func buildChipRecord(type: Int, code: Data) throws -> Data {
 }
 
 /// Разбирает сырую запись, прочитанную со страниц 4… Возвращает 16-байтовый код
-/// КП, либо `nil`, если [pages] короче нужного, магик не совпал, ниббл версии не
+/// либо `nil`, если [pages] короче нужного, магик не совпал, ниббл версии не
 /// ``CHIP_FORMAT_VERSION`` (guard от несовместимости вперёд) или ниббл типа не
-/// ``CHIP_TYPE_KP`` (ридер только для КП). Хвостовой паддинг допускается. Чистая.
-func parseChipRecord(pages: Data) -> Data? {
+/// равен [type]. Хвостовой паддинг допускается. Чистая.
+func parseChipRecord(pages: Data, type expectedType: Int) -> Data? {
     if pages.count < CHIP_RECORD_BYTES { return nil }
     let bytes = [UInt8](pages)
     for i in MAGIC.indices where bytes[i] != MAGIC[i] {
@@ -84,8 +91,14 @@ func parseChipRecord(pages: Data) -> Data? {
     let version = (packed >> 4) & 0x0F
     let type = packed & 0x0F
     if version != CHIP_FORMAT_VERSION { return nil }
-    if type != CHIP_TYPE_KP { return nil }
+    if type != expectedType { return nil }
     return Data(bytes[PAGE_SIZE..<(PAGE_SIZE + CHIP_CODE_BYTES)])
+}
+
+/// Ридер КП: ``parseChipRecord(pages:type:)`` с ``CHIP_TYPE_KP`` — запись браслета
+/// участника (тип `0x2`) отклоняется (`nil`), поведение прежнее.
+func parseChipRecord(pages: Data) -> Data? {
+    parseChipRecord(pages: pages, type: CHIP_TYPE_KP)
 }
 
 /// Uppercase hex от [code] (без разделителей) — для отображения/записи.
@@ -188,8 +201,9 @@ private func writePage(_ t: NfcTransport, page: Int, src: Data, from: Int) throw
 /// 1. инвалидировать стр. 4 нулевым заголовком (убить прежний магик до перезаписи кода),
 /// 2. записать код (стр. 5..8 = байты записи 4..19),
 /// 3. записать валидный заголовок последним (стр. 4 = байты записи 0..3).
-/// Затем читает обратно через **тот же** транспорт и возвращает `.failed`, если разобранный
-/// код не равен `record[4..19]`. Никогда не бросает.
+/// Затем читает обратно через **тот же** транспорт и возвращает `.failed`, если код,
+/// разобранный с типом из заголовка [record] (КП или браслет), не равен `record[4..19]`.
+/// Никогда не бросает.
 func writeRecord(_ t: NfcTransport, record: Data) -> ChipWriteResult {
     precondition(record.count == CHIP_RECORD_BYTES, "record must be \(CHIP_RECORD_BYTES) bytes")
     do {
@@ -210,8 +224,11 @@ func writeRecord(_ t: NfcTransport, record: Data) -> ChipWriteResult {
             return fail
         }
         // Прочитать обратно по тому же открытому соединению и сверить код.
-        let expected = Data([UInt8](record)[PAGE_SIZE..<CHIP_RECORD_BYTES])
-        let readBack = readRecord(t)
+        // Через `[UInt8]`: `Data` может иметь ненулевой `startIndex`.
+        let recordBytes = [UInt8](record)
+        let expected = Data(recordBytes[PAGE_SIZE..<CHIP_RECORD_BYTES])
+        let recordType = Int(recordBytes[MAGIC.count] & 0x0F)
+        let readBack = readRecordPages(t).flatMap { parseChipRecord(pages: $0, type: recordType) }
         if readBack == nil || readBack != expected {
             return .failed(message: "Чтение после записи не совпало")
         }
@@ -225,14 +242,13 @@ func writeRecord(_ t: NfcTransport, record: Data) -> ChipWriteResult {
     }
 }
 
-/// Читает 20-байтовую запись (стр. 4..8) через [t] и разбирает её. Пробует **FAST_READ**
+/// Читает сырые 20 байт записи (стр. 4..8) через [t] без разбора. Пробует **FAST_READ**
 /// (`0x3A 04 08`) одним transceive; трактует брошенную ошибку **или** ответ короче
 /// ``CHIP_RECORD_BYTES`` (метка может ответить на неподдержанную команду 1-байтовым NAK, не
 /// бросая) как неудачу и падает на два обычных **READ** — стр. 4 (байты 0..15) + стр. 8
 /// (первые 4 байта = байты записи 16..19). Каждый READ должен вернуть минимум ``READ_BLOCK``
-/// байт; короткий/NAK-ответ или ошибка на любом READ → `nil`. Возвращает код КП через
-/// ``parseChipRecord`` либо `nil`. Никогда не бросает.
-func readRecord(_ t: NfcTransport) -> Data? {
+/// байт; короткий/NAK-ответ или ошибка на любом READ → `nil`. Никогда не бросает.
+func readRecordPages(_ t: NfcTransport) -> Data? {
     let fast: Data?
     do {
         fast = try t.transceive(Data([CMD_FAST_READ, UInt8(HEADER_PAGE), UInt8(HEADER_PAGE + 4)]))
@@ -240,7 +256,7 @@ func readRecord(_ t: NfcTransport) -> Data? {
         fast = nil
     }
     if let fast, fast.count >= CHIP_RECORD_BYTES {
-        return parseChipRecord(pages: fast)
+        return Data([UInt8](fast)[0..<CHIP_RECORD_BYTES])
     }
     do {
         let head = try t.transceive(Data([CMD_READ, UInt8(HEADER_PAGE)]))
@@ -251,8 +267,14 @@ func readRecord(_ t: NfcTransport) -> Data? {
         let tailBytes = [UInt8](tail)
         var combined = Array(headBytes[0..<READ_BLOCK])
         combined.append(contentsOf: tailBytes[0..<(CHIP_RECORD_BYTES - READ_BLOCK)])
-        return parseChipRecord(pages: Data(combined))
+        return Data(combined)
     } catch {
         return nil
     }
+}
+
+/// Ридер КП: ``readRecordPages(_:)`` + ``parseChipRecord(pages:)``. Возвращает код КП либо
+/// `nil` (нет записи, чужой/браслетный тип, ошибка чтения). Никогда не бросает.
+func readRecord(_ t: NfcTransport) -> Data? {
+    readRecordPages(t).flatMap { parseChipRecord(pages: $0) }
 }

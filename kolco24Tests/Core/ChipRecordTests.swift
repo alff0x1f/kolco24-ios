@@ -142,6 +142,36 @@ struct ChipRecordTests {
         #expect(parseChipRecord(pages: try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode)) == sampleCode)
     }
 
+    // --- Типизированный разбор (браслет участника, тип 0x2) -----------------
+
+    @Test func parseChipRecordTyped_participant_withParticipantType_returnsCode() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        #expect(record[3] == 0x12)
+        #expect(parseChipRecord(pages: record, type: CHIP_TYPE_PARTICIPANT) == sampleCode)
+    }
+
+    @Test func parseChipRecordTyped_participant_withKpType_returnsNull() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        #expect(parseChipRecord(pages: record, type: CHIP_TYPE_KP) == nil)
+    }
+
+    @Test func parseChipRecordTyped_kp_withParticipantType_returnsNull() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode)
+        #expect(parseChipRecord(pages: record, type: CHIP_TYPE_PARTICIPANT) == nil)
+    }
+
+    @Test func parseChipRecordUntyped_rejectsParticipantRecord() throws {
+        // Регрессия: ридер КП по-прежнему отклоняет браслет.
+        let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        #expect(parseChipRecord(pages: record) == nil)
+    }
+
+    @Test func parseChipRecordTyped_unknownVersion_returnsNull() {
+        // version 2, type 2 → packed 0x22
+        let record = Data([0x4B, 0x32, 0x34, 0x22]) + sampleCode
+        #expect(parseChipRecord(pages: record, type: CHIP_TYPE_PARTICIPANT) == nil)
+    }
+
     // --- GET_VERSION model parsing ------------------------------------------
 
     @Test func chipModelFromVersion_ntag213Vector() {
@@ -280,6 +310,81 @@ struct ChipRecordTests {
             }
         }
         #expect(isFailed(writeRecord(t, record: record)))
+    }
+
+    @Test func writeRecord_participantRecord_succeeds() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        let t = FakeTransport { frame in
+            switch frame[0] {
+            case self.WRITE: return self.ACK
+            case self.FAST_READ: return record // read-back видит запись браслета (тип 0x2)
+            default: return self.NAK
+            }
+        }
+        #expect(writeRecord(t, record: record) == .success)
+        let last = t.frames.filter { $0[0] == WRITE }.last!
+        #expect(Data([UInt8](last)[2..<6]) == Data([0x4B, 0x32, 0x34, 0x12]))
+    }
+
+    @Test func writeRecord_readBackTypeMismatch_returnsFailed() throws {
+        // Пишем браслет, а read-back видит тот же код с типом КП → расхождение типа → failed.
+        let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        let kpRecord = try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode)
+        let t = FakeTransport { frame in
+            switch frame[0] {
+            case self.WRITE: return self.ACK
+            case self.FAST_READ: return kpRecord
+            default: return self.NAK
+            }
+        }
+        #expect(isFailed(writeRecord(t, record: record)))
+    }
+
+    @Test func writeRecord_kpRecord_readBackParticipant_returnsFailed() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode)
+        let participant = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        let t = FakeTransport { frame in
+            switch frame[0] {
+            case self.WRITE: return self.ACK
+            case self.FAST_READ: return participant
+            default: return self.NAK
+            }
+        }
+        #expect(isFailed(writeRecord(t, record: record)))
+    }
+
+    @Test func readRecordPages_fastRead_returnsRaw20Bytes() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        let t = FakeTransport { frame in
+            frame[0] == self.FAST_READ ? record + Data(count: 4) : self.NAK
+        }
+        #expect(readRecordPages(t) == record)
+        #expect(t.frames.count == 1)
+    }
+
+    @Test func readRecordPages_fastReadNak_fallsBackToTwoReads() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        let t = FakeTransport { frame in
+            switch frame[0] {
+            case self.FAST_READ: return self.NAK
+            case self.READ: return self.fallbackRead(record, frame)
+            default: return self.NAK
+            }
+        }
+        #expect(readRecordPages(t) == record)
+        let reads = t.frames.filter { $0[0] == READ }
+        #expect(reads.map { Int([UInt8]($0)[1]) } == [4, 8])
+        // Ридер КП по тем же страницам браслет не принимает.
+        #expect(readRecord(t) == nil)
+    }
+
+    @Test func readRecordPages_shortSecondRead_returnsNull() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode)
+        let t = FakeTransport { frame in
+            if frame[0] == self.READ && frame[1] == 4 { return Data([UInt8](record)[0..<16]) }
+            return self.NAK
+        }
+        #expect(readRecordPages(t) == nil)
     }
 
     @Test func readRecord_fastReadHappyPath_returnsCode() throws {

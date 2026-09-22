@@ -209,13 +209,13 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 - Modify: `kolco24/Core/Nfc/ChipRecord.swift`
 - Modify: `kolco24Tests/Core/ChipRecordTests.swift`
 
-- [ ] добавить `parseChipRecord(pages:type:)`; `parseChipRecord(pages:)` сделать обёрткой с `CHIP_TYPE_KP`
-- [ ] вынести чтение сырых страниц в `readRecordPages(_:)`; `readRecord(_:)` поверх него (поведение прежнее)
-- [ ] `writeRecord`: read-back с типом из заголовка записи (`Int([UInt8](record)[3] & 0x0F)`)
-- [ ] обновить комментарии: `CHIP_TYPE_KP` («единственное записываемое»), `CHIP_TYPE_PARTICIPANT`, doc `parseChipRecord`, шапку файла
-- [ ] тесты: разбор типа `0x2` с `type: PARTICIPANT` → код; с `type: KP` → `nil`; регрессия — `parseChipRecord(pages:)` отклоняет `0x2`
-- [ ] тесты: `writeRecord` записи участника на фейковом транспорте → `.success`; KP-запись по-прежнему `.success` (`writeRecord_writesHeaderLast_andSucceeds`); тип в read-back не совпал с заголовком → `.failed`; `readRecordPages` фолбэк на 2×READ
-- [ ] прогнать `ChipRecordTests` — зелёные
+- [x] добавить `parseChipRecord(pages:type:)`; `parseChipRecord(pages:)` сделать обёрткой с `CHIP_TYPE_KP`
+- [x] вынести чтение сырых страниц в `readRecordPages(_:)`; `readRecord(_:)` поверх него (поведение прежнее)
+- [x] `writeRecord`: read-back с типом из заголовка записи (`Int([UInt8](record)[3] & 0x0F)`)
+- [x] обновить комментарии: `CHIP_TYPE_KP` («единственное записываемое»), `CHIP_TYPE_PARTICIPANT`, doc `parseChipRecord`, шапку файла
+- [x] тесты: разбор типа `0x2` с `type: PARTICIPANT` → код; с `type: KP` → `nil`; регрессия — `parseChipRecord(pages:)` отклоняет `0x2`
+- [x] тесты: `writeRecord` записи участника на фейковом транспорте → `.success`; KP-запись по-прежнему `.success` (`writeRecord_writesHeaderLast_andSucceeds`); тип в read-back не совпал с заголовком → `.failed`; `readRecordPages` фолбэк на 2×READ
+- [x] прогнать `ChipRecordTests` — зелёные
 
 ### Task 2: DTO и `ApiClient.bindMemberTag`
 
