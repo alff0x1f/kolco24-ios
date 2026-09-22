@@ -225,11 +225,11 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 - Modify: `kolco24Tests/Net/ApiClientTests.swift`
 - Create: `kolco24Tests/Net/MemberTagBindDtoTests.swift`
 
-- [ ] `MemberTagBindRequest(nfcUid, number: Int?)` с ручным `encode(to:)` — `number` всегда, `null` явно; `MemberTagBindResponse(number, nfcUid, code)`
-- [ ] `ApiClient.bindMemberTag(raceId:nfcUid:number:)` → `POST /app/race/<id>/member_tags/` через `post` (по образцу `bindTag`)
-- [ ] тесты DTO: ключи `nfc_uid`/`number`, явный `null`, декодирование ответа
-- [ ] тесты ApiClient: путь со слэшем, метод POST, 201/200 → `.success`, 404 → `.error(404)`, 409 → `.conflict`, 403 без ретрая (один запрос)
-- [ ] прогнать тесты — зелёные
+- [x] `MemberTagBindRequest(nfcUid, number: Int?)` с ручным `encode(to:)` — `number` всегда, `null` явно; `MemberTagBindResponse(number, nfcUid, code)`
+- [x] `ApiClient.bindMemberTag(raceId:nfcUid:number:)` → `POST /app/race/<id>/member_tags/` через `post` (по образцу `bindTag`)
+- [x] тесты DTO: ключи `nfc_uid`/`number`, явный `null`, декодирование ответа
+- [x] тесты ApiClient: путь со слэшем, метод POST, 201/200 → `.success`, 404 → `.error(404)`, 409 → `.conflict`, 403 без ретрая (один запрос)
+- [x] прогнать тесты — зелёные
 
 ### Task 3: Чистая логика `MemberProvisioningLogic`
 
