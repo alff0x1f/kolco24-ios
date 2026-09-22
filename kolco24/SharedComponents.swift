@@ -172,3 +172,19 @@ enum AdminClockFormat {
         hms.string(from: Date(timeIntervalSince1970: Double(wallMs) / 1000))
     }
 }
+
+/// Непрерывное вращение глифа во время bind (`ProvisioningView`, `MemberProvisioningView`).
+struct SpinModifier: ViewModifier {
+    let active: Bool
+    @State private var angle: Double = 0
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(active ? angle : 0))
+            .onAppear {
+                guard active else { return }
+                withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                    angle = 360
+                }
+            }
+    }
+}

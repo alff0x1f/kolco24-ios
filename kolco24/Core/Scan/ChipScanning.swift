@@ -23,8 +23,8 @@ import Foundation
 ///   участника, **не** ошибка (Technical Details §9). Различение КП/участник/
 ///   непривязанный делает `classifyTag` уже в редьюсере, не здесь.
 /// - `memberCode`: K24-код браслета участника (тип `CHIP_TYPE_PARTICIPANT`), если
-///   он записан; разбирается из тех же сырых страниц только при `code == nil`
-///   (лишнего transceive нет). `nil` — браслет без кода / чип КП. Пока используется
+///   он записан; разбирается из тех же сырых страниц (`decodeTagPages`, лишнего
+///   transceive нет). `nil` — браслет без кода / чип КП. Пока используется
 ///   лишь «Проверкой браслетов» (наличие кода); отметки и судейские сканы по-прежнему
 ///   идентифицируют браслет по UID. Дефолт `nil` в `init`.
 /// - `uid`: нормализованный UID тега (`normalizeNfcUid` — сделан сканером до
@@ -37,22 +37,27 @@ import Foundation
 ///   для тапа по чужому UID при активной ячейке — модель тогда покажет «Приложите
 ///   тот же чип»). Дефолт `nil` в `init` сохраняет существующие construction-sites
 ///   (`FakeChipScanner`, `ScanModelTests`) без изменений.
+/// - `readFailed`: страницы записи не прочитались (I/O-ошибка / NAK) — `code`/`memberCode` тогда
+///   `nil` не потому, что записи нет. Экраны провижининга по такому тапу не начинают bind (просят
+///   приложить снова); прочие хосты флаг не смотрят. Дефолт `false`.
 struct TagReading: Equatable {
     let code: Data?
     let uid: String
     let sample: TimeSample
     let writeResult: ChipWriteResult?
     let memberCode: Data?
+    let readFailed: Bool
 
     init(
         code: Data?, uid: String, sample: TimeSample,
-        writeResult: ChipWriteResult? = nil, memberCode: Data? = nil
+        writeResult: ChipWriteResult? = nil, memberCode: Data? = nil, readFailed: Bool = false
     ) {
         self.code = code
         self.uid = uid
         self.sample = sample
         self.writeResult = writeResult
         self.memberCode = memberCode
+        self.readFailed = readFailed
     }
 }
 

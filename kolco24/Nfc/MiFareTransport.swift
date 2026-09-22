@@ -5,14 +5,15 @@
 //  CoreNFC-адаптер чистого шва `NfcTransport` (Core/Nfc/ChipRecord). Порт `readChipCode`-адаптера
 //  из Android (`data/nfc/MifareUltralightWriter.kt`), где чтение шло `nfcA.transceive(frame)`; на
 //  iOS сырой кадр гоняется через `NFCMiFareTag.sendMiFareCommand`. Чистая последовательность команд
-//  (FAST_READ 0x3A → фоллбек 2×READ 0x30, разбор K24) остаётся в `Core/Nfc/readRecord` — здесь только
+//  (FAST_READ 0x3A → фоллбек 2×READ 0x30 — `Core/Nfc/readRecordPages`; разбор K24 — `decodeTagPages`/
+//  `parseChipRecord`; запись — `writeRecord`) остаётся в `Core/Nfc/ChipRecord` — здесь только
 //  мост «колбэчный CoreNFC → синхронный `transceive`».
 //
-//  ⚠️ ДЕДЛОК-ЛОВУШКА. `readRecord`/`writeRecord` синхронно циклят `transceive`, поэтому каждый вызов
+//  ⚠️ ДЕДЛОК-ЛОВУШКА. `readRecordPages`/`writeRecord` синхронно циклят `transceive`, поэтому каждый вызов
 //  блокирует поток `DispatchSemaphore`, пока CoreNFC не доставит колбэк `sendMiFareCommand`. Этот
 //  блокирующий `wait()` ОБЯЗАН выполняться НЕ на очереди колбэков CoreNFC (делегатной очереди сессии),
 //  иначе `wait` заблокирует ту самую серийную очередь, на которой должен прийти колбэк, — и сессия
-//  зависнет навсегда. Гарантию даёт ВЫЗЫВАЮЩИЙ: `NfcChipScanner` гоняет `readRecord` на своей выделенной
+//  зависнет навсегда. Гарантию даёт ВЫЗЫВАЮЩИЙ: `NfcChipScanner` гоняет `readRecordPages`/`writeRecord` на своей выделенной
 //  фоновой `readQueue`, отдельной от делегатной очереди сессии. Сам транспорт очередь не выбирает.
 //
 
@@ -20,7 +21,7 @@ import CoreNFC
 import Foundation
 
 /// `NfcTransport` поверх открытого `NFCMiFareTag`: один сырой кадр → один ответ (или брошенная ошибка).
-/// Соответствует контракту `readRecord`, который трактует брошенное как «команда не поддержана» и
+/// Соответствует контракту `readRecordPages`, который трактует брошенное как «команда не поддержана» и
 /// падает на фоллбек.
 struct MiFareTransport: NfcTransport {
     let tag: NFCMiFareTag
@@ -29,7 +30,7 @@ struct MiFareTransport: NfcTransport {
     /// структуры — `struct` со ссылочным полем). После первого таймаута кадра дальнейшие вызовы
     /// падают немедленно, не отправляя новую команду: колбэк на не пришедший кадр мог не потеряться,
     /// а лишь задержаться, и параллельная отправка второй команды тому же тегу, пока первая ещё в
-    /// полёте, может испортить обмен командами CoreNFC. `readRecord`/`writeRecord` трактуют брошенное
+    /// полёте, может испортить обмен командами CoreNFC. `readRecordPages`/`writeRecord` трактуют брошенное
     /// как «команда не поддержана»/ошибку и переходят к следующему шагу (фоллбек READ, ранний return) —
     /// без этого флага тот следующий шаг сам стал бы той самой параллельной командой.
     private let poisoned = TimeoutFlag()
@@ -39,7 +40,7 @@ struct MiFareTransport: NfcTransport {
     /// тапы уходили бы в очередь за зависшим чтением («чипы не сканируются» до переоткрытия оверлея).
     private static let frameTimeout: DispatchTimeInterval = .seconds(2)
 
-    /// Не пришедший в таймаут колбэк — трактуется контрактом `readRecord` как «команда не поддержана»
+    /// Не пришедший в таймаут колбэк — трактуется контрактом `readRecordPages` как «команда не поддержана»
     /// (фоллбек-ветка), т.е. чтение деградирует, но очередь не зависает.
     private struct FrameTimeout: Error {}
 

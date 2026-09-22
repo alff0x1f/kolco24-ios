@@ -242,6 +242,9 @@ struct ChipCheckModelTests {
         scanner.emit(reading(code: nil, uid: "ZZ", memberCode: kpCode(2)))
         await waitUntil { if case .unknown = model.lastResult { return true }; return false }
         #expect(model.lastResult == .unknown(uid: "ZZ"))
+        // hasCode фиксирует сырой факт чтения и для не-.ok строк (UI рисует бейдж только для .ok).
+        #expect(model.lastHasCode == true)
+        #expect(model.feed.map(\.hasCode) == [true, false])
         #expect(feedback.failureCount == 2)
         #expect(feedback.successCount == 0)
     }

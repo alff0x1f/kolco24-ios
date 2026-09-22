@@ -68,4 +68,18 @@ struct MemberProvisioningLogicTests {
     @Test func parseMemberNumber_overflow_isNil() {
         #expect(parseMemberNumber("99999999999999999999999") == nil)
     }
+
+    // MARK: - memberProvisionStatusLine (строка системной NFC-шторки)
+
+    @Test func statusLine_perState() {
+        #expect(memberProvisionStatusLine(.waitingForChip, hint: nil) == "Приложите браслет участника")
+        #expect(memberProvisionStatusLine(.needsNumber(uid: "U1"), hint: nil) == "Введите номер участника")
+        #expect(memberProvisionStatusLine(.binding(uid: "U1", number: nil), hint: nil) == "Привязка на сервере…")
+        #expect(memberProvisionStatusLine(.waitingForWrite(uid: "U1", number: 7), hint: "Приложите тот же браслет")
+                == "Приложите тот же браслет (№7)")
+        #expect(memberProvisionStatusLine(.waitingForWrite(uid: "U1", number: 7), hint: nil)
+                == "Приложите браслет ещё раз (№7)")
+        #expect(memberProvisionStatusLine(.success(number: 7), hint: nil) == "Записано: №7")
+        #expect(memberProvisionStatusLine(.failed(reason: "Нет сети"), hint: nil) == "Ошибка: Нет сети")
+    }
 }

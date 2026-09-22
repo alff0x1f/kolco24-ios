@@ -738,6 +738,16 @@ struct ApiClientTests {
         if case .conflict = result {} else { Issue.record("ожидался .conflict, получено \(result)") }
     }
 
+    @Test func bindMemberTag_2xxBodyMissingCode_returnsErrorNil() async {
+        // 2xx без обязательного `code` — ошибка разбора → .error(nil), не .success.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 201, bodyString: #"{"number":101,"nfc_uid":"04A2B3"}"#)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.bindMemberTag(raceId: 8, nfcUid: "04A2B3", number: 101)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error(nil), получено \(result)") }
+    }
+
     @Test func bindMemberTag_403_doesNotRetry() async {
         // POST не ретраится даже при сменившемся ts (403 auth-vs-skew неразличим).
         let transport = FakeTransport()

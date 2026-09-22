@@ -53,6 +53,22 @@ func memberProvisionErrorMessage<T>(_ result: PostResult<T>) -> String {
     }
 }
 
+/// Подсказка тапа 2 по умолчанию (зона скана и системная NFC-шторка).
+let memberWriteAgainHint = "Приложите браслет ещё раз"
+
+/// Строка системной NFC-шторки для [state] (шторка модальна и закрывает экран — все подсказки должны
+/// дублироваться в ней). [hint] — текущая подсказка тапа 2 (`nil` → «Приложите браслет ещё раз»). Чистая.
+func memberProvisionStatusLine(_ state: MemberProvisionState, hint: String?) -> String {
+    switch state {
+    case .waitingForChip: return "Приложите браслет участника"
+    case .needsNumber: return "Введите номер участника"
+    case .binding: return "Привязка на сервере…"
+    case let .waitingForWrite(_, number): return "\(hint ?? memberWriteAgainHint) (№\(number))"
+    case let .success(number): return "Записано: №\(number)"
+    case let .failed(reason): return "Ошибка: \(reason)"
+    }
+}
+
 // MARK: - Номер участника
 
 /// Разбирает текст поля номера. Только ASCII-цифры (пробелы по краям обрезаются), ведущие нули

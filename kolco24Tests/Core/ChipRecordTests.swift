@@ -462,4 +462,72 @@ struct ChipRecordTests {
         if case .failed = result { return true }
         return false
     }
+
+    // MARK: - decodeTagPages (разбор одного чтения в оба типа — используется NfcChipScanner)
+
+    @Test func decodeTagPages_kpRecord_codeOnly() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode)
+        let decoded = decodeTagPages(record)
+        #expect(decoded.code == sampleCode)
+        #expect(decoded.memberCode == nil)
+    }
+
+    @Test func decodeTagPages_participantRecord_memberCodeOnly() throws {
+        let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        let decoded = decodeTagPages(record)
+        #expect(decoded.code == nil)
+        #expect(decoded.memberCode == sampleCode)
+    }
+
+    @Test func decodeTagPages_nilOrGarbage_bothNil() {
+        let fromNil = decodeTagPages(nil)
+        #expect(fromNil.code == nil && fromNil.memberCode == nil)
+        let garbage = decodeTagPages(Data(repeating: 0xFF, count: 20))
+        #expect(garbage.code == nil && garbage.memberCode == nil)
+        let short = decodeTagPages(Data([0x4B, 0x32]))
+        #expect(short.code == nil && short.memberCode == nil)
+    }
+
+    // MARK: - writeGuardDecision (pre-write guard сканера)
+
+    @Test func writeGuard_kpOnChip_participantPending_refusesKp() throws {
+        let onChip = try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode)
+        let pending = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        #expect(writeGuardDecision(currentPages: onChip, record: pending)
+                == .wrongType(reason: "Это чип КП, а не браслет"))
+    }
+
+    @Test func writeGuard_participantOnChip_kpPending_refusesBracelet() throws {
+        let onChip = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        let pending = try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode)
+        #expect(writeGuardDecision(currentPages: onChip, record: pending)
+                == .wrongType(reason: "Это браслет участника"))
+    }
+
+    @Test func writeGuard_unknownK24Type_refuses() throws {
+        let onChip = try buildChipRecord(type: 0x7, code: sampleCode)
+        let pending = try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode)
+        #expect(writeGuardDecision(currentPages: onChip, record: pending) == .wrongType(reason: "Чип другого типа"))
+    }
+
+    @Test func writeGuard_sameType_blank_garbage_allowed() throws {
+        for type in [CHIP_TYPE_KP, CHIP_TYPE_PARTICIPANT] {
+            let pending = try buildChipRecord(type: type, code: sampleCode)
+            let sameType = try buildChipRecord(type: type, code: Data(repeating: 0x01, count: 16))
+            #expect(writeGuardDecision(currentPages: sameType, record: pending) == .allow)
+            #expect(writeGuardDecision(currentPages: Data(count: 20), record: pending) == .allow)
+            #expect(writeGuardDecision(currentPages: Data(repeating: 0xFF, count: 20), record: pending) == .allow)
+            // Другая версия формата — не наша запись: разрешено (как и разбор её отвергает).
+            var otherVersion = [UInt8](try buildChipRecord(type: CHIP_TYPE_KP, code: sampleCode))
+            otherVersion[3] = UInt8((0x2 << 4) | CHIP_TYPE_KP)
+            if type == CHIP_TYPE_PARTICIPANT {
+                #expect(writeGuardDecision(currentPages: Data(otherVersion), record: pending) == .allow)
+            }
+        }
+    }
+
+    @Test func writeGuard_readFailure_refusesAsReadFailed() throws {
+        let pending = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: sampleCode)
+        #expect(writeGuardDecision(currentPages: nil, record: pending) == .readFailed)
+    }
 }

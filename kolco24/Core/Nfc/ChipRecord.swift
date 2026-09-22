@@ -101,6 +101,16 @@ func parseChipRecord(pages: Data) -> Data? {
     parseChipRecord(pages: pages, type: CHIP_TYPE_KP)
 }
 
+/// Разбор одного чтения сырых страниц (``readRecordPages(_:)``) в оба типа записи: `code` — K24-код
+/// **КП** (``CHIP_TYPE_KP``), `memberCode` — код браслета участника (``CHIP_TYPE_PARTICIPANT``).
+/// Типы взаимоисключающие (один ниббл типа), поэтому не более одного из двух не-`nil`; `nil`-страницы
+/// (ошибка чтения) / пустой / чужой чип → оба `nil`. Лишнего transceive нет. Чистая.
+func decodeTagPages(_ pages: Data?) -> (code: Data?, memberCode: Data?) {
+    guard let pages else { return (nil, nil) }
+    return (parseChipRecord(pages: pages, type: CHIP_TYPE_KP),
+            parseChipRecord(pages: pages, type: CHIP_TYPE_PARTICIPANT))
+}
+
 /// Uppercase hex от [code] (без разделителей) — для отображения/записи.
 func chipCodeHex(_ code: Data) -> String {
     HexBytes.encode(code, uppercase: true)
@@ -155,6 +165,43 @@ enum ChipWriteResult: Equatable {
 
     /// I/O-ошибка или NAK в середине записи (метку убрали, защита, чужой чип и т.п.).
     case failed(message: String)
+
+    /// Запись НЕ начиналась: на чипе уже K24-запись ДРУГОГО типа (КП вместо браслета или наоборот) —
+    /// ``writeGuardDecision(currentPages:record:)``. Повтор бессмыслен: хост бросает текущий чип.
+    case wrongType(reason: String)
+}
+
+/// Решение pre-write guard'а (сканер вызывает на `readQueue` перед ``writeRecord`` по тому же
+/// соединению). Guard на тапе 1 (`TagReading.code`/`memberCode`) обходится сбойным чтением тапа 1,
+/// а ``writeRecord`` первым делом зануляет заголовок — поэтому тип проверяется и здесь.
+enum ChipWriteGuard: Equatable {
+    /// Писать можно: пустой/чужой чип или K24-запись того же типа (перезапись).
+    case allow
+    /// Не удалось прочитать текущие страницы — не пишем вслепую, pending-write остаётся (приложить снова).
+    case readFailed
+    /// На чипе K24-запись другого типа — не пишем (``ChipWriteResult/wrongType(reason:)``).
+    case wrongType(reason: String)
+}
+
+/// Чистое решение guard'а: [currentPages] — результат ``readRecordPages(_:)`` (`nil` = ошибка чтения),
+/// [record] — вооружённая 20-байтовая запись. Валидная K24-запись (магик + версия) с ниббл-типом,
+/// отличным от типа [record], → `wrongType` («Это чип КП» / «Это браслет участника» / «Чип другого
+/// типа»); `nil`-страницы → `readFailed`; иначе `allow`.
+func writeGuardDecision(currentPages: Data?, record: Data) -> ChipWriteGuard {
+    guard let currentPages else { return .readFailed }
+    let recordBytes = [UInt8](record)
+    guard recordBytes.count > MAGIC.count else { return .allow }
+    let pendingType = Int(recordBytes[MAGIC.count] & 0x0F)
+    for type in 0...15 where type != pendingType {
+        if parseChipRecord(pages: currentPages, type: type) != nil {
+            switch type {
+            case CHIP_TYPE_KP: return .wrongType(reason: "Это чип КП, а не браслет")
+            case CHIP_TYPE_PARTICIPANT: return .wrongType(reason: "Это браслет участника")
+            default: return .wrongType(reason: "Чип другого типа")
+            }
+        }
+    }
+    return .allow
 }
 
 /// Минимальный шов над открытым NfcA-соединением: отправить один сырой кадр, получить

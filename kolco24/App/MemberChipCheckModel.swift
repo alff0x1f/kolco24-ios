@@ -46,8 +46,8 @@ final class MemberChipCheckModel: Identifiable {
     /// Последний результат — драйвит крупный статус-hero экрана.
     private(set) var lastResult: MemberChipCheckResult?
     /// Записан ли K24-код участника на последний проверенный чип (статус-панель читает его вместе
-    /// с `lastResult`; осмыслен только для `.ok`).
-    private(set) var lastHasCode = false
+    /// с `lastResult`; осмыслен только для `.ok`). Производное от головы ленты — отдельного состояния нет.
+    var lastHasCode: Bool { feed.first?.hasCode ?? false }
     /// Размер синхронизированного пула браслетов (idle-строка; `0` — признак «не синхронизирован»).
     private(set) var poolSize = 0
     /// Загрузился ли пул (первая эмиссия observation). До этого сканы игнорируются (null-sentinel).
@@ -164,7 +164,6 @@ final class MemberChipCheckModel: Identifiable {
     /// Свёртка результата в UI + фидбек. `ok` → success; `kpChip`/`unknown` → failure.
     private func apply(_ result: MemberChipCheckResult, hasCode: Bool, sample: TimeSample) {
         lastResult = result
-        lastHasCode = hasCode
         switch result {
         case .ok:
             feedback.play(.success)

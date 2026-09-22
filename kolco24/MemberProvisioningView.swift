@@ -8,6 +8,8 @@
 //  `needsNumber` — поле номера (`.numberPad`, префилл `nextNumber`, разбор `parseMemberNumber`,
 //  «Привязать» неактивна при `nil`), «Отмена» в `needsNumber`/`waitingForWrite` и лента зелёных
 //  пилюль «№101 · A1B2» свежезаписанных браслетов. `.task` стартует прод-сканер; `onDisappear` — `stop()`.
+//  Системная NFC-шторка модальна: в `needsNumber` модель приостанавливает сессию (поле номера доступно),
+//  а если шторку закрыл пользователь (`!scanning`) — кнопка «Сканировать» (`resumeScanning`).
 //
 
 import SwiftUI
@@ -43,6 +45,9 @@ struct MemberProvisioningView: View {
                 if canCancel {
                     cancelButton
                 }
+                if !model.scanning && needsNumberUid == nil {
+                    scanButton
+                }
                 if !model.freshFeed.isEmpty {
                     freshSection
                 }
@@ -58,8 +63,8 @@ struct MemberProvisioningView: View {
         .task { model.beginScanning() }
         .onDisappear { model.stop() }
         .onChange(of: needsNumberUid, initial: true) { _, uid in
-            if uid != nil {
-                numberText = model.nextNumber.map(String.init) ?? ""
+            if let uid {
+                numberText = model.prefillNumber(for: uid).map(String.init) ?? ""
                 numberFocused = true
             } else {
                 numberFocused = false
@@ -107,7 +112,7 @@ struct MemberProvisioningView: View {
                      subtitle: number.map { "Номер \($0)" }, spinning: true)
         case let .waitingForWrite(_, number):
             scanCard(icon: "square.and.arrow.down", tint: Color.kolcoOrange,
-                     title: model.writeHint ?? "Приложите браслет ещё раз",
+                     title: model.writeHint ?? memberWriteAgainHint,
                      subtitle: "Тап 2 — запись кода, участник №\(number)")
         case let .success(number):
             scanCard(icon: "checkmark.circle.fill", tint: Color.good,
@@ -126,7 +131,7 @@ struct MemberProvisioningView: View {
                 Image(systemName: icon)
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(tint)
-                    .modifier(MemberSpinModifier(active: spinning))
+                    .modifier(SpinModifier(active: spinning))
             }
             .frame(width: 54, height: 54)
             Text(title)
@@ -208,6 +213,22 @@ struct MemberProvisioningView: View {
         .buttonStyle(.plain)
     }
 
+    /// Шторку закрыл пользователь (или NFC недоступен) — открыть сессию заново; pending-write сохранён.
+    private var scanButton: some View {
+        Button {
+            model.resumeScanning()
+        } label: {
+            Label("Сканировать", systemImage: "wave.3.right")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.kolcoOrange)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Лента свежих браслетов
 
     private var freshSection: some View {
@@ -233,24 +254,6 @@ struct MemberProvisioningView: View {
         .background(Color.card)
         .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
         .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
-    }
-}
-
-// MARK: - Вспомогательные вьюхи
-
-/// Непрерывное вращение глифа во время bind (копия приватного `SpinModifier` из `ProvisioningView`).
-private struct MemberSpinModifier: ViewModifier {
-    let active: Bool
-    @State private var angle: Double = 0
-    func body(content: Content) -> some View {
-        content
-            .rotationEffect(.degrees(active ? angle : 0))
-            .onAppear {
-                guard active else { return }
-                withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                    angle = 360
-                }
-            }
     }
 }
 

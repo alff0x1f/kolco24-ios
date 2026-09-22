@@ -170,8 +170,11 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 - `needsNumber` + `confirmNumber(n)` → `binding(uid, n)`. Guard: только в `.needsNumber` и `n >= 1`,
   иначе no-op. Текст поля парсит чистая `parseMemberNumber(String) -> Int?` (пусто/0/не-число/
   переполнение → `nil`)
-- `cancel()` из `needsNumber`/`waitingForWrite`/`failed` → `clearPendingWrite`, отмена
-  `bindTask`/`advanceTask`, `writeHint = nil`, `waitingForChip`. Во вью — кнопка «Отмена»
+- `cancel()` из любого состояния, **кроме `binding`** (там no-op — серверный результат не выбрасываем)
+  → `clearPendingWrite`, отмена `advanceTask`, `writeHint = nil`, `waitingForChip` + возобновление
+  сканирования. Во вью — кнопка «Отмена» (в `needsNumber`/`waitingForWrite`)
+- тап чипа КП (`reading.code != nil`) в `waitingForChip`/`failed`/`needsNumber` → `failed("Это чип КП,
+  а не браслет")` + звук ошибки (иначе bind + запись затёрли бы запись КП)
 - `binding` → `.success` → `waitingForWrite(uid, resp.number)` + `setPendingWrite`
 - `binding(uid, nil)` → `.error(404)` → `needsNumber(uid)`
 - `binding` → `.unauthorized` → `onUnauthorized()` + `closeRequested`
@@ -180,7 +183,35 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
   `success(number)`, `nextNumber = number + 1`, свежий браслет в ленту, через `successHoldMs` →
   `waitingForChip`; свой + не-success → hint «Не удалось записать, приложите снова», pending сохранён
 - `binding`/`success` + тап → игнор
-- любой тап до первой эмиссии пула → игнор (null-sentinel)
+- любой тап до первой эмиссии пула → игнор (null-sentinel `loaded`)
+
+**Модальная NFC-шторка (ревью-фикс).** Системная шторка `NFCTagReaderSession` модальна — под ней поле
+номера не получает ни тапов, ни клавиатуры. Поэтому вход в `needsNumber` (из маршрутизации или 404 на
+`null`) **приостанавливает** сессию (`scanner.stop()`, `scanning = false`); `confirmNumber`/`cancel`
+возобновляют её (`resumeScanning`: барьер `waitUntilStopped()` → свежий `readings()` + `start()`;
+поколение потока `streamGen` не даёт концу старого потока сбросить `scanning`). Закрытие шторки
+пользователем → поток кончился → `scanning = false`, вью показывает «Сканировать» (`resumeScanning`),
+pending-write в сканере сохраняется. Все подсказки дублируются в шторку: `setStatus(
+memberProvisionStatusLine(state, hint))` на каждое изменение `provisionState`/`writeHint` и перед
+`start()` (иначе шторка говорила бы дефолтное «Приложите чип КП»). Префилл поля — `prefillNumber(for:)`:
+номер, уже введённый для этого UID (повтор после сбоя bind), иначе `nextNumber`.
+
+Прочие решения реализации: `parseMemberNumber` обрезает пробелы и принимает только ASCII-цифры
+(`+5`/`-5` → `nil`); `readRecordPages` обрезает ответ FAST_READ до 20 байт; 404 на `null` → `needsNumber`
+без звука ошибки; модель отдаёт `poolSize` для idle-строки; `nextNumber = nil` при `number == Int.max`.
+КП-провижининг (`ProvisioningModel`) симметрично отклоняет браслет с кодом участника
+(`memberCode != nil` → «Это браслет участника»). `SpinModifier` вынесен в `SharedComponents`.
+
+**Защита от перезаписи чужого типа и «браслета на телефоне» (ревью-фикс 2, оба экрана провижининга).**
+Guard тапа 1 обходится сбойным чтением, а `writeRecord` первым делом зануляет заголовок, поэтому
+`NfcChipScanner.defaultProcess` перед записью (на `readQueue`, то же соединение) читает страницы и
+спрашивает чистую `writeGuardDecision` (Core/Nfc): K24-запись другого типа → `ChipWriteResult.wrongType`
+(«Это чип КП, а не браслет» / «Это браслет участника») → модель `failed(reason)` + разоружение; страницы не
+прочитались → `.failed` (pending сохранён, тап снова — вслепую не пишем). `TagReading.readFailed` (I/O на
+тапе 1) → `failed(«Не удалось прочитать, приложите снова»)` без bind. Сканер `restartPolling()` после
+каждого чтения, поэтому записанный чип, оставленный на телефоне, детектится снова: модели помнят
+`lastWrittenUid` и молча игнорируют его в `waitingForChip`/`failed`, пока не прочитан другой UID или
+«Отмена» (браслеты) / ручной выбор КП в степпере (КП; автопереход фильтр не снимает).
 
 `nextNumber: Int?` — стартует `nil` (поле пустое), после успешной записи = `number + 1`.
 `freshFeed: [FreshBracelet]` (`struct FreshBracelet: Equatable, Identifiable { uid, number }`), новые
@@ -190,9 +221,9 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 ### Проверка браслета
 
 `TagReading` получает `memberCode: Data?` (дефолт `nil` в `init` — существующие вызовы не меняются).
-`NfcChipScanner.defaultProcess`: `pages = readRecordPages(t)` один раз → `code = parse(KP)`,
-`memberCode = code == nil ? parse(PARTICIPANT) : nil`. Лишнего transceive нет.
-`MemberChipCheckModel.FeedItem` получает `hasCode: Bool`, модель — `private(set) var lastHasCode: Bool`
+`NfcChipScanner.defaultProcess`: `readRecordPages(t)` один раз → чистый `decodeTagPages(pages)` (Core/Nfc,
+под тестами) разбирает оба типа (взаимоисключающие по нибблу). Лишнего transceive нет.
+`MemberChipCheckModel.FeedItem` получает `hasCode: Bool`, модель — вычисляемый `lastHasCode` (голова ленты)
 (статус-панель вью читает `lastResult`, а не ленту). Вью показывает «код записан» / «без кода» для `.ok`
 и в панели, и в строках «Недавние». `classifyMemberChipCheck` не меняется.
 
@@ -305,6 +336,8 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 ### Task 8: [Final] Update documentation
 
 - [x] CLAUDE.md: `POST …/member_tags/` в список «Backend endpoints not yet deployed»; `Core/Admin` — упомянуть запись браслетов (кратко, файл остаётся компактным)
+  - *отклонение:* строка Layout `Core/Admin` не менялась — вместо неё добавлен port-trap «K24 chip types»
+    (типы записи и где они разбираются), это полезнее для компактного CLAUDE.md
 - [x] переместить план в `docs/plans/completed/` (выполняет оркестратор после ревью)
 
 ## Post-Completion

@@ -13,7 +13,18 @@
 //  в наблюдаемом пуле `member_tags` ИЛИ записан в этой сессии — пул не обновится до refresh) → запрос
 //  с `number: null`; иначе (или сервер ответил `404` на `null`) → `needsNumber`, админ вводит номер
 //  (`confirmNumber`), поле префиллится `nextNumber` (автоинкремент после успешной записи).
-//  Пул наблюдается с null-sentinel (`pool == nil`): сканы до первой эмиссии игнорируются.
+//  Пул наблюдается с null-sentinel (`loaded`): сканы до первой эмиссии игнорируются. Тап чипа КП
+//  (`reading.code != nil`) отклоняется «Это чип КП» — иначе bind + запись затёрли бы запись КП.
+//  Сбой чтения тапа 1 (`readFailed`) → «приложите снова» без bind; перед записью сканер сам сверяет тип
+//  (`writeGuardDecision` → `.wrongType`). Только что записанный браслет (`lastWrittenUid`), оставленный
+//  на телефоне, игнорируется до чтения другого UID / «Отмена».
+//
+//  Системная NFC-шторка МОДАЛЬНА: под ней поле номера не получает ни тапов, ни клавиатуры. Поэтому
+//  вход в `needsNumber` ПРИОСТАНАВЛИВАЕТ сканирование (`scanner.stop()` → шторка уходит), а
+//  `confirmNumber`/`cancel` возобновляют его (`resumeScanning`: барьер `waitUntilStopped()` → свежий
+//  `readings()` + `start()`). Закрытие шторки пользователем (поток кончился) → `scanning == false`,
+//  вьюха показывает «Сканировать» (`resumeScanning`); pending-write при этом не теряется. Все подсказки
+//  зоны скана дублируются в шторку (`setStatus(memberProvisionStatusLine)`), т.к. экран под ней не виден.
 //
 //  Сетевой bind — в НЕструктурированном `Task`, захватывающем ЗАМЫКАНИЕ `bindMemberTag` (`[weak self]`
 //  лишь для обновления состояния): уход с экрана не рвёт серверную привязку (§6); результат после
@@ -43,9 +54,16 @@ final class MemberProvisioningModel: Identifiable {
     // MARK: - UI-состояние (observable)
 
     /// Состояние текущего браслета (двухтаповый флоу + ввод номера).
-    private(set) var provisionState: MemberProvisionState = .waitingForChip
+    private(set) var provisionState: MemberProvisionState = .waitingForChip {
+        didSet { pushStatus() }
+    }
     /// Подсказка зоны скана в `waitingForWrite` (тап 2). `nil` — без подсказки.
-    private(set) var writeHint: String?
+    private(set) var writeHint: String? {
+        didSet { pushStatus() }
+    }
+    /// Открыта (или открывается) NFC-сессия. `false` — приостановлено в `needsNumber` либо пользователь
+    /// закрыл системную шторку; вьюха предлагает «Сканировать» (`resumeScanning`).
+    private(set) var scanning = false
     /// Префилл поля номера: `nil` (пустое поле) до первой успешной записи, затем `number + 1`.
     private(set) var nextNumber: Int?
     /// Записанные в этой сессии браслеты, новые сверху, капится `feedCap`; дедуп по UID.
@@ -62,8 +80,16 @@ final class MemberProvisioningModel: Identifiable {
 
     // MARK: - Пул (не-observable, null-sentinel)
 
-    /// UID-множество пула браслетов гонки; `nil` до первой эмиссии observation.
-    @ObservationIgnored private var poolUids: Set<String>?
+    /// UID-множество пула браслетов гонки; осмысленно лишь при `loaded`.
+    @ObservationIgnored private var poolUids: Set<String> = []
+    /// Последний введённый номер для UID (префилл при повторном `needsNumber` того же браслета после
+    /// сбоя bind — чтобы не подставить устаревший автоинкремент).
+    @ObservationIgnored private var lastRequested: (uid: String, number: Int)?
+    /// UID последнего успешно записанного браслета. Сканер после каждого чтения `restartPolling()` —
+    /// браслет, оставленный на телефоне, детектится снова, как только кончится дебаунс; без этого
+    /// фильтра он бы пере-привязался и пере-записался (прерванная перезапись зануляет заголовок).
+    /// Его чтения игнорируются, пока не прочитан ДРУГОЙ UID или не нажата «Отмена».
+    @ObservationIgnored private var lastWrittenUid: String?
 
     // MARK: - Зависимости
 
@@ -84,6 +110,11 @@ final class MemberProvisioningModel: Identifiable {
     @ObservationIgnored private var poolTask: Task<Void, Never>?
     @ObservationIgnored private var bindTask: Task<Void, Never>?
     @ObservationIgnored private var advanceTask: Task<Void, Never>?
+    @ObservationIgnored private var resumeTask: Task<Void, Never>?
+    /// Поколение потока чтений: конец СТАРОГО потока (после suspend/рестарта) не сбрасывает `scanning`.
+    @ObservationIgnored private var streamGen = 0
+    /// Экран закрыт (`stop()`): отложенный `resumeScanning` не должен открыть шторку.
+    @ObservationIgnored private var closed = false
 
     /// Пауза «успех» по умолчанию (мс).
     static let defaultSuccessHoldMs = 1200
@@ -113,22 +144,33 @@ final class MemberProvisioningModel: Identifiable {
         poolTask?.cancel()
         bindTask?.cancel()
         advanceTask?.cancel()
+        resumeTask?.cancel()
         scanner?.stop()
     }
 
     // MARK: - Жизненный цикл
 
     /// Тестовый вход: стартует сканирование по инжектированному [scanner].
+    /// Повторно входим: старый поток (если был) отменяется, берётся свежий `readings()`.
     func start(scanner: any ProvisioningScanning) {
         self.scanner = scanner
+        closed = false
         liveness.set(true)
+        streamTask?.cancel()
+        streamGen += 1
+        let gen = streamGen
         let readings = scanner.readings()
+        pushStatus() // до start(): шторка открывается с актуальной строкой, а не «Приложите чип КП»
         scanner.start()
+        scanning = true
         streamTask = Task { [weak self] in
             for await reading in readings {
                 guard let self else { return }
                 await self.processReading(reading)
             }
+            // Поток кончился не по воле модели (пользователь закрыл шторку / NFC недоступен).
+            guard let self, self.streamGen == gen else { return }
+            self.scanning = false
         }
     }
 
@@ -146,27 +188,72 @@ final class MemberProvisioningModel: Identifiable {
     /// Закрытие экрана: гасит liveness, отменяет задачи (поздний bind-результат отбрасывается),
     /// разоружает pending-write и останавливает сканер.
     func stop() {
+        closed = true
         liveness.set(false)
+        streamGen += 1
+        scanning = false
         streamTask?.cancel()
         streamTask = nil
+        resumeTask?.cancel()
+        resumeTask = nil
         bindTask?.cancel()
         advanceTask?.cancel()
         scanner?.clearPendingWrite()
         scanner?.stop()
     }
 
+    /// Приостановить сессию (вход в `needsNumber`): модальная шторка уходит, поле номера доступно.
+    private func suspendScanning() {
+        streamGen += 1
+        scanning = false
+        resumeTask?.cancel()
+        resumeTask = nil
+        streamTask?.cancel()
+        streamTask = nil
+        scanner?.stop()
+    }
+
+    /// Возобновить сканирование («Сканировать» / `confirmNumber` / `cancel`). No-op, если сессия уже
+    /// открыта/открывается, экран закрыт или сканера нет. Барьер `waitUntilStopped()` — прежняя
+    /// платформенная сессия должна фактически инвалидироваться, иначе её поздний `didInvalidate`
+    /// завершил бы уже новый поток.
+    func resumeScanning() {
+        guard !closed, !scanning, let scanner else { return }
+        scanning = true
+        resumeTask = Task { [weak self] in
+            await scanner.waitUntilStopped()
+            guard let self, !Task.isCancelled, !self.closed else { return }
+            self.resumeTask = nil
+            self.start(scanner: scanner)
+        }
+    }
+
     // MARK: - Действия вьюхи
 
     /// «Привязать» с введённым номером [n]. Только в `needsNumber` и при `n >= 1`, иначе no-op.
+    /// Возобновляет сканирование (тап 2 требует открытой шторки).
     func confirmNumber(_ n: Int) {
         guard case let .needsNumber(uid) = provisionState, n >= 1 else { return }
+        lastRequested = (uid, n)
         startBind(uid: uid, number: n)
+        resumeScanning()
     }
 
-    /// «Отмена»: бросить текущий браслет — разоружить pending-write, отменить bind/автовозврат,
-    /// вернуться в `waitingForChip`.
+    /// Префилл поля номера для [uid]: номер, уже введённый для этого браслета (повтор после сбоя bind),
+    /// иначе автоинкремент `nextNumber`.
+    func prefillNumber(for uid: String) -> Int? {
+        if let lastRequested, lastRequested.uid == uid { return lastRequested.number }
+        return nextNumber
+    }
+
+    /// «Отмена»: бросить текущий браслет — разоружить pending-write, отменить автовозврат, вернуться в
+    /// `waitingForChip` и возобновить сканирование. Во время `binding` — no-op (результат сервера не
+    /// выбрасываем: привязка уже могла состояться).
     func cancel() {
+        if case .binding = provisionState { return }
+        lastWrittenUid = nil
         resetChipState()
+        resumeScanning()
     }
 
     private func resetChipState() {
@@ -196,21 +283,22 @@ final class MemberProvisioningModel: Identifiable {
     /// UID «известен»: есть в пуле или записан в этой сессии (пул до refresh его не содержит; повтор
     /// с `number: null` сервер отдаёт как `200`).
     private func isKnown(_ uid: String) -> Bool {
-        (poolUids?.contains(uid) ?? false) || freshFeed.contains { $0.uid == uid }
+        poolUids.contains(uid) || freshFeed.contains { $0.uid == uid }
     }
 
     // MARK: - Обработка одного чтения
 
     /// Один прочитанный браслет. До первой эмиссии пула — игнор. `waitingForChip`/`failed` →
-    /// маршрутизация по «известен»; `needsNumber` + другой UID → та же маршрутизация (тот же — игнор);
-    /// `waitingForWrite` → сверка UID + исход записи; `binding`/`success` → игнор.
+    /// маршрутизация по «известен»; `needsNumber` + другой UID → та же маршрутизация (тот же — игнор;
+    /// сюда доходит лишь чтение, успевшее до приостановки сессии); `waitingForWrite` → сверка UID +
+    /// исход записи; `binding`/`success` → игнор.
     func processReading(_ reading: TagReading) async {
-        guard poolUids != nil else { return }
+        guard loaded else { return }
         switch provisionState {
         case .waitingForChip, .failed:
-            route(uid: reading.uid)
+            route(reading)
         case let .needsNumber(uid):
-            if reading.uid != uid { route(uid: reading.uid) }
+            if reading.uid != uid { route(reading) }
         case let .waitingForWrite(uid, number):
             handleWriteTap(reading: reading, expectedUid: uid, number: number)
         case .binding, .success:
@@ -218,13 +306,31 @@ final class MemberProvisioningModel: Identifiable {
         }
     }
 
-    private func route(uid: String) {
+    /// Только что записанный браслет (всё ещё лежит на телефоне) → тихий игнор. Сбой чтения → просьба
+    /// приложить снова (без bind: чип КП с плохим контактом выглядел бы пустым браслетом). Чип КП
+    /// (прочитан K24-код КП) → отказ: bind + запись заменили бы запись КП кодом участника.
+    private func route(_ reading: TagReading) {
+        let uid = reading.uid
+        if uid == lastWrittenUid { return }
+        lastWrittenUid = nil
         writeHint = nil
-        if isKnown(uid) {
+        if reading.readFailed {
+            provisionState = .failed(reason: "Не удалось прочитать, приложите снова")
+            feedback.play(.failure)
+        } else if reading.code != nil {
+            provisionState = .failed(reason: "Это чип КП, а не браслет")
+            feedback.play(.failure)
+        } else if isKnown(uid) {
             startBind(uid: uid, number: nil)
         } else {
-            provisionState = .needsNumber(uid: uid)
+            enterNeedsNumber(uid: uid)
         }
+    }
+
+    /// `needsNumber` + приостановка сессии (под модальной шторкой номер не ввести).
+    private func enterNeedsNumber(uid: String) {
+        provisionState = .needsNumber(uid: uid)
+        suspendScanning()
     }
 
     /// Перевести в `binding` и запустить `bindMemberTag` в НЕструктурированном Task (захват замыкания, §6).
@@ -252,14 +358,14 @@ final class MemberProvisioningModel: Identifiable {
                 let record = try buildChipRecord(type: CHIP_TYPE_PARTICIPANT, code: code)
                 scanner?.setPendingWrite(uid: uid, record: record)
                 provisionState = .waitingForWrite(uid: uid, number: response.number)
-                writeHint = "Приложите браслет ещё раз"
+                writeHint = memberWriteAgainHint
             } catch {
                 provisionState = .failed(reason: "Неверный код от сервера")
                 feedback.play(.failure)
             }
         case .error(let code) where code == 404 && requestedNumber == nil:
             // Сервер не знает UID (пул устарел) — просим номер.
-            provisionState = .needsNumber(uid: uid)
+            enterNeedsNumber(uid: uid)
         case .unauthorized:
             onUnauthorized()
             closeRequested = true
@@ -280,6 +386,12 @@ final class MemberProvisioningModel: Identifiable {
         switch reading.writeResult {
         case .success:
             completeWrite(uid: expectedUid, number: number)
+        case let .wrongType(reason):
+            // Pre-write guard сканера: на чипе запись другого типа — ничего не записано, чип бросаем.
+            scanner?.clearPendingWrite()
+            writeHint = nil
+            provisionState = .failed(reason: reason)
+            feedback.play(.failure)
         case .failed, .unsupported, .none:
             writeHint = "Не удалось записать, приложите снова"
             feedback.play(.failure)
@@ -295,12 +407,19 @@ final class MemberProvisioningModel: Identifiable {
             freshFeed.removeLast(freshFeed.count - Self.feedCap)
         }
         nextNumber = number == Int.max ? nil : number + 1
+        if lastRequested?.uid == uid { lastRequested = nil }
+        lastWrittenUid = uid
         provisionState = .success(number: number)
         writeHint = nil
         scanner?.clearPendingWrite()
         feedback.play(.success)
         feedback.fanfare()
         scheduleReturn()
+    }
+
+    /// Строка системной NFC-шторки по текущему состоянию (экран под модальной шторкой не виден).
+    private func pushStatus() {
+        scanner?.setStatus(memberProvisionStatusLine(provisionState, hint: writeHint))
     }
 
     private func scheduleReturn() {
