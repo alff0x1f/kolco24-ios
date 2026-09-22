@@ -512,6 +512,30 @@ final class AppModel {
         return model
     }
 
+    /// Фабрика хост-редьюсера записи кода на браслет участника «Записать браслет участника». `raceId` —
+    /// гонка ВЫБРАННОЙ команды; `nil`, когда команда не выбрана (пул `member_tags` неизвестен).
+    /// `bindMemberTag` бьёт cloud-клиент; `onUnauthorized` при 401 роняет admin-сессию. Прод-сканер
+    /// `NfcChipScanner` (pending-write, `ProvisioningScanning`) инстанцируется здесь.
+    func makeMemberProvisioningModel() -> MemberProvisioningModel? {
+        guard let raceId = selectedRaceId else { return nil }
+        let repo = env.adminAuthRepository
+        let model = MemberProvisioningModel(
+            raceId: raceId,
+            memberTagStore: env.memberTagStore,
+            bindMemberTag: env.bindMemberTag,
+            onUnauthorized: { repo.onUnauthorized() },
+            feedback: env.feedback
+        )
+        let clock = env.trustedClock
+        let liveness = model.liveness
+        let scanner = NfcChipScanner(
+            sampleNow: { AppModel.syncSample(clock) },
+            shouldRestart: { liveness.isAlive }
+        )
+        model.attachProductionScanner(scanner)
+        return model
+    }
+
     /// Фабрика хост-редьюсера фото-отметки (этап 7). Собирается из графа (`checkpointStore`, `markStore`,
     /// `trustedClock.sample` для времени/окна, `locationProvider`, дисковые замыкания `writeFrame`/
     /// `deleteFrame`) + размер ростера выбранной команды. Возвращает `nil`, когда команда не выбрана

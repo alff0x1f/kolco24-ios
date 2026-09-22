@@ -252,20 +252,20 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 - Modify: `kolco24/App/AppModel.swift`
 - Create: `kolco24Tests/App/MemberProvisioningModelTests.swift`
 
-- [ ] модель по форме `ProvisioningModel`: `liveness`, `start(scanner:)`/`attachProductionScanner`/`beginScanning`/`stop`, `deinit`
-- [ ] наблюдение пула `memberTagStore.observeForRace` с null-sentinel
-- [ ] `processReading` + `confirmNumber(_:)` (guard `.needsNumber`, `n >= 1`) + `cancel()` + переходы из Technical Details; «известен» = пул ∪ `freshFeed`; bind в неструктурированном `Task`, захват замыкания `bindMemberTag` (§6), результат отбрасывается при `Task.isCancelled`
-- [ ] успех: `buildChipRecord(type: CHIP_TYPE_PARTICIPANT, …)` → `setPendingWrite`; после записи — `clearPendingWrite`, `nextNumber`, `FreshBracelet` в ленту, `successHoldMs` → `waitingForChip`, фидбек `.success` + фанфары
-- [ ] `env.bindMemberTag: (Int, String, Int?) async -> PostResult<MemberTagBindResponse>` в `AppEnvironment`; фабрика `AppModel.makeMemberProvisioningModel()` с прод `NfcChipScanner`
-- [ ] тест-хелперы: своя копия `FakeProvisioningScanner`/`RecordingFeedback` (в `ProvisioningModelTests` они вложенные) + новый `MemberBindStub` под `(Int, String, Int?)`; пул сидится через `env.memberTagStore.insertAll` (как `ChipCheckModelTests`)
-- [ ] тесты: UID в пуле → запрос с `nil` → `waitingForWrite` → тап 2 → `success`, `clearPendingWrite`, `nextNumber == number + 1`, после hold → `waitingForChip`
-- [ ] тесты: UID не в пуле → `needsNumber` → `confirmNumber(7)` → запрос с `7`; `404` на `nil` → `needsNumber`; `404` с номером → «Не найдено на сервере»
-- [ ] тесты: `needsNumber` + тап UID из пула → `binding(uid, nil)`; тап того же UID → игнор; повторный тап браслета, записанного в этой сессии → `binding(uid, nil)`
-- [ ] тесты: `confirmNumber` вне `needsNumber` и с `0` → no-op; `cancel()` из `waitingForWrite` → `clearPendingWrite` + `waitingForChip`
-- [ ] тесты: `409` → `failed`; `401` → `onUnauthorized` вызван + `closeRequested`; неверный hex → «Неверный код от сервера»; `stop()` во время `binding` → поздний результат не меняет состояние
-- [ ] тесты: чужой UID на тапе 2 → hint, без `success`; неудачная запись → pending сохранён, повтор успешен
-- [ ] тесты: скан до первой эмиссии пула игнорируется; `setPendingWrite` получил запись с типом `0x2`; дедуп ленты (повтор UID → замена + наверх)
-- [ ] прогнать тесты — зелёные
+- [x] модель по форме `ProvisioningModel`: `liveness`, `start(scanner:)`/`attachProductionScanner`/`beginScanning`/`stop`, `deinit`
+- [x] наблюдение пула `memberTagStore.observeForRace` с null-sentinel
+- [x] `processReading` + `confirmNumber(_:)` (guard `.needsNumber`, `n >= 1`) + `cancel()` + переходы из Technical Details; «известен» = пул ∪ `freshFeed`; bind в неструктурированном `Task`, захват замыкания `bindMemberTag` (§6), результат отбрасывается при `Task.isCancelled`
+- [x] успех: `buildChipRecord(type: CHIP_TYPE_PARTICIPANT, …)` → `setPendingWrite`; после записи — `clearPendingWrite`, `nextNumber`, `FreshBracelet` в ленту, `successHoldMs` → `waitingForChip`, фидбек `.success` + фанфары
+- [x] `env.bindMemberTag: (Int, String, Int?) async -> PostResult<MemberTagBindResponse>` в `AppEnvironment`; фабрика `AppModel.makeMemberProvisioningModel()` с прод `NfcChipScanner`
+- [x] тест-хелперы: своя копия `FakeProvisioningScanner`/`RecordingFeedback` (в `ProvisioningModelTests` они вложенные) + новый `MemberBindStub` под `(Int, String, Int?)`; пул сидится через `env.memberTagStore.insertAll` (как `ChipCheckModelTests`)
+- [x] тесты: UID в пуле → запрос с `nil` → `waitingForWrite` → тап 2 → `success`, `clearPendingWrite`, `nextNumber == number + 1`, после hold → `waitingForChip`
+- [x] тесты: UID не в пуле → `needsNumber` → `confirmNumber(7)` → запрос с `7`; `404` на `nil` → `needsNumber`; `404` с номером → «Не найдено на сервере»
+- [x] тесты: `needsNumber` + тап UID из пула → `binding(uid, nil)`; тап того же UID → игнор; повторный тап браслета, записанного в этой сессии → `binding(uid, nil)`
+- [x] тесты: `confirmNumber` вне `needsNumber` и с `0` → no-op; `cancel()` из `waitingForWrite` → `clearPendingWrite` + `waitingForChip`
+- [x] тесты: `409` → `failed`; `401` → `onUnauthorized` вызван + `closeRequested`; неверный hex → «Неверный код от сервера»; `stop()` во время `binding` → поздний результат не меняет состояние
+- [x] тесты: чужой UID на тапе 2 → hint, без `success`; неудачная запись → pending сохранён, повтор успешен
+- [x] тесты: скан до первой эмиссии пула игнорируется; `setPendingWrite` получил запись с типом `0x2`; дедуп ленты (повтор UID → замена + наверх)
+- [x] прогнать тесты — зелёные
 
 ### Task 5: Экран и пункт меню админки
 
