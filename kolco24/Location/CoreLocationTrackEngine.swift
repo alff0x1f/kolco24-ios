@@ -153,6 +153,22 @@ final class CoreLocationTrackEngine: NSObject, TrackEngine, @unchecked Sendable 
         }
     }
 
+    /// Трёхзначный геостатус для чек-листа готовности (`Core/Readiness`): в отличие от булева
+    /// `hasLocationAccess()`, различает «ещё не спрашивали» и «отказано» — при `.notDetermined`
+    /// хватает системного диалога, при `.denied` остаётся только уход в Настройки iOS.
+    /// Читает `authorizationStatus` с того же удерживаемого менеджера (одноразовый `CLLocationManager`
+    /// в замыкании читает статус до инициализации и врёт `.notDetermined`).
+    func locationAuthorization() -> LocationAuthorization {
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            return .notDetermined
+        case .authorizedWhenInUse, .authorizedAlways:
+            return .granted
+        default:
+            return .denied
+        }
+    }
+
     /// Выдана ли только «примерная» локация (iOS-аналог андроидного «нет GPS-провайдера» → деградация
     /// точности в TrackCard). Читает `accuracyAuthorization` с удерживаемого менеджера.
     func isReducedAccuracy() -> Bool {

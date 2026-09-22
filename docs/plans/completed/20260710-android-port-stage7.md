@@ -86,7 +86,8 @@
 - **Камера**: `AVCaptureSession` на фоновой очереди, `AVCapturePhotoOutput`, `videoRotationAngle` кадра из `RotationCoordinator.videoRotationAngleForHorizonLevelCapture`; превью — `UIViewRepresentable` с `AVCaptureVideoPreviewLayer` (+ `videoRotationAngleForHorizonLevelPreview`); фронт/тыл пересборкой input, фонарик `torchMode` (только тыл). Разрешение: `AVCaptureDevice.requestAccess(for: .video)` на входе; отказ → заглушка со ссылкой в Настройки (`UIApplication.openSettingsURLString` — допустимый UIKit-импорт в `Photo/`? нет: линк из SwiftUI-вьюхи через `@Environment(\.openURL)`).
 - **`INFOPLIST_KEY_NSCameraUsageDescription`** — в оба build config (конвенция location-ключа этапа 5).
 - **Лайтбокс**: `fullScreenCover` + `TabView(.page)` по `lightboxPhotos(tiles)` (все кадры всех взятий в порядке сетки), счётчик `k/N`, чип КП, `ShareLink(item: URL)`, drag-to-dismiss (offset + threshold), фон чёрный.
-- **Empty-state**: Kotlin-ветки лестницы про NFC-недоступность (роутинг «нет NFC → фото») на iOS **неприменимы** — все поддерживаемые iPhone имеют NFC; лестница `marksEmptyState` не меняется (фиксируем осознанно).
+- **Empty-state**: Kotlin-ветки лестницы про NFC-недоступность (роутинг «нет NFC → фото») на iOS **неприменимы** — все поддерживаемые iPhone имеют NFC; лестница `marksEmptyState` не меняется (фиксируем осознанно). ⚠️ Снято позже: лестница удалена целиком —
+  её заменил чек-лист готовности (`docs/plans/20260918-readiness-checklist.md`, `Core/Readiness/`).
 
 ## What Goes Where
 

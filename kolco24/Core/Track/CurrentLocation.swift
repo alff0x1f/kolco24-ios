@@ -108,3 +108,13 @@ func isFixFresh(_ fix: RawFix, nowElapsedNanos: Int64, maxAgeMs: Int64 = MAX_FIX
     let ageMs = (nowElapsedNanos - fix.elapsedRealtimeNanos) / 1_000_000
     return ageMs >= 0 && ageMs <= maxAgeMs
 }
+
+/// Трёхзначный геостатус устройства — в отличие от bool `hasLocationAccess`, который схлопывает
+/// `.notDetermined` и `.denied` в `false` и потому всегда выбрасывал бы в Настройки. Отдаёт
+/// `Location/CoreLocationTrackEngine.locationAuthorization()`, потребляет чек-лист готовности
+/// (`Core/Readiness/`): тип платформенной способности, а не часть чек-листа.
+enum LocationAuthorization: Equatable {
+    case notDetermined
+    case denied
+    case granted
+}

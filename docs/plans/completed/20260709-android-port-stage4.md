@@ -79,6 +79,10 @@
 
 ## Technical Details
 
+⚠️ Снято позже: лестница `MarksEmpty`/`marksEmptyState`/`MarksEmptyState` удалена — заменена чек-листом
+готовности (`docs/plans/20260918-readiness-checklist.md`, `Core/Readiness/`). Упоминания лестницы ниже
+описывают исторический этап 4, а не текущий код.
+
 **`SelectedTeamState`** (порт `produceState`-цепочки `MainActivity.kt` ~683): `selected == nil` → `.none`; `selected != nil`, команда ещё не эмитирована → `.loading`; observation команды эмитировал `nil` → `.missing` («команда исчезла» — например, удалена сервером при resync); эмитировал `Team` → `.present(team)`. `loading` подавляет мигание empty-state.
 
 **Refresh-оркестрация (`AppModel`, всё `.cloud`):**

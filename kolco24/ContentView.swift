@@ -23,7 +23,8 @@ struct ContentView: View {
                 NavigationStack {
                     MarksView(
                         onChooseTeam: { showPicker = true },
-                        onBindChips: { selectedTab = 3 }
+                        onBindChips: { selectedTab = 3 },
+                        onOpenMap: { selectedTab = 2 }
                     )
                 }
                 .tabItem { Label("Отметки", systemImage: "flag.fill") }

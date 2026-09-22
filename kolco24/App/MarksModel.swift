@@ -13,8 +13,20 @@
 //  в шаге с «Легендой» после серверной правки цены (порт `checkpointCosts[id] ?: it.cost`).
 //
 //  `marksLoading` (порт `loading` из `MarksScreen.kt`): true, пока observation взятий не эмитировал
-//  первую порцию для команды — подавляет мигание ложного empty-состояния на холодном старте. При
-//  отсутствии команды загрузки нет (сразу `chooseTeam`).
+//  первую порцию для команды — вьюха на это время не рисует ничего, подавляя мигание чек-листа на
+//  холодном старте. При отсутствии команды загрузки нет (чек-лист показывается сразу). Рядом с ним
+//  живут `bindingsLoading`/`checkpointsLoading`/`deviceStatePolled`/`mapUrlResolved`: карточка
+//  чек-листа рисует и привязки, и КП, и опрошенное состояние устройства, и подложку гонки, а все пять
+//  источников асинхронны и независимы — гейт по части из них пропускал бы кадр с неполным снимком.
+//
+//  Сверх наблюдений модель собирает чек-лист готовности к старту (`readiness(team:members:clock:)`,
+//  ядро — `Core/Readiness/ReadinessChecklist`). Геостатус, Low Power Mode и наличие файла подложки —
+//  **синхронный опрос** замыканий `env` (`refreshDeviceState()`), а не observation: они меняются вне
+//  приложения (Настройки iOS) или на другой вкладке, БД о них ничего не знает. `mapUrl` гонки читается
+//  из БД в `rebind` и перечитывается на КАЖДОМ опросе (синк может записать `races.mapUrl` впервые
+//  прямо на этом экране, а также подменить или отозвать её), как и существование файла — `rebind`
+//  рано выходит на неизменённой паре, а вкладки в `TabView` живут вечно, иначе пункт застрял бы в
+//  «карта не скачана» после возврата с вкладки «Карта» (тот же приём, что `MapModel.refreshAvailability`).
 //
 //  `import SwiftUI` запрещён (grep-инвариант) — хватает `Observation`. Stale-guard (порт
 //  `safeMarks`/`safeCheckpoints` из `MainActivity.kt`): между отменой старого observation и первой
@@ -34,17 +46,48 @@ final class MarksModel {
     private(set) var checkpoints: [Checkpoint] = []
     /// Агрегаты легенды текущей гонки (`total_cost`/`scoring_count`); `nil` до первой эмиссии.
     private(set) var legendMeta: LegendMeta?
-    /// Привязки чипов текущей команды (ключ — `numberInTeam`) — для лестницы empty-состояний.
+    /// Привязки чипов текущей команды (ключ — `numberInTeam`) — источник строки «чипы» чек-листа готовности.
     private(set) var bindings: [Int: MemberChipBinding] = [:]
     /// Порт `loading`: true, пока observation взятий команды не эмитировал первую порцию. При `nil`-команде
     /// сразу `false` (нечего грузить — показываем `chooseTeam`).
     private(set) var marksLoading: Bool = false
+    /// true, пока observation привязок команды не эмитировал первую порцию (`nil`-команда → сразу `false`).
+    /// Отдельный флаг: три observation'а независимы, порядка первых эмиссий у GRDB нет.
+    private(set) var bindingsLoading: Bool = false
+    /// true, пока observation КП гонки не эмитировал первую порцию (`nil`-гонка → сразу `false`).
+    private(set) var checkpointsLoading: Bool = false
+    /// true, пока `refreshDeviceState()` не отработал ни разу: до первого опроса поля устройства
+    /// держат дефолты (`.granted`/false), и карточка нарисовала бы ложно-зелёную «Геолокация разрешена».
+    private(set) var deviceStatePolled: Bool = false
+    /// true, когда `mapUrl` гонки хоть раз прочитан из БД после текущего `rebind` (при `nil`-гонке —
+    /// сразу). ПЯТЫЙ сигнал гейта и единственный не-observation: без него карточка успевала свернуться
+    /// в зелёное «Всё готово к старту», а через пару миллисекунд разворачивалась в 7 строк с «Карта не
+    /// скачана». Взводится ОДИН раз за привязку (а не `isLoadingMapUrl`, который опрос поднимает снова
+    /// и снова) — иначе каждый `refreshDeviceState()` прятал бы уже показанную карточку.
+    private(set) var mapUrlResolved: Bool = false
+
+    /// Доступность оффлайн-подложки для чек-листа: `.notApplicable`, пока у гонки нет `mapUrl`.
+    /// Пересчитывается из `mapUrl` и `env.mapFileExists` — оба перечитываются на КАЖДОМ опросе.
+    private(set) var mapReadiness: MapReadiness = .notApplicable
+    /// Трёхзначный геостатус последнего опроса устройства.
+    private(set) var locationAuth: LocationAuthorization = .granted
+    /// «Дана примерная локация» последнего опроса устройства.
+    private(set) var isReducedAccuracy: Bool = false
+    /// Low Power Mode последнего опроса устройства.
+    private(set) var lowPowerMode: Bool = false
 
     @ObservationIgnored private let env: AppEnvironment
     @ObservationIgnored private var marksTask: Task<Void, Never>?
     @ObservationIgnored private var checkpointsTask: Task<Void, Never>?
     @ObservationIgnored private var legendMetaTask: Task<Void, Never>?
     @ObservationIgnored private var bindingsTask: Task<Void, Never>?
+    @ObservationIgnored private var mapUrlTask: Task<Void, Never>?
+    /// `mapUrl` текущей гонки (одиночное чтение из БД в `rebind` и на каждом опросе); `nil` → пункта карты нет.
+    /// Пустая строка нормализуется в `nil` при чтении — сервер присылает `""` как «карты нет».
+    @ObservationIgnored private var mapUrl: String?
+    /// Чтение `mapUrl` в полёте — чтобы опрос сразу после `rebind` не отменял только что начатое
+    /// чтение и не слал второй идентичный запрос в БД.
+    @ObservationIgnored private var isLoadingMapUrl: Bool = false
     /// Команда/гонка активных наблюдений — для идемпотентности `rebind` на той же паре.
     @ObservationIgnored private var boundTeamId: Int?
     @ObservationIgnored private var boundRaceId: Int?
@@ -58,6 +101,7 @@ final class MarksModel {
         checkpointsTask?.cancel()
         legendMetaTask?.cancel()
         bindingsTask?.cancel()
+        mapUrlTask?.cancel()
     }
 
     // MARK: - Жизненный цикл
@@ -74,11 +118,19 @@ final class MarksModel {
         checkpointsTask?.cancel()
         legendMetaTask?.cancel()
         bindingsTask?.cancel()
+        mapUrlTask?.cancel()
         marks = []
         checkpoints = []
         legendMeta = nil
         bindings = [:]
+        // Stale-guard чек-листа: подложка прежней гонки не должна дожить до эмиссии новой.
+        mapUrl = nil
+        mapReadiness = .notApplicable
         marksLoading = teamId != nil
+        bindingsLoading = teamId != nil
+        checkpointsLoading = raceId != nil
+        isLoadingMapUrl = false
+        mapUrlResolved = raceId == nil
         boundTeamId = teamId
         boundRaceId = raceId
 
@@ -89,8 +141,16 @@ final class MarksModel {
                     for try await rows in cpObservation {
                         guard let self, !Task.isCancelled else { return }
                         self.checkpoints = rows
+                        self.checkpointsLoading = false
                     }
-                } catch {}
+                } catch {
+                    // Ошибка-значение, не крах: поток наблюдения мёртв (сбой БД/схемы). Флаг ОБЯЗАН
+                    // сняться, иначе гейт карточки закрыт навсегда — пустой экран без единого CTA.
+                    // Сверка привязки: отменённая задача прежней гонки тоже попадает сюда и не должна
+                    // снимать флаг, только что взведённый новым `rebind`.
+                    guard let self, !Task.isCancelled, self.boundRaceId == raceId else { return }
+                    self.checkpointsLoading = false
+                }
             }
 
             let metaObservation = env.legendMetaStore.observeForRace(raceId)
@@ -102,6 +162,8 @@ final class MarksModel {
                     }
                 } catch {}
             }
+
+            loadMapUrl(raceId)
         }
 
         if let teamId {
@@ -113,7 +175,11 @@ final class MarksModel {
                         self.marks = rows
                         self.marksLoading = false
                     }
-                } catch {}
+                } catch {
+                    // См. `checkpointsTask`: мёртвый поток не имеет права запереть гейт карточки.
+                    guard let self, !Task.isCancelled, self.boundTeamId == teamId else { return }
+                    self.marksLoading = false
+                }
             }
 
             let bindingsObservation = env.memberChipBindingStore.observeForTeam(teamId)
@@ -122,8 +188,13 @@ final class MarksModel {
                     for try await rows in bindingsObservation {
                         guard let self, !Task.isCancelled else { return }
                         self.bindings = Dictionary(uniqueKeysWithValues: rows.map { ($0.numberInTeam, $0) })
+                        self.bindingsLoading = false
                     }
-                } catch {}
+                } catch {
+                    // См. `checkpointsTask`: мёртвый поток не имеет права запереть гейт карточки.
+                    guard let self, !Task.isCancelled, self.boundTeamId == teamId else { return }
+                    self.bindingsLoading = false
+                }
             }
         }
     }
@@ -193,7 +264,7 @@ final class MarksModel {
     /// (in-memory окружение).
     func photoURL(_ relPath: String) -> URL? { env.photoURL(relPath) }
 
-    // MARK: - Лестница empty-состояний
+    // MARK: - Привязка чипов
 
     /// Число участников ростера с привязанным чипом (только текущие слоты — устаревшие записи
     /// удалённых участников игнорируются). Делегирует общий Core-хелпер `boundCount(members:bindings:)`.
@@ -201,14 +272,106 @@ final class MarksModel {
         kolco24.boundCount(members: members, bindings: bindings)
     }
 
-    /// Состояние пустого экрана: `loading` подавляет мигание; нет команды → `chooseTeam`; не все чипы
-    /// привязаны → `bindChips`; иначе → `ready`. Порт ветвления `MarksEmpty` (NFC-ветки — этап 5).
-    func emptyState(hasTeam: Bool, members: [TeamMemberItem]) -> MarksEmptyState {
-        marksEmptyState(
-            loading: marksLoading,
-            hasTeam: hasTeam,
-            memberCount: members.count,
-            boundCount: boundCount(members: members)
+    // MARK: - Чек-лист готовности к старту
+
+    /// Синхронный опрос устройства: геостатус, точность, Low Power Mode и наличие файла подложки.
+    /// Зовётся вьюхой из `.task`, `onAppear` (возврат с соседней вкладки не меняет `scenePhase`) и на
+    /// `scenePhase == .active` (возврат из Настроек iOS). Все четыре замыкания `env` синхронные и
+    /// дешёвые — ни `await`, ни observation здесь не нужны.
+    func refreshDeviceState() {
+        locationAuth = env.locationAuthorization()
+        isReducedAccuracy = env.isReducedAccuracy()
+        lowPowerMode = env.isLowPowerMode()
+        deviceStatePolled = true
+        recomputeMapReadiness()
+        // `mapUrl` перечитываем БЕЗУСЛОВНО (как `MapModel.refreshAvailability`), а не «пока его нет»:
+        // чек-лист живёт ровно в предстартовом окне, когда синк впервые пишет `races.map_url`, а
+        // `rebind` на неизменённой паре уже не сработает. Значение-гард сломал бы это на `""` (сервер
+        // шлёт пустую строку как «карты нет» — она не `nil`, и опрос выключился бы навсегда) и не
+        // заметил бы отозванной/подменённой подложки. Единственный гард — чтение уже в полёте.
+        if !isLoadingMapUrl, let raceId = boundRaceId { loadMapUrl(raceId) }
+    }
+
+    /// One-shot чтение `mapUrl` гонки (образец `MapModel.refreshAvailability`): колонка правится
+    /// только синком, поэтому не observation. Stale-guard — отмена задачи плюс сверка `boundRaceId`
+    /// после `await`, чтобы ответ прежней гонки не дожил до новой привязки.
+    private func loadMapUrl(_ raceId: Int) {
+        mapUrlTask?.cancel()
+        isLoadingMapUrl = true
+        mapUrlTask = Task { [weak self] in
+            guard let self else { return }
+            let race = (try? await self.env.raceStore.getById(raceId)) ?? nil
+            guard !Task.isCancelled, self.boundRaceId == raceId else { return }
+            self.isLoadingMapUrl = false
+            // Пятый сигнал гейта взводим ДО проверки «строка не изменилась»: на раннем выходе
+            // (у гонки честно нет подложки — самый частый случай) карточка иначе не показалась бы
+            // никогда. Ошибка чтения — тоже «разрешено»: `(try? …) ?? nil` даёт `nil`-строку.
+            self.mapUrlResolved = true
+            // Нормализуем `""` в `nil` прямо здесь (как `MapModel`), чтобы «пусто» имело ровно одно
+            // представление во всей модели.
+            let url = race?.mapUrl.flatMap { $0.isEmpty ? nil : $0 }
+            // Пересчитываем, только если строка гонки реально изменилась: файл-как-флаг на каждом
+            // опросе уже проверил `refreshDeviceState()`, а он в UI-горячем пути — лишний удар в
+            // `FileManager` на каждый `scenePhase == .active` и каждое переключение вкладки не нужен.
+            guard url != self.mapUrl else { return }
+            self.mapUrl = url
+            self.recomputeMapReadiness()
+        }
+    }
+
+    /// Пункт карты: нет `mapUrl` → пункта нет вовсе; иначе файл-как-флаг с диска.
+    private func recomputeMapReadiness() {
+        guard let raceId = boundRaceId, let url = mapUrl, !url.isEmpty else {
+            mapReadiness = .notApplicable
+            return
+        }
+        mapReadiness = env.mapFileExists(raceId) ? .ready : .missing
+    }
+
+    /// Системный диалог геодоступа. Живёт здесь, а не в `AppModel`: там `env` приватен и обёртки нет,
+    /// а `MarksModel` граф и так держит.
+    func requestLocationAccess() {
+        env.requestLocationAuthorization()
+    }
+
+    /// Шов вьюхи: что рисовать в ветке «нет взятий». `nil`, пока не приехал хотя бы один из пяти
+    /// источников карточки (взятия, привязки, КП гонки, первый опрос устройства, `mapUrl` гонки) —
+    /// подавление мигания на холодном старте: с пустым снимком чек-лист мелькнул бы ложным «чипы не
+    /// привязаны» или ложным «всё готово». Решение живёт здесь, а не в `if` вьюхи, чтобы его можно
+    /// было проверить тестом.
+    func readinessCard(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [ReadinessItem]? {
+        // Решение «рисовать или молчать» — чистая функция ядра (таблица в `ReadinessChecklistTests`):
+        // карточка рисует привязки и КП из ОТДЕЛЬНЫХ observation'ов, порядка первых эмиссий у GRDB
+        // нет, до первого опроса устройства поля держат дефолты, а `mapUrl` — вообще отдельное
+        // одиночное чтение из БД.
+        guard readinessCardVisible(
+            marksLoading: marksLoading,
+            bindingsLoading: bindingsLoading,
+            checkpointsLoading: checkpointsLoading,
+            deviceStatePolled: deviceStatePolled,
+            mapUrlResolved: mapUrlResolved
+        ) else { return nil }
+        return readiness(team: team, members: members, clock: clock)
+    }
+
+    /// Чек-лист готовности: снимок наблюдений (привязки, КП) + опрошенное состояние устройства +
+    /// переданные вьюхой команда/ростер/статус часов. Вся логика статусов — в `readinessItems`.
+    /// Продовый вход — `readinessCard(...)` (он добавляет гейт первой отрисовки); прямо эту функцию
+    /// зовут только тесты, которым нужен массив без гейта.
+    func readiness(team: Team?, members: [TeamMemberItem], clock: ClockStatus) -> [ReadinessItem] {
+        readinessItems(
+            ReadinessInput(
+                hasTeam: team != nil,
+                teamTitle: team?.teamname ?? "",
+                memberCount: members.count,
+                boundCount: boundCount(members: members),
+                locationAuthorization: locationAuth,
+                isReducedAccuracy: isReducedAccuracy,
+                checkpointCount: checkpoints.count,
+                map: mapReadiness,
+                clock: clock,
+                lowPowerMode: lowPowerMode
+            )
         )
     }
 }

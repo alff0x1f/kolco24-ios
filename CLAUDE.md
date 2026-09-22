@@ -63,7 +63,7 @@ Four tabs: Отметки (`MarksView` — taken-КП grid + NFC/photo scan), Л
   `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay), `Sync`, `Track` (Segments, TrackPoints, GpxExport,
   TrackEngine seam), `Upload`, `Time` (TrustedClock actor, ServerTimeSampler, SkewFormat), `Lease`,
   `Stores` (InstallId, ClockAnchorStore, ThemePreference, RaceLeaseStore, AdminTokenStore), `Admin`,
-  `Map` (MBTiles math).
+  `Map` (MBTiles math), `Readiness` (start-readiness checklist).
 - **`kolco24/Model/`** — domain value types mirroring Room v5 (GRDB-free; conformances live in `Data/Records/`)
   (stages 1–2).
 - **`kolco24/Data/`** (stages 2–3, 6–10, map) — `AppDatabase` (migration `v1` = Room v5 snapshot,
@@ -119,6 +119,10 @@ server 200.
 - **Upload drains**: `actor` + `inFlight` tryLock, shared generic `drainUploadLoop` (batch 500,
   `accepted ∩ batch` empty → `.error` anti-loop), Local then Cloud independent, outcome precedence
   `error > offline > ok > nil`.
+- **Device-state polling**: geo authorization, Low Power Mode and map-file-as-flag are polled synchronously
+  (`MarksModel.refreshDeviceState`, `MapModel.refreshAvailability`), never observed — wire the call from
+  `.task`, `onAppear` **and** `scenePhase == .active` (a tab switch changes neither). `hasLocationAccess`
+  (Bool, `TrackRecorder` TOCTOU) and `locationAuthorization` (three-valued, checklist) both stay — don't collapse.
 - Stores/repos are `struct`s (no protocols/fakes for the DB); complex DAO SQL is transcribed verbatim from
   Kotlin for line-by-line checkability.
 
@@ -157,7 +161,8 @@ server 200.
 - Typography: `Font.mono(_:weight:)` = JetBrains Mono (bundled, declared under `UIAppFonts`).
   Spacing/radii in `enum DS`.
 - Recurring motif: diagonal `Canvas` line hatch (`NFCTileView`, `PhotoTileView`, `DarkHeroBackground`).
-- Removed features stay removed: no `isRecent` green ring on tiles.
+- Removed features stay removed: no `isRecent` green ring on tiles; the `MarksEmpty` ladder is replaced by
+  the start-readiness checklist and does not come back.
 
 ## Known facts, not bugs
 
@@ -167,6 +172,8 @@ server 200.
 - The prod server always answers `data_source: "cloud"` → the LAN pin never engages outside a race-LAN
   deployment (`MOBILE_DATA_SOURCE=local`).
 - Force-quit kills track recording (Android `START_NOT_STICKY` parity).
+- iOS needs no notifications for background tracking (`UIBackgroundModes: location` + `CLBackgroundActivitySession`)
+  — the Android foreground-service notification has no iOS analog.
 - `LiveServerSmokeTests` is env-gated (`LIVE_API_SMOKE`) and skipped normally; `xcodebuild` doesn't forward
   shell env to the hosted simulator process.
 - КП map pins come from the take's own GPS fix (`Mark.locLat/locLon`) — the server has no checkpoint
