@@ -237,12 +237,12 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 - Create: `kolco24/Core/Admin/MemberProvisioningLogic.swift`
 - Create: `kolco24Tests/Core/MemberProvisioningLogicTests.swift`
 
-- [ ] `enum MemberProvisionState` (см. Technical Details)
-- [ ] `memberProvisionErrorMessage(_:)`: 409 → «Браслет уже привязан к другому участнику»; 404 (доходит сюда только
+- [x] `enum MemberProvisionState` (см. Technical Details)
+- [x] `memberProvisionErrorMessage(_:)`: 409 → «Браслет уже привязан к другому участнику»; 404 (доходит сюда только
   при запросе с номером) → «Не найдено на сервере»; остальное делегирует `provisionErrorMessage`
-- [ ] `parseMemberNumber(_ text: String) -> Int?` — пусто/`0`/не-число/переполнение → `nil`, ведущие нули допустимы
-- [ ] тесты на каждую ветку маппера строк и `parseMemberNumber`
-- [ ] прогнать тесты — зелёные
+- [x] `parseMemberNumber(_ text: String) -> Int?` — пусто/`0`/не-число/переполнение → `nil`, ведущие нули допустимы
+- [x] тесты на каждую ветку маппера строк и `parseMemberNumber`
+- [x] прогнать тесты — зелёные
 
 ### Task 4: Хост-модель `MemberProvisioningModel` + проводка в граф
 
