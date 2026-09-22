@@ -273,10 +273,10 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 - Create: `kolco24/MemberProvisioningView.swift`
 - Modify: `kolco24/AdminFlowView.swift`
 
-- [ ] `AdminRoute.memberProvisioning`, пункт в секции «Чипы»: «Записать браслет участника» / «Запись кода на браслет»
-- [ ] хост-обёртка `…HostView` по образцу provisioning (`.task { model = appModel.makeMemberProvisioningModel() }`, `stop()` на уходе, дисмисс по `closeRequested`)
-- [ ] `MemberProvisioningView`: зона скана (стили `ProvisioningView`), в `needsNumber` — поле номера `.numberPad` (префилл `nextNumber`, парсинг через `parseMemberNumber`, кнопка «Привязать» неактивна при `nil`), кнопка «Отмена» в `needsNumber`/`waitingForWrite`, лента пилюль «№101 · A1B2»; `#Preview` с фейком
-- [ ] сборка проходит; существующие тесты зелёные (вью без unit-тестов — device-only)
+- [x] `AdminRoute.memberProvisioning`, пункт в секции «Чипы»: «Записать браслет участника» / «Запись кода на браслет»
+- [x] хост-обёртка `…HostView` по образцу provisioning (`.task { model = appModel.makeMemberProvisioningModel() }`, `stop()` на уходе, дисмисс по `closeRequested`)
+- [x] `MemberProvisioningView`: зона скана (стили `ProvisioningView`), в `needsNumber` — поле номера `.numberPad` (префилл `nextNumber`, парсинг через `parseMemberNumber`, кнопка «Привязать» неактивна при `nil`), кнопка «Отмена» в `needsNumber`/`waitingForWrite`, лента пилюль «№101 · A1B2»; `#Preview` с фейком
+- [x] сборка проходит; существующие тесты зелёные (вью без unit-тестов — device-only)
 
 ### Task 6: «Проверить чип участника» показывает наличие кода
 

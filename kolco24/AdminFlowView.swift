@@ -10,6 +10,8 @@
 //  «Войти», спиннер, inline-ошибка из
 //  `adminErrorMessage`); `loggedIn` → email + ряды действий.
 //
+//  «Записать браслет участника» пушит `MemberProvisioningView` (запись K24-кода типа `0x2`).
+//
 //  Действия «Отметка старта»/«Отметка финиша» пушат `JudgeScanView` (этап 10, задача 9). Ряды
 //  «Привязать чип к КП»/«Проверить чип КП»/«Проверить чип участника» — плейсхолдеры (задачи 10 и 12
 //  подключат `CheckChipView`/`CheckMemberChipView`/`ProvisioningView`), сейчас видимы и задизейблены.
@@ -26,6 +28,7 @@ private enum AdminRoute: Hashable {
     case checkChip
     case checkMemberChip
     case provisioning
+    case memberProvisioning
 }
 
 struct AdminFlowView: View {
@@ -45,6 +48,8 @@ struct AdminFlowView: View {
                         CheckMemberChipHostView()
                     case .provisioning:
                         ProvisioningHostView()
+                    case .memberProvisioning:
+                        MemberProvisioningHostView()
                     }
                 }
         }
@@ -218,6 +223,11 @@ private struct AdminHomeView: View {
                                        label: "Проверить чип участника", sub: "Оффлайн-проверка браслета", enabled: true)
                     }
                     .listRowBackground(Color.card)
+                    NavigationLink(value: AdminRoute.memberProvisioning) {
+                        AdminActionRow(systemImage: "person.badge.key.fill", iconBg: Color.charcoal,
+                                       label: "Записать браслет участника", sub: "Запись кода на браслет", enabled: true)
+                    }
+                    .listRowBackground(Color.card)
                 } header: {
                     Text("Чипы")
                 }
@@ -388,6 +398,28 @@ private struct ProvisioningHostView: View {
             }
         }
         .task { if model == nil { model = appModel.makeProvisioningModel() } }
+    }
+}
+
+/// Строит `MemberProvisioningModel` из графа (`AppModel.makeMemberProvisioningModel`) и держит его,
+/// пока экран на стеке. На 401 (`closeRequested`) — авто-возврат в форму логина (сессия уже отозвана).
+private struct MemberProvisioningHostView: View {
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var model: MemberProvisioningModel?
+
+    var body: some View {
+        Group {
+            if let model {
+                MemberProvisioningView(model: model)
+                    .onChange(of: model.closeRequested) { _, requested in
+                        if requested { dismiss() }
+                    }
+            } else {
+                AdminNoTeamPlaceholder()
+            }
+        }
+        .task { if model == nil { model = appModel.makeMemberProvisioningModel() } }
     }
 }
 
