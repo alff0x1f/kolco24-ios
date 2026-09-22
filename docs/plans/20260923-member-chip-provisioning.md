@@ -296,11 +296,11 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] оба режима (пул / ввод номера) и 404-фолбэк реализованы
-- [ ] запись браслета проходит read-back (тип `0x2`); ридеры КП, отметки и судейские сканы не изменились
-- [ ] grep-инварианты: нет `import GRDB`/`SwiftUI`/`CoreNFC` в `Core/`, `App/`, `Net/`
-- [ ] полный suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] сборка: `xcodebuild … build`
+- [x] оба режима (пул / ввод номера) и 404-фолбэк реализованы
+- [x] запись браслета проходит read-back (тип `0x2`); ридеры КП, отметки и судейские сканы не изменились
+- [x] grep-инварианты: нет `import GRDB`/`SwiftUI`/`CoreNFC` в `Core/`, `App/`, `Net/`
+- [x] полный suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
+- [x] сборка: `xcodebuild … build`
 
 ### Task 8: [Final] Update documentation
 
