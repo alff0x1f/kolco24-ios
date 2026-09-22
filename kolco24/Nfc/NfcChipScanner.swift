@@ -57,6 +57,11 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
     /// множество закрывает гонку stop с тихим пересозданием после системного 60-с таймаута.
     private var activeSessionIds: Set<ObjectIdentifier> = []
     private var stopWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Поколение потока: растёт на каждом `start()`. `didInvalidateWithError` старой сессии снимает его под
+    /// тем же lock, где удаляет сессию, и завершает поток/пересоздаёт сессию только если поколение не
+    /// сменилось — иначе `waitUntilStopped()` уже отпустил хоста, и тот поднял свежий поток (`start()`),
+    /// который запоздалая инвалидация не должна убить.
+    private var generation = 0
 
     /// Дебаунс: последний прочитанный UID и когда.
     private var lastUid: String?
@@ -94,8 +99,10 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
     func start() {
         lock.lock()
         finished = false
+        generation += 1
+        let gen = generation
         lock.unlock()
-        beginSession()
+        beginSession(generation: gen)
     }
 
     func stop() {
@@ -191,9 +198,9 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
 
     // MARK: - Сессия
 
-    private func beginSession() {
+    private func beginSession(generation gen: Int) {
         guard NFCTagReaderSession.readingAvailable else {
-            finishStream()
+            finishStream(generation: gen)
             return
         }
         lock.lock()
@@ -202,7 +209,7 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         guard let s = NFCTagReaderSession(
             pollingOption: .iso14443, delegate: self, queue: delegateQueue
         ) else {
-            finishStream()
+            finishStream(generation: gen)
             return
         }
         s.alertMessage = message
@@ -213,7 +220,8 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         // под тем же lock, если поток ещё жив; иначе сессию-сироту никто не инвалидирует → системная
         // NFC-шторка зависает до перезапуска приложения. Проверка finished и публикация session
         // атомарны относительно lock, поэтому stop() не может вклиниться между ними.
-        if finished {
+        // Та же логика для сменившегося поколения: хост уже поднял новый поток со своей сессией.
+        if finished || generation != gen {
             lock.unlock()
             s.invalidate()
             return
@@ -224,8 +232,14 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         s.begin()
     }
 
-    private func finishStream() {
+    /// Завершить поток поколения [gen]; no-op, если с тех пор был новый `start()` (гонка с запоздалой
+    /// инвалидацией старой сессии — см. `generation`).
+    private func finishStream(generation gen: Int) {
         lock.lock()
+        guard generation == gen else {
+            lock.unlock()
+            return
+        }
         finished = true
         let cont = continuation
         continuation = nil
@@ -253,21 +267,24 @@ extension NfcChipScanner: NFCTagReaderSessionDelegate {
         session === self.session ? (self.session = nil) : ()
         activeSessionIds.remove(ObjectIdentifier(session))
         let alreadyFinished = finished
+        // Снимаем поколение под тем же lock, что и удаление сессии: после unlock `waitUntilStopped()` может
+        // отпустить хоста, и его новый `start()` не должен быть завершён этой (старой) инвалидацией.
+        let gen = generation
         lock.unlock()
 
         let code = (error as? NFCReaderError)?.code
         // Отмена пользователем (в т.ч. наш собственный `invalidate()` из stop() приходит как
         // userCanceled) → завершаем поток. Хост закрывает оверлей штатно.
         if code == .readerSessionInvalidationErrorUserCanceled {
-            finishStream()
+            finishStream(generation: gen)
             return
         }
         // 60-с лимит iOS / ошибка чтения: если окно ещё живо и оверлей открыт — молча пересоздаём сессию.
         if !alreadyFinished && shouldRestart() {
-            beginSession()
+            beginSession(generation: gen)
             return
         }
-        finishStream()
+        finishStream(generation: gen)
     }
 
     func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
