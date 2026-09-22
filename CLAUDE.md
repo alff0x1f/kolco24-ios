@@ -146,6 +146,8 @@ server 200.
 - **MBTiles TMS y-flip** (`tile_row = 2^z − 1 − y`) lives only in `Core/Map/MBTiles.tmsRow`.
 - **`Category` collision**: in test files importing `Testing`+`Foundation`, qualify the domain type as
   `kolco24.Category`.
+- **K24 chip types**: `parseChipRecord(pages:)` stays KP-only; other types (0x2 = participant bracelet, written by
+  admin «Записать браслет участника») go through `parseChipRecord(pages:type:)`.
 - `ClockAnchorStore` parse: trailing `|` with nil bootCount — use `components(separatedBy:)`
   (Swift `split` drops the empty segment).
 
@@ -167,8 +169,8 @@ server 200.
 ## Known facts, not bugs
 
 - Backend endpoints **not yet deployed**: `POST /app/race/<id>/marks/`, the binary photo-frame endpoint,
-  `POST …/judge_scans/`. Live runs show perpetual «ошибка»/pending — the designed self-heal (flags stay 0,
-  same build re-sends when deployed). `POST …/track/` **is** deployed.
+  `POST …/judge_scans/`, `POST …/member_tags/` (bracelet code bind). Live runs show perpetual «ошибка»/pending —
+  the designed self-heal (flags stay 0, same build re-sends when deployed). `POST …/track/` **is** deployed.
 - The prod server always answers `data_source: "cloud"` → the LAN pin never engages outside a race-LAN
   deployment (`MOBILE_DATA_SOURCE=local`).
 - Force-quit kills track recording (Android `START_NOT_STICKY` parity).

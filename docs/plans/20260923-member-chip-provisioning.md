@@ -304,8 +304,8 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 
 ### Task 8: [Final] Update documentation
 
-- [ ] CLAUDE.md: `POST …/member_tags/` в список «Backend endpoints not yet deployed»; `Core/Admin` — упомянуть запись браслетов (кратко, файл остаётся компактным)
-- [ ] переместить этот план в `docs/plans/completed/`
+- [x] CLAUDE.md: `POST …/member_tags/` в список «Backend endpoints not yet deployed»; `Core/Admin` — упомянуть запись браслетов (кратко, файл остаётся компактным)
+- [x] переместить план в `docs/plans/completed/` (выполняет оркестратор после ревью)
 
 ## Post-Completion
 
