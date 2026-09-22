@@ -7,7 +7,8 @@
 //  `FakeChipScanner` (платформенная граница) + фидбек-рекордера.
 //
 //  Проверяем: сканы до ПЕРВОЙ эмиссии легенды/пула игнорируются (null-sentinel); `ok`-классификация
-//  КП-чипа по синхронизированной легенде; лента капится 20; браслет из пула → `ok`, вне пула → unknown.
+//  КП-чипа по синхронизированной легенде; лента капится 20; браслет из пула → `ok`, вне пула → unknown;
+//  наличие K24-кода участника (`memberCode`) → `hasCode`/`lastHasCode`, классификация от него не зависит.
 //
 
 import Foundation
@@ -44,9 +45,10 @@ struct ChipCheckModelTests {
         })
     }
 
-    private func reading(code: Data?, uid: String, wall: Int64 = 2000) -> TagReading {
+    private func reading(code: Data?, uid: String, wall: Int64 = 2000, memberCode: Data? = nil) -> TagReading {
         TagReading(code: code, uid: uid,
-                   sample: TimeSample(wallMs: wall, elapsedMs: 1000, trustedMs: nil, bootCount: nil))
+                   sample: TimeSample(wallMs: wall, elapsedMs: 1000, trustedMs: nil, bootCount: nil),
+                   memberCode: memberCode)
     }
 
     private func kpCode(_ seed: UInt8) -> Data { Data((0..<16).map { UInt8(($0 + Int(seed)) & 0xFF) }) }
@@ -181,5 +183,66 @@ struct ChipCheckModelTests {
         await waitUntil { model.feed.first?.result.uid == "U24" }
         #expect(model.feed.first?.result.uid == "U24")
         #expect(model.feed.count == MemberChipCheckModel.feedCap)
+    }
+
+    @Test func memberCheck_okWithMemberCode_setsHasCode() async throws {
+        let env = try makeEnv()
+        try await env.memberTagStore.insertAll([MemberTag(raceId: race, nfcUid: "W1", number: 101)])
+        let model = MemberChipCheckModel(raceId: race, memberTagStore: env.memberTagStore,
+                                         feedback: RecordingFeedback())
+        let scanner = FakeChipScanner()
+        model.start(scanner: scanner)
+        await waitUntil { model.loaded }
+
+        scanner.emit(reading(code: nil, uid: "W1", memberCode: kpCode(9)))
+        await waitUntil { !model.feed.isEmpty }
+        #expect(model.lastResult == .ok(uid: "W1", number: 101))
+        #expect(model.lastHasCode == true)
+        #expect(model.feed.first?.hasCode == true)
+
+        // Следующий браслет без кода → флаг сбрасывается, прежняя строка ленты сохраняет свой.
+        scanner.emit(reading(code: nil, uid: "W1"))
+        await waitUntil { model.feed.count == 2 }
+        #expect(model.lastResult == .ok(uid: "W1", number: 101))
+        #expect(model.lastHasCode == false)
+        #expect(model.feed.map(\.hasCode) == [false, true])
+    }
+
+    @Test func memberCheck_okWithoutMemberCode_hasCodeFalse() async throws {
+        let env = try makeEnv()
+        try await env.memberTagStore.insertAll([MemberTag(raceId: race, nfcUid: "W1", number: 101)])
+        let model = MemberChipCheckModel(raceId: race, memberTagStore: env.memberTagStore,
+                                         feedback: RecordingFeedback())
+        let scanner = FakeChipScanner()
+        model.start(scanner: scanner)
+        await waitUntil { model.loaded }
+
+        scanner.emit(reading(code: nil, uid: "W1"))
+        await waitUntil { !model.feed.isEmpty }
+        #expect(model.lastResult == .ok(uid: "W1", number: 101))
+        #expect(model.lastHasCode == false)
+        #expect(model.feed.first?.hasCode == false)
+    }
+
+    @Test func memberCheck_kpChipAndUnknown_unchangedByMemberCode() async throws {
+        let env = try makeEnv()
+        try await env.memberTagStore.insertAll([MemberTag(raceId: race, nfcUid: "W1", number: 101)])
+        let feedback = RecordingFeedback()
+        let model = MemberChipCheckModel(raceId: race, memberTagStore: env.memberTagStore, feedback: feedback)
+        let scanner = FakeChipScanner()
+        model.start(scanner: scanner)
+        await waitUntil { model.loaded }
+
+        // Чип КП (K24 КП-код) вне пула → kpChip, как раньше.
+        scanner.emit(reading(code: kpCode(1), uid: "KP"))
+        await waitUntil { if case .kpChip = model.lastResult { return true }; return false }
+        #expect(model.lastResult == .kpChip(uid: "KP"))
+
+        // Браслет с кодом участника, но вне пула → unknown (матч по-прежнему UID-only).
+        scanner.emit(reading(code: nil, uid: "ZZ", memberCode: kpCode(2)))
+        await waitUntil { if case .unknown = model.lastResult { return true }; return false }
+        #expect(model.lastResult == .unknown(uid: "ZZ"))
+        #expect(feedback.failureCount == 2)
+        #expect(feedback.successCount == 0)
     }
 }

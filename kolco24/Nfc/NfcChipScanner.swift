@@ -159,7 +159,7 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         lock.unlock()
     }
 
-    /// Per-tag обработчик: воспроизводит чтение (`readRecord` → `TagReading`), а при вооружённой
+    /// Per-tag обработчик: воспроизводит чтение (`readRecordPages` → разбор КП / браслета → `TagReading`), а при вооружённой
     /// pending-write ячейке с совпавшим UID вместо чтения делает `writeRecord` (header-last + read-back
     /// внутри) и кладёт исход в `writeResult`. Один механизм: несовпадающий UID при активной ячейке →
     /// обычное чтение, `writeResult == nil`. Выполняется на `readQueue`.
@@ -172,8 +172,14 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
             let result = writeRecord(transport, record: pendingRecord)
             return TagReading(code: nil, uid: uid, sample: sample, writeResult: result)
         }
-        let code = readRecord(transport)
-        return TagReading(code: code, uid: uid, sample: sample)
+        // Одно чтение сырых страниц, два разбора: сперва КП, затем (только если это не КП) —
+        // код браслета участника. Лишнего transceive нет.
+        let pages = readRecordPages(transport)
+        let code = pages.flatMap { parseChipRecord(pages: $0, type: CHIP_TYPE_KP) }
+        let memberCode = code == nil
+            ? pages.flatMap { parseChipRecord(pages: $0, type: CHIP_TYPE_PARTICIPANT) }
+            : nil
+        return TagReading(code: code, uid: uid, sample: sample, memberCode: memberCode)
     }
 
     // MARK: - Сессия

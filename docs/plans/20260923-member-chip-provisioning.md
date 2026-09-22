@@ -287,12 +287,12 @@ refresh `member_tags`; повтор с `number: null` сервер отдаёт 
 - Modify: `kolco24/CheckMemberChipView.swift`
 - Modify: `kolco24Tests/App/ChipCheckModelTests.swift` (там живут `memberCheck_*` и `FakeChipScanner`)
 
-- [ ] `TagReading.memberCode: Data?` (дефолт `nil` в `init`); обновить doc `TagReading` («не-K24 = браслет»)
-- [ ] `NfcChipScanner.defaultProcess`: один `readRecordPages`, два разбора (KP, затем PARTICIPANT при `code == nil`)
-- [ ] `MemberChipCheckModel`: `FeedItem.hasCode` + `lastHasCode`; обновить шапку («браслет не несёт K24-кода»)
-- [ ] `CheckMemberChipView` — «код записан» / «без кода» для `.ok` в статус-панели и в строках «Недавние»
-- [ ] тесты (`memberCheck_*`): `ok` + `memberCode` → `hasCode`/`lastHasCode == true`; `ok` без кода → `false`; `kpChip`/`unknown` не меняются
-- [ ] прогнать тесты — зелёные
+- [x] `TagReading.memberCode: Data?` (дефолт `nil` в `init`); обновить doc `TagReading` («не-K24 = браслет»)
+- [x] `NfcChipScanner.defaultProcess`: один `readRecordPages`, два разбора (KP, затем PARTICIPANT при `code == nil`)
+- [x] `MemberChipCheckModel`: `FeedItem.hasCode` + `lastHasCode`; обновить шапку («браслет не несёт K24-кода»)
+- [x] `CheckMemberChipView` — «код записан» / «без кода» для `.ok` в статус-панели и в строках «Недавние»
+- [x] тесты (`memberCheck_*`): `ok` + `memberCode` → `hasCode`/`lastHasCode == true`; `ok` без кода → `false`; `kpChip`/`unknown` не меняются
+- [x] прогнать тесты — зелёные
 
 ### Task 7: Verify acceptance criteria
 

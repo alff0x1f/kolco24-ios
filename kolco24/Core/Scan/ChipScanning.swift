@@ -18,10 +18,15 @@ import Foundation
 
 /// Одно чтение чипа, поднятое сканером в `ScanModel`.
 ///
-/// - `code`: расшифрованный K24-код чипа (`readRecord` → `chipCodeHex`), или `nil`
-///   для не-K24 чипа — это валидное чтение браслета участника, **не** ошибка
-///   (Technical Details §9). Различение КП/участник/непривязанный делает
-///   `classifyTag` уже в редьюсере, не здесь.
+/// - `code`: расшифрованный K24-код **КП** (тип `CHIP_TYPE_KP`), или `nil` для
+///   чипа без K24-записи КП («не-K24 = браслет») — это валидное чтение браслета
+///   участника, **не** ошибка (Technical Details §9). Различение КП/участник/
+///   непривязанный делает `classifyTag` уже в редьюсере, не здесь.
+/// - `memberCode`: K24-код браслета участника (тип `CHIP_TYPE_PARTICIPANT`), если
+///   он записан; разбирается из тех же сырых страниц только при `code == nil`
+///   (лишнего transceive нет). `nil` — браслет без кода / чип КП. Пока используется
+///   лишь «Проверкой браслетов» (наличие кода); отметки и судейские сканы по-прежнему
+///   идентифицируют браслет по UID. Дефолт `nil` в `init`.
 /// - `uid`: нормализованный UID тега (`normalizeNfcUid` — сделан сканером до
 ///   подъёма чтения).
 /// - `sample`: снимок `TrustedClock.sample()`, взятый **до** чтения чипа
@@ -37,12 +42,17 @@ struct TagReading: Equatable {
     let uid: String
     let sample: TimeSample
     let writeResult: ChipWriteResult?
+    let memberCode: Data?
 
-    init(code: Data?, uid: String, sample: TimeSample, writeResult: ChipWriteResult? = nil) {
+    init(
+        code: Data?, uid: String, sample: TimeSample,
+        writeResult: ChipWriteResult? = nil, memberCode: Data? = nil
+    ) {
         self.code = code
         self.uid = uid
         self.sample = sample
         self.writeResult = writeResult
+        self.memberCode = memberCode
     }
 }
 
