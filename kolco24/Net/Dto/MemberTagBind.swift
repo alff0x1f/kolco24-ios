@@ -2,7 +2,7 @@
 //  MemberTagBind.swift
 //  kolco24
 //
-//  Проводные типы `POST /app/race/<race_id>/member_tags/` — запись серверного кода на браслет
+//  Проводные типы `POST /app/race/<race_id>/member_tags/bind/` — запись серверного кода на браслет
 //  участника (iOS-first: у Android аналога нет, контракт — в плане
 //  `docs/plans/20260923-member-chip-provisioning.md`). `MemberTagBindRequest` несёт нормализованный
 //  `nfc_uid` и номер участника: `number == nil` — «UID уже в пуле, отдай код» (неизвестный UID →
@@ -15,7 +15,7 @@
 
 import Foundation
 
-/// Тело запроса `POST /app/race/<race_id>/member_tags/`: привязать `nfcUid` к участнику `number`
+/// Тело запроса `POST /app/race/<race_id>/member_tags/bind/`: привязать `nfcUid` к участнику `number`
 /// (или, при `nil`, получить код уже известного браслета).
 struct MemberTagBindRequest: Encodable, Equatable {
     let nfcUid: String
@@ -35,7 +35,7 @@ struct MemberTagBindRequest: Encodable, Equatable {
     }
 }
 
-/// Ответ `POST /app/race/<race_id>/member_tags/` (201 новый Tag / 200 идемпотентный повтор):
+/// Ответ `POST /app/race/<race_id>/member_tags/bind/` (201 новый Tag / 200 идемпотентный повтор):
 /// номер участника, нормализованный `nfc_uid` и hex-`code` для записи на браслет.
 struct MemberTagBindResponse: Decodable, Equatable {
     let number: Int

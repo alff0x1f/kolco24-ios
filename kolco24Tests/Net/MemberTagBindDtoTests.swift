@@ -2,7 +2,7 @@
 //  MemberTagBindDtoTests.swift
 //  kolco24Tests
 //
-//  Проводной формат `POST /app/race/<id>/member_tags/`: snake_case-ключи, `number` кодируется
+//  Проводной формат `POST /app/race/<id>/member_tags/bind/`: snake_case-ключи, `number` кодируется
 //  всегда (явный JSON `null` при `nil` — kotlinx-стиль), декодирование ответа с `code`.
 //  Кодирование сверяется через `JSONSerialization` над реально сериализованными байтами.
 //

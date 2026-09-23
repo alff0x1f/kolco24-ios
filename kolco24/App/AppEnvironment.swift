@@ -66,7 +66,7 @@ final class AppEnvironment {
     /// на LAN, как login/logout). Замыкание — `ProvisioningModel` не видит `ApiClient` напрямую (граф
     /// инкапсулирован фабрикой `AppModel.makeProvisioningModel`).
     let bindTag: (Int, Int, String) async -> PostResult<TagBindResponse>
-    /// `POST /app/race/<id>/member_tags/` (запись кода на браслет участника: `raceId`, `nfcUid`,
+    /// `POST /app/race/<id>/member_tags/bind/` (запись кода на браслет участника: `raceId`, `nfcUid`,
     /// `number` — `nil`, когда номер знает сервер) на **cloud-клиенте**, как `bindTag`. Замыкание —
     /// граф инкапсулирован фабрикой `AppModel.makeMemberProvisioningModel`.
     let bindMemberTag: (Int, String, Int?) async -> PostResult<MemberTagBindResponse>

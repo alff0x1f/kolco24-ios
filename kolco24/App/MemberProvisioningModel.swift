@@ -96,7 +96,7 @@ final class MemberProvisioningModel: Identifiable {
 
     @ObservationIgnored let raceId: Int
     @ObservationIgnored private let memberTagStore: MemberTagStore
-    /// `POST /app/race/<id>/member_tags/` на cloud-клиенте: (`raceId`, `nfcUid`, `number`).
+    /// `POST /app/race/<id>/member_tags/bind/` на cloud-клиенте: (`raceId`, `nfcUid`, `number`).
     @ObservationIgnored private let bindMemberTag: (Int, String, Int?) async -> PostResult<MemberTagBindResponse>
     /// 401 посреди записи: `AdminAuthRepository.onUnauthorized()` (чистит сессию → форма логина).
     @ObservationIgnored private let onUnauthorized: () -> Void

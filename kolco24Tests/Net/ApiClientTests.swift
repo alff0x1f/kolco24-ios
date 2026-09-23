@@ -695,7 +695,7 @@ struct ApiClientTests {
 
         let recorded = transport.last!
         #expect(recorded.httpMethod == "POST")
-        #expect(fullPath(recorded.url!) == "/app/race/8/member_tags/")
+        #expect(fullPath(recorded.url!) == "/app/race/8/member_tags/bind/")
         #expect(recorded.value(forHTTPHeaderField: "Content-Type") == "application/json")
         let obj = try #require(try JSONSerialization.jsonObject(with: recorded.httpBody!) as? [String: Any])
         #expect(obj["nfc_uid"] as? String == "04A2B3")

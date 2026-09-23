@@ -109,8 +109,12 @@ xcodebuild test ... -only-testing:kolco24Tests/<SuiteName>
 
 ### API-контракт (для бэкенда и для iOS)
 
-`POST /app/race/<raceId>/member_tags/` — cloud-клиент, подпись `X-App-*` + админский Bearer,
+`POST /app/race/<raceId>/member_tags/bind/` — cloud-клиент, подпись `X-App-*` + админский Bearer,
 **без ретраев** (как `bindTag`), путь с завершающим слэшем.
+
+> Бэкенд реализовал эндпоинт по пути `member_tags/bind/`, а не `member_tags/`, как планировалось изначально:
+> отдельный view рядом с GET пула. Тело и ответы совпадают с контрактом ниже. См.
+> `kolco24/docs/plans/completed/20260923-member-tag-bind-endpoint.md` в репо бэкенда.
 
 Запрос:
 ```json

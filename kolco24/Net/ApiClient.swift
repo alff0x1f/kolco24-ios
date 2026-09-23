@@ -301,7 +301,7 @@ struct ApiClient {
         }
     }
 
-    /// `POST /app/race/<raceId>/member_tags/` — получить серверный код для браслета участника
+    /// `POST /app/race/<raceId>/member_tags/bind/` — получить серверный код для браслета участника
     /// `nfcUid`. `number == nil` — UID уже в пуле `member_tags` (сервер отдаёт существующий код);
     /// с номером — сервер создаёт привязку. Тело `MemberTagBindRequest` (`number` всегда, `null`
     /// явно) сериализуется **один раз** (конвенция `post`). `201` при новом Tag / `200` при
@@ -321,7 +321,7 @@ struct ApiClient {
             // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
             return .error(code: nil)
         }
-        return await post(url: endpoint("/app/race/\(raceId)/member_tags/"), body: body) {
+        return await post(url: endpoint("/app/race/\(raceId)/member_tags/bind/"), body: body) {
             try JSONDecoder().decode(MemberTagBindResponse.self, from: $0)
         }
     }

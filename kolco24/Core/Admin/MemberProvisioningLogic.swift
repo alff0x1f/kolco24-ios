@@ -27,7 +27,7 @@ enum MemberProvisionState: Equatable {
     case waitingForChip
     /// UID [uid] не найден в пуле (или сервер ответил `404`) — ждём ввода номера участника.
     case needsNumber(uid: String)
-    /// Идёт `POST .../member_tags/` для [uid]; [number] == `nil` — номер знает сервер (UID в пуле).
+    /// Идёт `POST .../member_tags/bind/` для [uid]; [number] == `nil` — номер знает сервер (UID в пуле).
     case binding(uid: String, number: Int?)
     /// Сервер выдал код для участника [number]; ждём **повторного** прикладывания браслета [uid].
     case waitingForWrite(uid: String, number: Int)
