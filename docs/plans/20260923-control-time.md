@@ -200,12 +200,12 @@ func controlTimeState(
 **Files:**
 - Modify: `kolco24/MarksView.swift`
 
-- [ ] `MetricsCard`: новые параметры `controlState: (Int64) -> ControlTimeState` и `clock: ClockStatus`; убрать комментарий-заглушку
-- [ ] ячейка в `TimelineView(.everyMinute) { context in … }`: `nowMs = context.date ms − skewMs` при `.skewed`, иначе без поправки
-- [ ] подпись/значение по таблице из Technical Details; красный — существующим `MetricView(isWarning:)` (brandRed + mono-шрифт), новых параметров не добавлять
-- [ ] в `marksScreen` передать `{ model?.controlState(team: team, nowMs: $0) ?? .unknown }` и `appModel.clockStatus`
-- [ ] сборка проходит; логика уже покрыта тестами задач 2–3 (вьюхи в проекте не тестируются)
-- [ ] run tests - must pass before task 5
+- [x] `MetricsCard`: новые параметры `controlState: (Int64) -> ControlTimeState` и `clock: ClockStatus`; убрать комментарий-заглушку
+- [x] ячейка в `TimelineView(.everyMinute) { context in … }`: `nowMs = context.date ms − skewMs` при `.skewed`, иначе без поправки
+- [x] подпись/значение по таблице из Technical Details; красный — существующим `MetricView(isWarning:)` (brandRed + mono-шрифт), новых параметров не добавлять
+- [x] в `marksScreen` передать `{ model?.controlState(team: team, nowMs: $0) ?? .unknown }` и `appModel.clockStatus`
+- [x] сборка проходит; логика уже покрыта тестами задач 2–3 (вьюхи в проекте не тестируются)
+- [x] run tests - must pass before task 5
 
 ### Task 5: Verify acceptance criteria
 
