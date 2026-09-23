@@ -14,9 +14,8 @@
 /// Одна гонка. [dateEnd] опционален (одно-/многодневные события).
 ///
 /// [mapUrl] — прямой HTTPS-URL оффлайн-подложки `.mbtiles` для этой гонки
-/// (`nil` = карты нет). Первая iOS-only колонка сверх Room v5 (миграция `"v2"`, `map_url` в DTO);
-/// вторая — `categories.controlTime` (`"v3"`). Дефолт `nil` в `init` — существующие конструкции
-/// не трогаем.
+/// (`nil` = карты нет). Первая iOS-only колонка сверх Room v5 (миграция `"v2"`,
+/// `map_url` в DTO). Дефолт `nil` в `init` — существующие конструкции не трогаем.
 struct Race: Equatable {
     let id: Int
     let name: String

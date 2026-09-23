@@ -551,9 +551,9 @@ private struct MetricsCard: View {
             MetricView(label: "Баллов", value: scoreValue)
             VDivider()
             // Тик раз в минуту (формат Ч:ММ, минуты вниз). «Сейчас» — в trusted-шкале отметок
-            // (`trustedNowMs`), подпись/значение — `controlTimeDisplay` (оба в `Core/Marks/ControlTime`).
+            // (`trustedNowMs`, `Core/Time/TrustedNow`), подпись/значение — `controlTimeDisplay` (`Core/Marks/ControlTime`).
             TimelineView(.everyMinute) { context in
-                let wallMs = Int64((context.date.timeIntervalSince1970 * 1000).rounded(.down))
+                let wallMs = Int64((context.date.timeIntervalSince1970 * 1000).rounded())
                 let display = controlTimeDisplay(controlState(trustedNowMs(wallMs: wallMs, clock: clock)))
                 MetricView(label: display.label, value: display.value, isWarning: display.isWarning)
             }

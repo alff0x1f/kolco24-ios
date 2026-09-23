@@ -4,7 +4,7 @@
 //
 //  iOS-only (Kotlin-источника нет): чистая `controlTimeState` — состояния КВ,
 //  правила выбора старта/финиша, округление вниз как на сервере — форматтер
-//  `formatHoursMinutes`, перевод «сейчас» в trusted-шкалу и таблица ячейки «До КВ».
+//  `formatHoursMinutes` и таблица ячейки «До КВ».
 //
 
 import Testing
@@ -184,15 +184,6 @@ struct ControlTimeTests {
         #expect(formatHoursMinutes(8 * Self.hour) == "8:00")
         #expect(formatHoursMinutes(3 * Self.hour + 27 * Self.min + 59_000) == "3:27")
         #expect(formatHoursMinutes(12 * Self.min) == "0:12")
-    }
-
-    // MARK: - trustedNowMs
-
-    @Test func trustedNow_subtractsSkewOnlyWhenSkewed() {
-        #expect(trustedNowMs(wallMs: Self.t0, clock: .skewed(skewMs: 5 * Self.min)) == Self.t0 - 5 * Self.min)
-        #expect(trustedNowMs(wallMs: Self.t0, clock: .skewed(skewMs: -Self.hour)) == Self.t0 + Self.hour)
-        #expect(trustedNowMs(wallMs: Self.t0, clock: .ok) == Self.t0)
-        #expect(trustedNowMs(wallMs: Self.t0, clock: .noSync) == Self.t0)
     }
 
     // MARK: - controlTimeDisplay

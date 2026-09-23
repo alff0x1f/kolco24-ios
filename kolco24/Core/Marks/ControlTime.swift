@@ -41,13 +41,11 @@ func controlTimeState(
     controlMinutes: Int,
     nowMs: Int64
 ) -> ControlTimeState {
-    var typeById: [Int: String] = [:]
-    for cp in checkpoints { typeById[cp.id] = cp.type }
+    let typeById = Dictionary(checkpoints.map { ($0.id, $0.type) }, uniquingKeysWith: { first, _ in first })
 
-    func time(_ m: Mark) -> Int64 { m.trustedTakenAt ?? m.takenAt }
     func times(ofType type: String) -> [Int64] {
         marks.filter { $0.method == "nfc" && typeById[$0.checkpointId] == type }
-            .map(time)
+            .map { $0.trustedTakenAt ?? $0.takenAt }
             .filter { $0 > 0 }
     }
 
@@ -76,15 +74,7 @@ func formatHoursMinutes(_ ms: Int64) -> String {
     let totalMinutes = ms / msPerMinute
     let hours = totalMinutes / 60
     let minutes = totalMinutes % 60
-    return "\(hours):" + (minutes < 10 ? "0\(minutes)" : "\(minutes)")
-}
-
-/// «Сейчас» в trusted-шкале отметок из wall-времени. `skew = wall − trusted`, поэтому при
-/// `.skewed` skew вычитается. При `.ok` расхождение ниже порога skew не известно точно и не
-/// корректируется (≤ ±1 мин в ячейке — принято); при `.noSync` доверенного времени нет → wall.
-func trustedNowMs(wallMs: Int64, clock: ClockStatus) -> Int64 {
-    if case .skewed(let skewMs) = clock { return wallMs - skewMs }
-    return wallMs
+    return "\(hours):" + String(format: "%02d", minutes)
 }
 
 /// Подпись/значение/красный ячейки «До КВ» (таблица плана).
