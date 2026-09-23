@@ -317,7 +317,7 @@ struct AppDatabaseSchemaTests {
         let rows = try queue.read { db in
             try kolco24.Category.fetchAll(db, sql: "SELECT * FROM categories ORDER BY id")
         }
-        #expect(rows.map(\.id) == [45])
+        try #require(rows.map(\.id) == [45])
         #expect(rows[0].code == "m4")
         #expect(rows[0].sortOrder == 1)
         #expect(rows[0].controlTime == 0)

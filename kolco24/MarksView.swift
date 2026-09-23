@@ -5,13 +5,13 @@
 //  Вкладка «Отметки» на реальных данных. Порт ПОВЕДЕНИЯ `ui/marks/MarksScreen.kt`: метрики + сетка
 //  тайлов взятий выбранной команды из БД. Пока не взято ни одного КП, вместо сетки показывается
 //  чек-лист готовности к старту (`ReadinessCard`, iOS-only; заменил урезанную лестницу `MarksEmpty`).
-//  Данные и derived — из `MarksModel` (наблюдение взятий/КП/агрегатов/привязок).
+//  Данные и derived — из `MarksModel` (наблюдение взятий/КП/агрегатов/привязок/категорий).
 //
 //  Тайл на complete-взятие (oldest-first), существующий дизайн (`NFCTileView`/`PhotoTileView`).
 //  `ScanSheet` теперь на реальных данных (этап 5, `ScanModel`); `PhotoTile`/лайтбокс — заглушка (этап 7).
-//  «ДО КВ» в метриках —
-//  плейсхолдер «—» (источника нет, как в Android). Нудж «привяжи чипы» ведёт на вкладку «Команда»
-//  (`onBindChips`).
+//  «До КВ» в метриках — iOS-only (в Android плейсхолдер «—»): состояние КВ из `Core/Marks/ControlTime`
+//  по категории команды и её отметкам старта/финиша, тик раз в минуту. Нудж «привяжи чипы» ведёт на
+//  вкладку «Команда» (`onBindChips`).
 //
 
 import os
@@ -550,11 +550,11 @@ private struct MetricsCard: View {
             VDivider()
             MetricView(label: "Баллов", value: scoreValue)
             VDivider()
-            // Тик раз в минуту (формат Ч:ММ, минуты вниз). «Сейчас» переводим в trusted-шкалу
-            // отметок: `skew = wall − trusted`, поэтому при `.skewed` вычитаем skew.
+            // Тик раз в минуту (формат Ч:ММ, минуты вниз). «Сейчас» — в trusted-шкале отметок
+            // (`trustedNowMs`), подпись/значение — `controlTimeDisplay` (оба в `Core/Marks/ControlTime`).
             TimelineView(.everyMinute) { context in
                 let wallMs = Int64((context.date.timeIntervalSince1970 * 1000).rounded(.down))
-                let display = Self.display(controlState(wallMs - skewMs))
+                let display = controlTimeDisplay(controlState(trustedNowMs(wallMs: wallMs, clock: clock)))
                 MetricView(label: display.label, value: display.value, isWarning: display.isWarning)
             }
         }
@@ -562,27 +562,6 @@ private struct MetricsCard: View {
         .background(Color.card)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
-    }
-
-    private var skewMs: Int64 {
-        if case .skewed(let skewMs) = clock { return skewMs }
-        return 0
-    }
-
-    /// Подпись/значение/красный по таблице плана «До КВ».
-    private static func display(_ state: ControlTimeState) -> (label: String, value: String, isWarning: Bool) {
-        switch state {
-        case .unknown:
-            return ("До КВ", "—", false)
-        case .notStarted(let limitMs):
-            return ("КВ", formatHoursMinutes(limitMs), false)
-        case .running(let remainingMs):
-            return ("До КВ", formatHoursMinutes(remainingMs), false)
-        case .overtime(let overMs):
-            return ("Опоздание", "+" + formatHoursMinutes(overMs), true)
-        case .finished(let elapsedMs, let overMs):
-            return ("Время", formatHoursMinutes(elapsedMs), overMs != nil)
-        }
     }
 }
 

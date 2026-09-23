@@ -259,6 +259,8 @@ struct MarksModelTests {
 
         #expect(model.controlState(team: team(id: 42, race: 7, categoryId: nil), nowMs: 0) == .unknown)
         #expect(model.controlState(team: nil, nowMs: 0) == .unknown)
+        // categoryId указывает на незагруженную категорию → КВ 0 → `.unknown`.
+        #expect(model.controlState(team: team(id: 42, race: 7, categoryId: 999), nowMs: 0) == .unknown)
         // Категория с КВ, старта нет → КВ показывается.
         #expect(model.controlState(team: team(id: 42, race: 7, categoryId: 3), nowMs: 0)
                 == .notStarted(limitMs: 480 * 60_000))
@@ -269,18 +271,25 @@ struct MarksModelTests {
         try await env.teamStore.insertCategories([
             kolco24.Category(id: 3, raceId: 7, code: "24", shortName: "24ч", name: "24 часа",
                              sortOrder: 1, controlTime: 480),
+            kolco24.Category(id: 5, raceId: 8, code: "12", shortName: "12ч", name: "12 часов",
+                             sortOrder: 1, controlTime: 720),
         ])
 
         let model = MarksModel(env: env)
         model.rebind(teamId: 42, raceId: 7)
         await waitUntil { !model.categories.isEmpty }
-        #expect(model.categories.count == 1)
+        #expect(model.categories.map(\.id) == [3])
 
-        // Другая гонка: категории прежней не доживают до эмиссии новой (и не приходят после неё).
+        // Другая гонка: категории прежней очищаются синхронно, до эмиссии новой.
         model.rebind(teamId: 42, raceId: 8)
         #expect(model.categories.isEmpty)
         #expect(model.controlState(team: team(id: 42, race: 8, categoryId: 3), nowMs: 0) == .unknown)
-        try await Task.sleep(for: .milliseconds(100))
-        #expect(model.categories.isEmpty)
+
+        // После эмиссии — только категории новой гонки и её КВ.
+        await waitUntil { !model.categories.isEmpty }
+        #expect(model.categories.map(\.id) == [5])
+        #expect(model.controlState(team: team(id: 42, race: 8, categoryId: 3), nowMs: 0) == .unknown)
+        #expect(model.controlState(team: team(id: 42, race: 8, categoryId: 5), nowMs: 0)
+                == .notStarted(limitMs: 720 * 60_000))
     }
 }

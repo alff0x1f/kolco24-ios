@@ -3,8 +3,8 @@
 //  kolco24Tests
 //
 //  iOS-only (Kotlin-источника нет): чистая `controlTimeState` — состояния КВ,
-//  правила выбора старта/финиша, округление вниз как на сервере — и форматтер
-//  `formatHoursMinutes`.
+//  правила выбора старта/финиша, округление вниз как на сервере — форматтер
+//  `formatHoursMinutes`, перевод «сейчас» в trusted-шкалу и таблица ячейки «До КВ».
 //
 
 import Testing
@@ -26,7 +26,8 @@ struct ControlTimeTests {
         _ id: String,
         cp: Int,
         at takenAt: Int64,
-        trusted: Int64? = nil
+        trusted: Int64? = nil,
+        method: String = "nfc"
     ) -> Mark {
         Mark(
             id: id,
@@ -35,7 +36,7 @@ struct ControlTimeTests {
             checkpointId: cp,
             checkpointNumber: cp,
             cost: 0,
-            method: "nfc",
+            method: method,
             cpUid: "UID",
             cpCode: "CODE",
             present: [],
@@ -71,6 +72,7 @@ struct ControlTimeTests {
 
     @Test func overtime_atAndAfterLimit() {
         let s = [mark("s", cp: 100, at: Self.t0)]
+        #expect(state(s, now: Self.t0 + 8 * Self.hour - 1) == .running(remainingMs: 1))
         #expect(state(s, now: Self.t0 + 8 * Self.hour) == .overtime(overMs: 0))
         #expect(state(s, now: Self.t0 + 8 * Self.hour + 12 * Self.min) == .overtime(overMs: 12 * Self.min))
     }
@@ -108,6 +110,50 @@ struct ControlTimeTests {
         #expect(state(marks, now: Self.t0 + Self.hour) == .running(remainingMs: 7 * Self.hour))
     }
 
+    @Test func finishEqualsStart_finishedZero() {
+        let marks = [mark("s", cp: 100, at: Self.t0), mark("f", cp: 199, at: Self.t0)]
+        #expect(state(marks) == .finished(elapsedMs: 0, overMs: nil))
+    }
+
+    @Test func finishBeforeStart_laterValidFinishUsed() {
+        let marks = [mark("f0", cp: 199, at: Self.t0 - Self.hour), mark("s", cp: 100, at: Self.t0),
+                     mark("f1", cp: 199, at: Self.t0 + 5 * Self.hour)]
+        #expect(state(marks) == .finished(elapsedMs: 5 * Self.hour, overMs: nil))
+    }
+
+    @Test func twoValidFinishes_earliestWins() {
+        let marks = [mark("s", cp: 100, at: Self.t0), mark("f2", cp: 199, at: Self.t0 + 6 * Self.hour),
+                     mark("f1", cp: 199, at: Self.t0 + 5 * Self.hour)]
+        #expect(state(marks) == .finished(elapsedMs: 5 * Self.hour, overMs: nil))
+    }
+
+    @Test func trustedTakenAt_winsOnFinishMark() {
+        // wall-время финиша на 3 ч позже trusted — считается от trusted.
+        let marks = [mark("s", cp: 100, at: Self.t0),
+                     mark("f", cp: 199, at: Self.t0 + 8 * Self.hour, trusted: Self.t0 + 5 * Self.hour)]
+        #expect(state(marks) == .finished(elapsedMs: 5 * Self.hour, overMs: nil))
+    }
+
+    @Test func photoMarks_notBoundaries() {
+        // Сервер (`_auto_populate_boundary_times`) берёт только method == "nfc".
+        let photoStart = [mark("s", cp: 100, at: Self.t0, method: "photo")]
+        #expect(state(photoStart, now: Self.t0 + Self.hour) == .notStarted(limitMs: 8 * Self.hour))
+        let photoFinish = [mark("s", cp: 100, at: Self.t0),
+                           mark("f", cp: 199, at: Self.t0 + Self.hour, method: "photo")]
+        #expect(state(photoFinish, now: Self.t0 + 2 * Self.hour) == .running(remainingMs: 6 * Self.hour))
+    }
+
+    @Test func epochZeroMark_ignored() {
+        // Время 0 (незаданные часы) — не старт, как `boundary_ms > 0` на сервере.
+        let marks = [mark("s0", cp: 100, at: 0), mark("s", cp: 100, at: Self.t0)]
+        #expect(state(marks, now: Self.t0 + Self.hour) == .running(remainingMs: 7 * Self.hour))
+    }
+
+    @Test func absurdControlTime_overflowIsUnknown() {
+        #expect(state([], minutes: Int.max) == .unknown)
+        #expect(state([mark("s", cp: 100, at: Self.t0)], minutes: Int.max) == .unknown)
+    }
+
     @Test func noLegend_isNotStarted() {
         let marks = [mark("s", cp: 100, at: Self.t0), mark("f", cp: 199, at: Self.t0 + Self.hour)]
         #expect(state(marks, cps: []) == .notStarted(limitMs: 8 * Self.hour))
@@ -138,5 +184,31 @@ struct ControlTimeTests {
         #expect(formatHoursMinutes(8 * Self.hour) == "8:00")
         #expect(formatHoursMinutes(3 * Self.hour + 27 * Self.min + 59_000) == "3:27")
         #expect(formatHoursMinutes(12 * Self.min) == "0:12")
+    }
+
+    // MARK: - trustedNowMs
+
+    @Test func trustedNow_subtractsSkewOnlyWhenSkewed() {
+        #expect(trustedNowMs(wallMs: Self.t0, clock: .skewed(skewMs: 5 * Self.min)) == Self.t0 - 5 * Self.min)
+        #expect(trustedNowMs(wallMs: Self.t0, clock: .skewed(skewMs: -Self.hour)) == Self.t0 + Self.hour)
+        #expect(trustedNowMs(wallMs: Self.t0, clock: .ok) == Self.t0)
+        #expect(trustedNowMs(wallMs: Self.t0, clock: .noSync) == Self.t0)
+    }
+
+    // MARK: - controlTimeDisplay
+
+    @Test func display_table() {
+        func d(_ s: ControlTimeState) -> [String] {
+            let r = controlTimeDisplay(s)
+            return [r.label, r.value, r.isWarning ? "red" : "-"]
+        }
+        #expect(d(.unknown) == ["До КВ", "—", "-"])
+        #expect(d(.notStarted(limitMs: 8 * Self.hour)) == ["КВ", "8:00", "-"])
+        #expect(d(.running(remainingMs: 3 * Self.hour + 27 * Self.min + 59_000)) == ["До КВ", "3:27", "-"])
+        #expect(d(.overtime(overMs: 0)) == ["Опоздание", "+0:00", "red"])
+        #expect(d(.overtime(overMs: 12 * Self.min)) == ["Опоздание", "+0:12", "red"])
+        #expect(d(.finished(elapsedMs: 7 * Self.hour + 48 * Self.min, overMs: nil)) == ["Время", "7:48", "-"])
+        #expect(d(.finished(elapsedMs: 8 * Self.hour + 12 * Self.min, overMs: 12 * Self.min))
+            == ["Время", "8:12", "red"])
     }
 }

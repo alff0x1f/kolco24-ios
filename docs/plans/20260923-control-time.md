@@ -111,6 +111,8 @@ func controlTimeState(
 Алгоритм:
 1. `typeById = checkpoints` → `[id: type]`; время отметки `t(m) = m.trustedTakenAt ?? m.takenAt`.
 2. `start = min t(m)` среди отметок с типом `start`. `finish = min t(m)` среди `finish` с `t ≥ start`.
+   Учитываются только `method == "nfc"` и `t > 0` — как серверный `_auto_populate_boundary_times`
+   (фото-отметки не старт/финиш; добавлено по код-ревью).
 3. `limitMs = controlMinutes * 60_000`.
 4. Есть `start` и `finish`: `elapsed = finish − start`. `overMs = controlMinutes > 0 &&
    elapsed / 60_000 > controlMinutes ? elapsed − limitMs : nil` → `.finished(elapsed, overMs)`.

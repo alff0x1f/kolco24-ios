@@ -155,7 +155,7 @@ struct TeamRepositoryTests {
         #expect(team.members[1].numberInTeam == 2)
 
         let categories = try await storedCategories(h.dbWriter, raceId: 8)
-        #expect(categories.count == 2)
+        try #require(categories.count == 2)
         #expect(categories[0].shortName == "Муж")
         #expect(categories[0].sortOrder == 2)
         #expect(categories[0].controlTime == 480)   // control_time → controlTime
