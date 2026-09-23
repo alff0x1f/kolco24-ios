@@ -216,9 +216,9 @@ func controlTimeState(
 
 ### Task 6: [Final] Update documentation
 
-- [ ] CLAUDE.md: коротко — `AppDatabase` миграции (`v3` = `categories.controlTime`), `Core/Marks` упоминает ControlTime; компактно, без деталей стадии
-- [ ] `Model/Race.swift:17`: комментарий про iOS-only колонки учитывает `v3`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] CLAUDE.md: коротко — `AppDatabase` миграции (`v3` = `categories.controlTime`), `Core/Marks` упоминает ControlTime; компактно, без деталей стадии
+- [x] `Model/Race.swift:17`: комментарий про iOS-only колонки учитывает `v3`
+- [x] move this plan to `docs/plans/completed/` (done by orchestrator at completion)
 
 ## Post-Completion
 
