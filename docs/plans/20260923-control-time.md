@@ -174,13 +174,13 @@ func controlTimeState(
 - Create: `kolco24/Core/Marks/ControlTime.swift`
 - Create: `kolco24Tests/Core/ControlTimeTests.swift`
 
-- [ ] `enum ControlTimeState` и `func controlTimeState(marks:checkpoints:controlMinutes:nowMs:)` по алгоритму из Technical Details
-- [ ] `func formatHoursMinutes(_ ms: Int64) -> String` (`Ч:ММ`, минуты вниз, отрицательные не ожидаются)
-- [ ] тесты состояний: `unknown` (`controlMinutes == 0`), `notStarted`, `running`, `overtime`, `finished` с опозданием и без
-- [ ] тесты правил: две отметки старта → ранняя; финиш раньше старта игнорируется; финиш без старта → `notStarted`; `trustedTakenAt` важнее `takenAt`; без легенды → `notStarted`
-- [ ] тесты округления: опоздание 59 с на финише → `overMs == nil`; ровно 60 с → `overMs != nil`; `finished` при `controlMinutes == 0` → `overMs == nil`
-- [ ] тесты `formatHoursMinutes`: `0` → `0:00`, `59_999` → `0:00`, `8 ч` → `8:00`, `3 ч 27 мин 59 с` → `3:27`
-- [ ] run tests - must pass before task 3
+- [x] `enum ControlTimeState` и `func controlTimeState(marks:checkpoints:controlMinutes:nowMs:)` по алгоритму из Technical Details
+- [x] `func formatHoursMinutes(_ ms: Int64) -> String` (`Ч:ММ`, минуты вниз, отрицательные не ожидаются)
+- [x] тесты состояний: `unknown` (`controlMinutes == 0`), `notStarted`, `running`, `overtime`, `finished` с опозданием и без
+- [x] тесты правил: две отметки старта → ранняя; финиш раньше старта игнорируется; финиш без старта → `notStarted`; `trustedTakenAt` важнее `takenAt`; без легенды → `notStarted`
+- [x] тесты округления: опоздание 59 с на финише → `overMs == nil`; ровно 60 с → `overMs != nil`; `finished` при `controlMinutes == 0` → `overMs == nil`
+- [x] тесты `formatHoursMinutes`: `0` → `0:00`, `59_999` → `0:00`, `8 ч` → `8:00`, `3 ч 27 мин 59 с` → `3:27`
+- [x] run tests - must pass before task 3
 
 ### Task 3: Категории в `MarksModel`
 
