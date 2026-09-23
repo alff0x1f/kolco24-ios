@@ -209,10 +209,10 @@ func controlTimeState(
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] все состояния из Overview реализованы
-- [ ] инварианты: `grep -rn "import GRDB" kolco24/Core kolco24/App kolco24/Model` пусто; `ControlTime.swift` — только Foundation
-- [ ] полный прогон: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
+- [x] все состояния из Overview реализованы
+- [x] инварианты: `grep -rn "import GRDB" kolco24/Core kolco24/App kolco24/Model` пусто; `ControlTime.swift` — только Foundation (grep находит только упоминания в комментариях)
+- [x] полный прогон: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'` (на iPhone 16 Pro по UDID)
+- [x] сборка: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build` (на iPhone 16 Pro по UDID)
 
 ### Task 6: [Final] Update documentation
 
