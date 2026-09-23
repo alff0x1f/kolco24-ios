@@ -66,6 +66,10 @@ final class ProvisioningModel: Identifiable {
     @ObservationIgnored private var cachedCounts: [Int: Int] = [:]
     /// Человеко-читаемый номер КП, выданный сервером на тапе 1 — переносится в `success(number:)` на тапе 2.
     @ObservationIgnored private var pendingWriteNumber: Int?
+    /// UID последнего успешно записанного чипа: оставленный на телефоне, он детектится снова после
+    /// дебаунса (`restartPolling`) и без фильтра привязался бы к СЛЕДУЮЩЕМУ КП (автопереход) с
+    /// перезаписью. Игнорируется, пока не прочитан другой UID или админ сам не выбрал КП в степпере.
+    @ObservationIgnored private var lastWrittenUid: String?
 
     // MARK: - Зависимости
 
@@ -192,6 +196,11 @@ final class ProvisioningModel: Identifiable {
     /// (иначе чип, вооружённый для прежнего КП, записался бы на новый). No-op при выходе за границы.
     func selectCheckpoint(index: Int) {
         guard index >= 0, index < checkpoints.count else { return }
+        lastWrittenUid = nil
+        moveToCheckpoint(index: index)
+    }
+
+    private func moveToCheckpoint(index: Int) {
         selectedIndex = index
         resetChipState()
     }
@@ -237,11 +246,29 @@ final class ProvisioningModel: Identifiable {
 
     // MARK: - Обработка одного чтения (двухтаповый флоу)
 
-    /// Один прочитанный чип. Тап 1 (`waitingForChip`/`failed` — повтор) → bind; тап 2 (`waitingForWrite`)
+    /// Один прочитанный чип. Тап 1 (`waitingForChip`/`failed` — повтор) → bind (браслет с кодом участника —
+    /// `memberCode != nil` — отклоняется «Это браслет участника»); тап 2 (`waitingForWrite`)
     /// → сверка UID + исход записи. Во время `binding`/`success` чтения игнорируются (сериализовано `for await`).
     func processReading(_ reading: TagReading) async {
         switch provisionState {
         case .waitingForChip, .failed:
+            // Только что записанный чип всё ещё на телефоне — тихий игнор (иначе ре-bind к след. КП).
+            if reading.uid == lastWrittenUid { return }
+            lastWrittenUid = nil
+            // Сбой чтения: браслет с плохим контактом выглядел бы пустым чипом — bind не начинаем.
+            if reading.readFailed {
+                writeHint = nil
+                provisionState = .failed(reason: ProvisionMessage.readFailedTapAgain)
+                feedback.play(.failure)
+                return
+            }
+            // Браслет с записанным кодом участника — не перезаписываем его записью КП.
+            if reading.memberCode != nil {
+                writeHint = nil
+                provisionState = .failed(reason: ProvisionMessage.memberBracelet)
+                feedback.play(.failure)
+                return
+            }
             startBind(uid: reading.uid)
         case let .waitingForWrite(uid, _):
             handleWriteTap(reading: reading, expectedUid: uid)
@@ -279,7 +306,7 @@ final class ProvisioningModel: Identifiable {
                 pendingWriteNumber = response.number
                 scanner?.setPendingWrite(uid: uid, record: record)
                 provisionState = .waitingForWrite(uid: uid, code: response.code)
-                writeHint = "Приложите чип ещё раз"
+                writeHint = ProvisionMessage.kpWriteAgainHint
             } catch {
                 provisionState = .failed(reason: "Неверный код от сервера")
                 feedback.play(.failure)
@@ -305,8 +332,19 @@ final class ProvisioningModel: Identifiable {
         switch reading.writeResult {
         case .success:
             completeWrite(uid: expectedUid)
+        case let .wrongType(reason):
+            // Pre-write guard сканера: на чипе запись другого типа — ничего не записано, чип бросаем.
+            scanner?.clearPendingWrite()
+            pendingWriteNumber = nil
+            writeHint = nil
+            provisionState = .failed(reason: reason)
+            feedback.play(.failure)
+        case .readFailed:
+            // Pre-write чтение не удалось — ничего не записано, pending-write сохранён.
+            writeHint = ProvisionMessage.readFailedTapAgain
+            feedback.play(.failure)
         case .failed, .unsupported, .none:
-            writeHint = "Не удалось записать, приложите снова"
+            writeHint = ProvisionMessage.writeFailedTapAgain
             feedback.play(.failure)
         }
     }
@@ -324,6 +362,7 @@ final class ProvisioningModel: Identifiable {
         provisionState = .success(number: number)
         writeHint = nil
         pendingWriteNumber = nil
+        lastWrittenUid = uid
         scanner?.clearPendingWrite()
         feedback.play(.success)
         feedback.fanfare()
@@ -344,6 +383,6 @@ final class ProvisioningModel: Identifiable {
     private func advanceToNext() {
         guard !checkpoints.isEmpty else { resetChipState(); return }
         let next = min(selectedIndex + 1, checkpoints.count - 1)
-        selectCheckpoint(index: next)
+        moveToCheckpoint(index: next) // не selectCheckpoint: lastWrittenUid переживает автопереход
     }
 }

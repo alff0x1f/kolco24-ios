@@ -8,9 +8,11 @@
 //  `member_tags`. Ничего не пишется (transient) — только UI-лента.
 //
 //  Пул наблюдается (`observeForRace`); сканы игнорируются до ПЕРВОЙ эмиссии (null-sentinel `pool == nil`).
-//  Матч UID-only (браслет не несёт K24-кода); прочитанный код — лишь диагностика, чтобы отличить
-//  ошибочно тапнутый чип КП (`kpChip`) от по-настоящему неизвестного браслета (`unknown`). Размер пула
-//  идёт в idle-строку: `0` — признак «пул не синхронизирован».
+//  Матч UID-only: идентификация по-прежнему по UID, даже если на браслет записан K24-код участника
+//  (`TagReading.memberCode`, экран «Записать браслет участника») — его наличие лишь показывается
+//  («код записан» / «без кода», `FeedItem.hasCode`/`lastHasCode`). Прочитанный код КП — диагностика,
+//  чтобы отличить ошибочно тапнутый чип КП (`kpChip`) от по-настоящему неизвестного браслета
+//  (`unknown`). Размер пула идёт в idle-строку: `0` — признак «пул не синхронизирован».
 //
 //  `import SwiftUI`/`GRDB`/`CoreNFC` запрещены (grep-инвариант) — хватает `Observation`/`Foundation`.
 //  Прод-сканер `NfcChipScanner` инстанцируется фабрикой `AppModel.makeMemberChipCheckModel`; тесты
@@ -28,10 +30,12 @@ final class MemberChipCheckModel: Identifiable {
     nonisolated let id = UUID()
 
     /// Одна запись ленты недавних проверок: результат + метка стенных часов. `seq` — монотонный id.
+    /// `hasCode` — на браслете записан K24-код участника (осмыслен только для `.ok`).
     struct FeedItem: Equatable, Identifiable {
         let seq: Int
         let result: MemberChipCheckResult
         let atWallMs: Int64
+        let hasCode: Bool
         var id: Int { seq }
     }
 
@@ -41,6 +45,9 @@ final class MemberChipCheckModel: Identifiable {
     private(set) var feed: [FeedItem] = []
     /// Последний результат — драйвит крупный статус-hero экрана.
     private(set) var lastResult: MemberChipCheckResult?
+    /// Записан ли K24-код участника на последний проверенный чип (статус-панель читает его вместе
+    /// с `lastResult`; осмыслен только для `.ok`). Производное от головы ленты — отдельного состояния нет.
+    var lastHasCode: Bool { feed.first?.hasCode ?? false }
     /// Размер синхронизированного пула браслетов (idle-строка; `0` — признак «не синхронизирован»).
     private(set) var poolSize = 0
     /// Загрузился ли пул (первая эмиссия observation). До этого сканы игнорируются (null-sentinel).
@@ -151,11 +158,11 @@ final class MemberChipCheckModel: Identifiable {
         let result = classifyMemberChipCheck(
             uid: uid, memberNumber: memberNumber, hasKpCode: reading.code != nil
         )
-        apply(result, sample: reading.sample)
+        apply(result, hasCode: reading.memberCode != nil, sample: reading.sample)
     }
 
     /// Свёртка результата в UI + фидбек. `ok` → success; `kpChip`/`unknown` → failure.
-    private func apply(_ result: MemberChipCheckResult, sample: TimeSample) {
+    private func apply(_ result: MemberChipCheckResult, hasCode: Bool, sample: TimeSample) {
         lastResult = result
         switch result {
         case .ok:
@@ -163,12 +170,12 @@ final class MemberChipCheckModel: Identifiable {
         case .kpChip, .unknown:
             feedback.play(.failure)
         }
-        pushFeed(result, atWallMs: sample.wallMs)
+        pushFeed(result, hasCode: hasCode, atWallMs: sample.wallMs)
     }
 
-    private func pushFeed(_ result: MemberChipCheckResult, atWallMs: Int64) {
+    private func pushFeed(_ result: MemberChipCheckResult, hasCode: Bool, atWallMs: Int64) {
         feedSeq += 1
-        feed.insert(FeedItem(seq: feedSeq, result: result, atWallMs: atWallMs), at: 0)
+        feed.insert(FeedItem(seq: feedSeq, result: result, atWallMs: atWallMs, hasCode: hasCode), at: 0)
         if feed.count > Self.feedCap {
             feed.removeLast(feed.count - Self.feedCap)
         }

@@ -9,18 +9,21 @@
 //
 //  - `start()` открывает системную NFC-шторку; `stop()` инвалидирует её (закрытие оверлея);
 //  - `didDetect` → `connect` → UID (`normalizeNfcUid`) → семпл часов ДО чтения (§8) → блокирующий
-//    `readRecord` через `MiFareTransport` на выделенной `readQueue` (дедлок-ловушка — см. MiFareTransport)
-//    → `TagReading` в стрим → `restartPolling()` для следующего чипа;
+//    `readRecordPages` через `MiFareTransport` на выделенной `readQueue` (дедлок-ловушка — см. MiFareTransport)
+//    → `decodeTagPages` (код КП / код браслета участника) → `TagReading` в стрим → `restartPolling()`;
 //  - дебаунс того же UID ~1.5 с (гасит звуковой спам, редьюсер и так идемпотентен);
 //  - 60-с системный лимит iOS (`sessionTimeout`) / ошибка чтения + хост говорит «окно живо» (`shouldRestart`)
 //    → молча пересоздаём сессию; поток при этом НЕ завершается (для участника — короткое мигание шторки);
-//  - отмена пользователем (`userCanceled`) → завершаем поток (хост закрывает оверлей штатно).
+//  - отмена пользователем (`userCanceled`) → завершаем поток (хост закрывает оверлей штатно или, как
+//    экраны записи браслетов, предлагает начать сканирование заново — `start()` повторно входим после
+//    `waitUntilStopped()`: `readings()` отдаёт свежий поток).
 //
 //  И скан-оверлей, и bind-лист держат ОДНУ длинную сессию на всё время открытого экрана (bind — порт
 //  Android-`DisposableEffect`-хука до `onDispose`): после `poolNotReady`/`notInPool` участник может
 //  поднести чип снова, поэтому одноразового режима нет.
 //
-//  Не-K24 чип (`readRecord` → nil) — валидное чтение браслета участника, НЕ ошибка (§9); различение
+//  Чип без K24-записи КП (`code == nil`, в т.ч. браслет с кодом участника — он в `memberCode`) — валидное
+//  чтение браслета участника, НЕ ошибка (§9); различение
 //  КП/участник/непривязанный делает `classifyTag` уже в `ScanModel`.
 //
 //  `import CoreNFC` живёт только под `Nfc/` (grep-инвариант этапа 5).
@@ -43,7 +46,7 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
 
     /// Выделенная очередь для делегатных колбэков сессии (НЕ main).
     private let delegateQueue = DispatchQueue(label: "ru.kolco24.nfc.session")
-    /// Выделенная очередь блокирующего `readRecord` — отдельная от делегатной (дедлок-ловушка).
+    /// Выделенная очередь блокирующих `readRecordPages`/`writeRecord` — отдельная от делегатной (дедлок-ловушка).
     private let readQueue = DispatchQueue(label: "ru.kolco24.nfc.read")
 
     private let lock = NSLock()
@@ -54,6 +57,11 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
     /// множество закрывает гонку stop с тихим пересозданием после системного 60-с таймаута.
     private var activeSessionIds: Set<ObjectIdentifier> = []
     private var stopWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Поколение потока: растёт на каждом `start()`. `didInvalidateWithError` старой сессии снимает его под
+    /// тем же lock, где удаляет сессию, и завершает поток/пересоздаёт сессию только если поколение не
+    /// сменилось — иначе `waitUntilStopped()` уже отпустил хоста, и тот поднял свежий поток (`start()`),
+    /// который запоздалая инвалидация не должна убить.
+    private var generation = 0
 
     /// Дебаунс: последний прочитанный UID и когда.
     private var lastUid: String?
@@ -91,8 +99,10 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
     func start() {
         lock.lock()
         finished = false
+        generation += 1
+        let gen = generation
         lock.unlock()
-        beginSession()
+        beginSession(generation: gen)
     }
 
     func stop() {
@@ -159,7 +169,7 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         lock.unlock()
     }
 
-    /// Per-tag обработчик: воспроизводит чтение (`readRecord` → `TagReading`), а при вооружённой
+    /// Per-tag обработчик: воспроизводит чтение (`readRecordPages` → разбор КП / браслета → `TagReading`), а при вооружённой
     /// pending-write ячейке с совпавшим UID вместо чтения делает `writeRecord` (header-last + read-back
     /// внутри) и кладёт исход в `writeResult`. Один механизм: несовпадающий UID при активной ячейке →
     /// обычное чтение, `writeResult == nil`. Выполняется на `readQueue`.
@@ -169,18 +179,28 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         let pendingRecord = pendingWriteRecord
         lock.unlock()
         if let pendingUid, let pendingRecord, pendingUid == uid {
-            let result = writeRecord(transport, record: pendingRecord)
+            // Pre-write guard (чистый `writeGuardDecision`): не затирать K24-запись другого типа и не
+            // писать вслепую, если текущие страницы не прочитались (pending-write остаётся — тап снова).
+            let result: ChipWriteResult
+            switch writeGuardDecision(currentPages: readRecordPages(transport), record: pendingRecord) {
+            case .allow: result = writeRecord(transport, record: pendingRecord)
+            case .readFailed: result = .readFailed
+            case let .wrongType(reason): result = .wrongType(reason: reason)
+            }
             return TagReading(code: nil, uid: uid, sample: sample, writeResult: result)
         }
-        let code = readRecord(transport)
-        return TagReading(code: code, uid: uid, sample: sample)
+        // Одно чтение сырых страниц, разбор в оба типа — чистый `decodeTagPages` (Core/Nfc, под тестами).
+        // `nil`-страницы (ошибка I/O) помечаются `readFailed` — провижининг не начнёт bind по такому тапу.
+        let pages = readRecordPages(transport)
+        let (code, memberCode) = decodeTagPages(pages)
+        return TagReading(code: code, uid: uid, sample: sample, memberCode: memberCode, readFailed: pages == nil)
     }
 
     // MARK: - Сессия
 
-    private func beginSession() {
+    private func beginSession(generation gen: Int) {
         guard NFCTagReaderSession.readingAvailable else {
-            finishStream()
+            finishStream(generation: gen)
             return
         }
         lock.lock()
@@ -189,7 +209,7 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         guard let s = NFCTagReaderSession(
             pollingOption: .iso14443, delegate: self, queue: delegateQueue
         ) else {
-            finishStream()
+            finishStream(generation: gen)
             return
         }
         s.alertMessage = message
@@ -200,7 +220,8 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         // под тем же lock, если поток ещё жив; иначе сессию-сироту никто не инвалидирует → системная
         // NFC-шторка зависает до перезапуска приложения. Проверка finished и публикация session
         // атомарны относительно lock, поэтому stop() не может вклиниться между ними.
-        if finished {
+        // Та же логика для сменившегося поколения: хост уже поднял новый поток со своей сессией.
+        if finished || generation != gen {
             lock.unlock()
             s.invalidate()
             return
@@ -211,8 +232,14 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
         s.begin()
     }
 
-    private func finishStream() {
+    /// Завершить поток поколения [gen]; no-op, если с тех пор был новый `start()` (гонка с запоздалой
+    /// инвалидацией старой сессии — см. `generation`).
+    private func finishStream(generation gen: Int) {
         lock.lock()
+        guard generation == gen else {
+            lock.unlock()
+            return
+        }
         finished = true
         let cont = continuation
         continuation = nil
@@ -240,21 +267,24 @@ extension NfcChipScanner: NFCTagReaderSessionDelegate {
         session === self.session ? (self.session = nil) : ()
         activeSessionIds.remove(ObjectIdentifier(session))
         let alreadyFinished = finished
+        // Снимаем поколение под тем же lock, что и удаление сессии: после unlock `waitUntilStopped()` может
+        // отпустить хоста, и его новый `start()` не должен быть завершён этой (старой) инвалидацией.
+        let gen = generation
         lock.unlock()
 
         let code = (error as? NFCReaderError)?.code
         // Отмена пользователем (в т.ч. наш собственный `invalidate()` из stop() приходит как
         // userCanceled) → завершаем поток. Хост закрывает оверлей штатно.
         if code == .readerSessionInvalidationErrorUserCanceled {
-            finishStream()
+            finishStream(generation: gen)
             return
         }
         // 60-с лимит iOS / ошибка чтения: если окно ещё живо и оверлей открыт — молча пересоздаём сессию.
         if !alreadyFinished && shouldRestart() {
-            beginSession()
+            beginSession(generation: gen)
             return
         }
-        finishStream()
+        finishStream(generation: gen)
     }
 
     func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
@@ -283,7 +313,7 @@ extension NfcChipScanner: NFCTagReaderSessionDelegate {
                 return
             }
             // Блокирующее чтение/запись — на readQueue, НЕ на делегатной очереди сессии (дедлок-ловушка).
-            // Per-tag шаг: `defaultProcess` (`readRecord`, а при вооружённой pending-write ячейке —
+            // Per-tag шаг: `defaultProcess` (`readRecordPages`, а при вооружённой pending-write ячейке —
             // `writeRecord`). Session-менеджмент ниже не меняется.
             self.readQueue.async {
                 let transport = MiFareTransport(tag: miFare)

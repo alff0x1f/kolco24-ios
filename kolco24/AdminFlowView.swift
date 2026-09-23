@@ -10,9 +10,10 @@
 //  «Войти», спиннер, inline-ошибка из
 //  `adminErrorMessage`); `loggedIn` → email + ряды действий.
 //
-//  Действия «Отметка старта»/«Отметка финиша» пушат `JudgeScanView` (этап 10, задача 9). Ряды
-//  «Привязать чип к КП»/«Проверить чип КП»/«Проверить чип участника» — плейсхолдеры (задачи 10 и 12
-//  подключат `CheckChipView`/`CheckMemberChipView`/`ProvisioningView`), сейчас видимы и задизейблены.
+//  Секция «Чипы» — пары «записать → проверить»: «Привязать чип к КП» (`ProvisioningView`) /
+//  «Проверить чип КП» (`CheckChipView`), «Записать браслет участника» (`MemberProvisioningView`,
+//  K24-код типа `0x2`) / «Проверить чип участника» (`CheckMemberChipView`).
+//  «Отметка старта»/«Отметка финиша» пушат `JudgeScanView` (этап 10, задача 9).
 //
 //  Без выбранной команды (`selectedRaceId == nil`) — вместо рядов действий подсказка (гонка неизвестна,
 //  судейский `raceId` взять неоткуда).
@@ -26,6 +27,7 @@ private enum AdminRoute: Hashable {
     case checkChip
     case checkMemberChip
     case provisioning
+    case memberProvisioning
 }
 
 struct AdminFlowView: View {
@@ -45,6 +47,8 @@ struct AdminFlowView: View {
                         CheckMemberChipHostView()
                     case .provisioning:
                         ProvisioningHostView()
+                    case .memberProvisioning:
+                        MemberProvisioningHostView()
                     }
                 }
         }
@@ -211,6 +215,11 @@ private struct AdminHomeView: View {
                     NavigationLink(value: AdminRoute.checkChip) {
                         AdminActionRow(systemImage: "magnifyingglass", iconBg: Color.charcoal,
                                        label: "Проверить чип КП", sub: "Оффлайн-проверка привязки", enabled: true)
+                    }
+                    .listRowBackground(Color.card)
+                    NavigationLink(value: AdminRoute.memberProvisioning) {
+                        AdminActionRow(systemImage: "person.badge.key.fill", iconBg: Color.charcoal,
+                                       label: "Записать браслет участника", sub: "Запись кода на браслет", enabled: true)
                     }
                     .listRowBackground(Color.card)
                     NavigationLink(value: AdminRoute.checkMemberChip) {
@@ -388,6 +397,28 @@ private struct ProvisioningHostView: View {
             }
         }
         .task { if model == nil { model = appModel.makeProvisioningModel() } }
+    }
+}
+
+/// Строит `MemberProvisioningModel` из графа (`AppModel.makeMemberProvisioningModel`) и держит его,
+/// пока экран на стеке. На 401 (`closeRequested`) — авто-возврат в форму логина (сессия уже отозвана).
+private struct MemberProvisioningHostView: View {
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var model: MemberProvisioningModel?
+
+    var body: some View {
+        Group {
+            if let model {
+                MemberProvisioningView(model: model)
+                    .onChange(of: model.closeRequested) { _, requested in
+                        if requested { dismiss() }
+                    }
+            } else {
+                AdminNoTeamPlaceholder()
+            }
+        }
+        .task { if model == nil { model = appModel.makeMemberProvisioningModel() } }
     }
 }
 

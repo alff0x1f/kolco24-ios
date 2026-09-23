@@ -148,6 +148,26 @@ struct ProvisioningModelTests {
         #expect(scanner.pendingUid == nil) // разоружён после успеха
     }
 
+    @Test func memberBraceletWithCode_rejected_noBind() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5)])
+        let feedback = RecordingFeedback()
+        let bind = BindStub(okResponse(number: 5, code: goodCodeHex))
+        let model = makeModel(env: env, bind: bind, feedback: feedback)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { !model.checkpoints.isEmpty }
+
+        await model.processReading(TagReading(
+            code: nil, uid: "M1",
+            sample: TimeSample(wallMs: 2000, elapsedMs: 1000, trustedMs: nil, bootCount: nil),
+            memberCode: Data(repeating: 0xAB, count: 16)))
+        #expect(model.provisionState == .failed(reason: "Это браслет участника"))
+        #expect(bind.calls.isEmpty)
+        #expect(scanner.pendingUid == nil)
+        #expect(feedback.failureCount == 1)
+    }
+
     // MARK: - Ошибки bind
 
     @Test func bind409_failedConflictString() async throws {
@@ -337,5 +357,117 @@ struct ProvisioningModelTests {
         #expect(model.selectedIndex == 1)
         #expect(model.provisionState == .waitingForChip)
         #expect(scanner.pendingUid == nil)
+    }
+
+    // MARK: - Чип, оставленный на телефоне / сбой чтения / pre-write guard
+
+    @Test func chipLeftOnPhone_afterAutoAdvance_notReboundToNextKp() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5), kp(2, number: 12, color: "blue")])
+        let feedback = RecordingFeedback()
+        let bind = BindStub(okResponse(code: goodCodeHex))
+        let model = makeModel(env: env, bind: bind, feedback: feedback, successHoldMs: 20)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { model.checkpoints.count == 2 }
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { if case .waitingForWrite = model.provisionState { return true }; return false }
+        scanner.emit(reading(uid: "U1", writeResult: .success))
+        await waitUntil { model.selectedIndex == 1 && model.provisionState == .waitingForChip }
+        #expect(model.selectedIndex == 1)
+
+        // Тот же чип детектится снова на следующем КП — тихий игнор.
+        await model.processReading(reading(uid: "U1"))
+        #expect(model.provisionState == .waitingForChip)
+        #expect(bind.calls.count == 1)
+        #expect(feedback.failureCount == 0)
+
+        // Другой чип снимает фильтр и биндится как обычно.
+        await model.processReading(reading(uid: "U2"))
+        await waitUntil { bind.calls.count == 2 }
+        #expect(bind.calls.last?.2 == "U2")
+        model.stop()
+    }
+
+    @Test func chipLeftOnPhone_manualSelectCheckpoint_clearsFilter() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5), kp(2, number: 12, color: "blue")])
+        let bind = BindStub(okResponse(code: goodCodeHex))
+        let model = makeModel(env: env, bind: bind, successHoldMs: 20)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { model.checkpoints.count == 2 }
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { if case .waitingForWrite = model.provisionState { return true }; return false }
+        scanner.emit(reading(uid: "U1", writeResult: .success))
+        await waitUntil { model.selectedIndex == 1 && model.provisionState == .waitingForChip }
+
+        model.selectCheckpoint(index: 0)
+        await model.processReading(reading(uid: "U1"))
+        await waitUntil { bind.calls.count == 2 }
+        #expect(bind.calls.last?.1 == 1)
+        model.stop()
+    }
+
+    @Test func readFailedTap_failed_noBind() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5)])
+        let feedback = RecordingFeedback()
+        let bind = BindStub(okResponse(code: goodCodeHex))
+        let model = makeModel(env: env, bind: bind, feedback: feedback)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { !model.checkpoints.isEmpty }
+
+        await model.processReading(TagReading(
+            code: nil, uid: "U1",
+            sample: TimeSample(wallMs: 2000, elapsedMs: 1000, trustedMs: nil, bootCount: nil),
+            readFailed: true))
+        #expect(model.provisionState == .failed(reason: "Не удалось прочитать, приложите снова"))
+        #expect(bind.calls.isEmpty)
+        #expect(feedback.failureCount == 1)
+        model.stop()
+    }
+
+    @Test func writeTap_wrongType_failedAndDisarmed() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5)])
+        let feedback = RecordingFeedback()
+        let model = makeModel(env: env, bind: BindStub(okResponse(code: goodCodeHex)), feedback: feedback)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { !model.checkpoints.isEmpty }
+
+        scanner.emit(reading(uid: "M1"))
+        await waitUntil { if case .waitingForWrite = model.provisionState { return true }; return false }
+        scanner.emit(reading(uid: "M1", writeResult: .wrongType(reason: "Это браслет участника")))
+        await waitUntil { if case .failed = model.provisionState { return true }; return false }
+        #expect(model.provisionState == .failed(reason: "Это браслет участника"))
+        #expect(scanner.pendingUid == nil)
+        #expect(model.freshLabels(model.checkpoints[0]).isEmpty)
+        #expect(feedback.failureCount == 1)
+        model.stop()
+    }
+    @Test func writeTap_preWriteReadFailed_readHint_keepsPending() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5)])
+        let feedback = RecordingFeedback()
+        let model = makeModel(env: env, bind: BindStub(okResponse(code: goodCodeHex)), feedback: feedback)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { !model.checkpoints.isEmpty }
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { if case .waitingForWrite = model.provisionState { return true }; return false }
+        scanner.emit(reading(uid: "U1", writeResult: .readFailed))
+        await waitUntil { model.writeHint == "Не удалось прочитать, приложите снова" }
+        if case .waitingForWrite = model.provisionState {} else {
+            Issue.record("ожидался waitingForWrite после pre-write readFailed, получено \(model.provisionState)")
+        }
+        #expect(scanner.pendingUid == "U1")
+        #expect(feedback.failureCount == 1)
+        model.stop()
     }
 }

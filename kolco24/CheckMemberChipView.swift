@@ -4,7 +4,8 @@
 //
 //  Read-only проверка браслетов участников «Проверка браслетов» (этап 10). Рендерит состояние
 //  `MemberChipCheckModel`: hero последнего скана (зелёный `№N` для `ok` / amber «Это чип КП» для
-//  `kpChip` / красный «Неизвестный чип» для `unknown`) + idle-строка с размером пула (`0` — признак
+//  `kpChip` / красный «Неизвестный чип» для `unknown`; для `ok` — ещё «код записан» / «без кода» по наличию
+//  K24-кода участника на браслете) + idle-строка с размером пула (`0` — признак
 //  «пул не синхронизирован») + лента недавних (до 20). Полностью оффлайн, ничего не пишет.
 //
 //  `.task` стартует привязанный прод-сканер; `onDisappear` — `model.stop()`. UI-референс —
@@ -57,6 +58,9 @@ struct CheckMemberChipView: View {
                     .font(.mono(13, weight: .medium))
                     .foregroundStyle(Color.sub)
                     .lineLimit(1)
+            }
+            if case .ok = model.lastResult {
+                CodeBadge(hasCode: model.lastHasCode)
             }
         }
         .frame(maxWidth: .infinity)
@@ -122,6 +126,9 @@ struct CheckMemberChipView: View {
                 Text(s.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.ink)
+                if case .ok = item.result {
+                    CodeBadge(hasCode: item.hasCode)
+                }
                 Spacer()
                 Text(timeString(item.atWallMs))
                     .font(.mono(12, weight: .medium))
@@ -132,6 +139,28 @@ struct CheckMemberChipView: View {
         private func timeString(_ wallMs: Int64) -> String {
             AdminClockFormat.time(wallMs)
         }
+    }
+}
+
+// MARK: - Наличие кода участника
+
+/// Пилюля «код записан» / «без кода» — есть ли на браслете K24-код участника (только для `.ok`).
+private struct CodeBadge: View {
+    let hasCode: Bool
+
+    var body: some View {
+        let color = hasCode ? Color.good : Color.sub
+        HStack(spacing: 4) {
+            Image(systemName: hasCode ? "key.fill" : "minus.circle")
+                .font(.system(size: 10, weight: .semibold))
+            Text(hasCode ? "код записан" : "без кода")
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.12))
+        .clipShape(Capsule())
     }
 }
 

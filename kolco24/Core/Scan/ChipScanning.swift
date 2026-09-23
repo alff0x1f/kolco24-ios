@@ -16,12 +16,18 @@
 
 import Foundation
 
-/// Одно чтение чипа, поднятое сканером в `ScanModel`.
+/// Одно чтение чипа, поднятое сканером в хост (`ScanModel`, судейский/проверочные экраны, экраны
+/// записи `ProvisioningModel`/`MemberProvisioningModel`).
 ///
-/// - `code`: расшифрованный K24-код чипа (`readRecord` → `chipCodeHex`), или `nil`
-///   для не-K24 чипа — это валидное чтение браслета участника, **не** ошибка
-///   (Technical Details §9). Различение КП/участник/непривязанный делает
-///   `classifyTag` уже в редьюсере, не здесь.
+/// - `code`: расшифрованный K24-код **КП** (тип `CHIP_TYPE_KP`), или `nil` для
+///   чипа без K24-записи КП («не-K24 = браслет») — это валидное чтение браслета
+///   участника, **не** ошибка (Technical Details §9). Различение КП/участник/
+///   непривязанный делает `classifyTag` уже в редьюсере, не здесь.
+/// - `memberCode`: K24-код браслета участника (тип `CHIP_TYPE_PARTICIPANT`), если
+///   он записан; разбирается из тех же сырых страниц (`decodeTagPages`, лишнего
+///   transceive нет). `nil` — браслет без кода / чип КП. Пока используется
+///   лишь «Проверкой браслетов» (наличие кода); отметки и судейские сканы по-прежнему
+///   идентифицируют браслет по UID. Дефолт `nil` в `init`.
 /// - `uid`: нормализованный UID тега (`normalizeNfcUid` — сделан сканером до
 ///   подъёма чтения).
 /// - `sample`: снимок `TrustedClock.sample()`, взятый **до** чтения чипа
@@ -32,17 +38,27 @@ import Foundation
 ///   для тапа по чужому UID при активной ячейке — модель тогда покажет «Приложите
 ///   тот же чип»). Дефолт `nil` в `init` сохраняет существующие construction-sites
 ///   (`FakeChipScanner`, `ScanModelTests`) без изменений.
+/// - `readFailed`: страницы записи не прочитались (I/O-ошибка / NAK) — `code`/`memberCode` тогда
+///   `nil` не потому, что записи нет. Экраны провижининга по такому тапу не начинают bind (просят
+///   приложить снова); прочие хосты флаг не смотрят. Дефолт `false`.
 struct TagReading: Equatable {
     let code: Data?
     let uid: String
     let sample: TimeSample
     let writeResult: ChipWriteResult?
+    let memberCode: Data?
+    let readFailed: Bool
 
-    init(code: Data?, uid: String, sample: TimeSample, writeResult: ChipWriteResult? = nil) {
+    init(
+        code: Data?, uid: String, sample: TimeSample,
+        writeResult: ChipWriteResult? = nil, memberCode: Data? = nil, readFailed: Bool = false
+    ) {
         self.code = code
         self.uid = uid
         self.sample = sample
         self.writeResult = writeResult
+        self.memberCode = memberCode
+        self.readFailed = readFailed
     }
 }
 
@@ -67,8 +83,9 @@ protocol ChipScanning: AnyObject {
     /// Дождаться фактической инвалидации платформенной сессии. `stop()` только инициирует закрытие
     /// системной NFC-шторки; этот барьер завершается из delegate-callback CoreNFC.
     func waitUntilStopped() async
-    /// Прогресс-строка для системной NFC-шторки, которую хост (`ScanModel`) толкает по мере набора
-    /// участников («Приложите чип КП» / «КП 32 · чипы 2/4» / диагностика). У `NfcChipScanner` это
+    /// Прогресс-строка для системной NFC-шторки, которую хост толкает по ходу флоу (`ScanModel`:
+    /// «Приложите чип КП» / «КП 32 · чипы 2/4» / диагностика; `MemberProvisioningModel`: строки
+    /// `memberProvisionStatusLine` — «Приложите браслет участника» и т.п.). У `NfcChipScanner` это
     /// `session.alertMessage`; у фейков/превью — no-op (нет системной шторки).
     func setStatus(_ text: String)
 }
@@ -81,18 +98,20 @@ extension ChipScanning {
     func setStatus(_ text: String) {}
 }
 
-/// Расширение `ChipScanning` для провижининга (этап 10): pending-write ячейка. Хост
-/// (`ProvisioningModel`) вооружает сканер записью на следующий тап (`setPendingWrite`) и
-/// разоружает её при смене КП / успешной записи / закрытии экрана (`clearPendingWrite`). Ячейку
+/// Расширение `ChipScanning` для провижининга (этап 10 + браслеты участников): pending-write ячейка.
+/// Хост (`ProvisioningModel` — чипы КП, `MemberProvisioningModel` — браслеты) вооружает сканер
+/// записью на следующий тап (`setPendingWrite`) и разоружает её при смене КП / «Отмене» / отказе
+/// по типу / успешной записи / закрытии экрана (`clearPendingWrite`). Ячейку
 /// читает ТОЛЬКО инжектированный обработчик сканера на `readQueue` (один механизм, не два — см.
-/// `NfcChipScanner.defaultProcess`): при совпадении UID он делает `writeRecord` + read-back и кладёт
-/// исход в `TagReading.writeResult`; несовпадающий UID → обычное чтение (`writeResult == nil`).
+/// `NfcChipScanner.defaultProcess`): при совпадении UID он делает pre-write guard
+/// (`writeGuardDecision`) + `writeRecord` + read-back и кладёт исход в `TagReading.writeResult`;
+/// несовпадающий UID → обычное чтение (`writeResult == nil`).
 /// Реализуется `NfcChipScanner` (Nfc/) и тестовым фейком; обычный скан/судейский/чек-флоу его не
 /// требуют (потому это отдельный протокол, а не расширение `ChipScanning` — этап 5 не трогается).
 protocol ProvisioningScanning: ChipScanning {
     /// Вооружить сканер записью [record] для следующего тапа по чипу с совпавшим [uid].
     func setPendingWrite(uid: String, record: Data)
-    /// Разоружить сканер (смена КП / успешная запись / закрытие экрана). Идемпотентно.
+    /// Разоружить сканер (смена КП / «Отмена» / успешная запись / закрытие экрана). Идемпотентно.
     func clearPendingWrite()
 }
 

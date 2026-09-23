@@ -66,6 +66,10 @@ final class AppEnvironment {
     /// на LAN, как login/logout). Замыкание — `ProvisioningModel` не видит `ApiClient` напрямую (граф
     /// инкапсулирован фабрикой `AppModel.makeProvisioningModel`).
     let bindTag: (Int, Int, String) async -> PostResult<TagBindResponse>
+    /// `POST /app/race/<id>/member_tags/bind/` (запись кода на браслет участника: `raceId`, `nfcUid`,
+    /// `number` — `nil`, когда номер знает сервер) на **cloud-клиенте**, как `bindTag`. Замыкание —
+    /// граф инкапсулирован фабрикой `AppModel.makeMemberProvisioningModel`.
+    let bindMemberTag: (Int, String, Int?) async -> PostResult<MemberTagBindResponse>
 
     // MARK: - Этап 9 (LAN-режим + настройки)
     /// Единый держатель текущего `RaceLease` (LAN-пин): координатор пишет через `set(_:)`, пин-гарды
@@ -318,6 +322,10 @@ final class AppEnvironment {
         // Этап 10: провижининг — bind чипа к КП на cloud-клиенте (как login/logout).
         bindTag = { raceId, checkpointId, nfcUid in
             await cloud.bindTag(raceId: raceId, checkpointId: checkpointId, nfcUid: nfcUid)
+        }
+        // Запись браслетов участников — тоже cloud-клиент.
+        bindMemberTag = { raceId, nfcUid, number in
+            await cloud.bindMemberTag(raceId: raceId, nfcUid: nfcUid, number: number)
         }
 
         // Этап 6: дренаж взятий поверх тех же cloud/local-клиентов + `installId` (провенанс устройства).

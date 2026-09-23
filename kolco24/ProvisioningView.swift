@@ -184,7 +184,7 @@ struct ProvisioningView: View {
                      title: "Привязка на сервере…", subtitle: nil, spinning: true)
         case .waitingForWrite:
             scanCard(icon: "square.and.arrow.down", tint: Color.kolcoOrange,
-                     title: model.writeHint ?? "Приложите чип ещё раз",
+                     title: model.writeHint ?? ProvisionMessage.kpWriteAgainHint,
                      subtitle: "Тап 2 — запись кода на чип")
         case let .success(number):
             scanCard(icon: "checkmark.circle.fill", tint: Color.good,
@@ -227,22 +227,6 @@ struct ProvisioningView: View {
 }
 
 // MARK: - Вспомогательные вьюхи
-
-/// Непрерывное вращение глифа во время bind.
-private struct SpinModifier: ViewModifier {
-    let active: Bool
-    @State private var angle: Double = 0
-    func body(content: Content) -> some View {
-        content
-            .rotationEffect(.degrees(active ? angle : 0))
-            .onAppear {
-                guard active else { return }
-                withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                    angle = 360
-                }
-            }
-    }
-}
 
 /// Простая перенос-по-строкам раскладка зелёных пилюль свежих чипов.
 private struct FlowPills: View {

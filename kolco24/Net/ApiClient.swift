@@ -301,6 +301,31 @@ struct ApiClient {
         }
     }
 
+    /// `POST /app/race/<raceId>/member_tags/bind/` — получить серверный код для браслета участника
+    /// `nfcUid`. `number == nil` — UID уже в пуле `member_tags` (сервер отдаёт существующий код);
+    /// с номером — сервер создаёт привязку. Тело `MemberTagBindRequest` (`number` всегда, `null`
+    /// явно) сериализуется **один раз** (конвенция `post`). `201` при новом Tag / `200` при
+    /// идемпотентном повторе → `.success` с `MemberTagBindResponse` (hex-`code` для записи);
+    /// `404` → `.error(404)` (при `number == nil` — UID неизвестен, UI просит номер); `409` →
+    /// `.conflict` (этот UID привязан к **другому** номеру); прочие статусы — по `post`. Как и
+    /// `bindTag`: **cloud-клиент**, **без ретраев**, путь с завершающим слэшем.
+    func bindMemberTag(
+        raceId: Int,
+        nfcUid: String,
+        number: Int?
+    ) async -> PostResult<MemberTagBindResponse> {
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(MemberTagBindRequest(nfcUid: nfcUid, number: number))
+        } catch {
+            // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
+            return .error(code: nil)
+        }
+        return await post(url: endpoint("/app/race/\(raceId)/member_tags/bind/"), body: body) {
+            try JSONDecoder().decode(MemberTagBindResponse.self, from: $0)
+        }
+    }
+
     // MARK: - Эндпоинты (админ-авторизация)
 
     /// `POST /app/login/` с admin-`email`/`password`. Тело — `LoginRequest`, сериализуется в `Data`

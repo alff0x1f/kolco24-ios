@@ -674,6 +674,93 @@ struct ApiClientTests {
         else { Issue.record("ожидался .error(404), получено \(result)") }
     }
 
+    // MARK: - Запись браслетов: bindMemberTag
+
+    private let memberBindBody =
+        #"{"number":101,"nfc_uid":"04A2B3","code":"00112233445566778899AABBCCDDEEFF"}"#
+
+    @Test func bindMemberTag_201_parsesResponse_andPostsToMemberTagsPath() async throws {
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 201, bodyString: memberBindBody)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.bindMemberTag(raceId: 8, nfcUid: "04A2B3", number: 101)
+
+        guard case .success(let response) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(response.number == 101)
+        #expect(response.nfcUid == "04A2B3")
+        #expect(response.code == "00112233445566778899AABBCCDDEEFF")
+
+        let recorded = transport.last!
+        #expect(recorded.httpMethod == "POST")
+        #expect(fullPath(recorded.url!) == "/app/race/8/member_tags/bind/")
+        #expect(recorded.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        let obj = try #require(try JSONSerialization.jsonObject(with: recorded.httpBody!) as? [String: Any])
+        #expect(obj["nfc_uid"] as? String == "04A2B3")
+        #expect(obj["number"] as? Int == 101)
+    }
+
+    @Test func bindMemberTag_200_nilNumber_parsesResponse_andSendsExplicitNull() async throws {
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: memberBindBody)
+        let client = fixedTsClient(transport: transport)
+
+        let result = await client.bindMemberTag(raceId: 8, nfcUid: "04A2B3", number: nil)
+
+        guard case .success(let response) = result else {
+            Issue.record("ожидался .success, получено \(result)"); return
+        }
+        #expect(response.number == 101)
+        let obj = try #require(
+            try JSONSerialization.jsonObject(with: transport.last!.httpBody!) as? [String: Any]
+        )
+        #expect(obj["number"] is NSNull)
+    }
+
+    @Test func bindMemberTag_404_returnsErrorWith404() async {
+        // UID неизвестен при number == nil (или эндпоинт ещё не задеплоен).
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 404)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.bindMemberTag(raceId: 8, nfcUid: "04A2B3", number: nil)
+        if case .error(let code) = result { #expect(code == 404) }
+        else { Issue.record("ожидался .error(404), получено \(result)") }
+    }
+
+    @Test func bindMemberTag_409_returnsConflict() async {
+        // UID уже привязан к другому номеру.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 409, bodyString: #"{"detail":"bound to another number"}"#)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.bindMemberTag(raceId: 8, nfcUid: "04A2B3", number: 7)
+        if case .conflict = result {} else { Issue.record("ожидался .conflict, получено \(result)") }
+    }
+
+    @Test func bindMemberTag_2xxBodyMissingCode_returnsErrorNil() async {
+        // 2xx без обязательного `code` — ошибка разбора → .error(nil), не .success.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 201, bodyString: #"{"number":101,"nfc_uid":"04A2B3"}"#)
+        let client = fixedTsClient(transport: transport)
+        let result = await client.bindMemberTag(raceId: 8, nfcUid: "04A2B3", number: 101)
+        if case .error(let code) = result { #expect(code == nil) }
+        else { Issue.record("ожидался .error(nil), получено \(result)") }
+    }
+
+    @Test func bindMemberTag_403_doesNotRetry() async {
+        // POST не ретраится даже при сменившемся ts (403 auth-vs-skew неразличим).
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 403)
+        let tsSeq = TsSequence([100, 200])
+        let client = makeClient(transport: transport, nowSeconds: { tsSeq.next() })
+
+        let result = await client.bindMemberTag(raceId: 8, nfcUid: "04A2B3", number: 7)
+
+        #expect(transport.callCount == 1)
+        if case .forbidden = result {} else { Issue.record("ожидался .forbidden, получено \(result)") }
+    }
+
     // MARK: - Часть 2: эндпоинты и условные GET (Зеркало `ApiClientTest.kt` fetch-группа)
 
     private let racesJson = """

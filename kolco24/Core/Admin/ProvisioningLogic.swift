@@ -64,6 +64,34 @@ func provisionErrorMessage<T>(_ result: PostResult<T>) -> String {
     }
 }
 
+/// Общие RU-строки обоих экранов записи (чипы КП и браслеты участников) + pre-write guard'а
+/// сканера (``writeGuardDecision(currentPages:record:)``) — один источник для Core, моделей и вьюх.
+enum ProvisionMessage {
+    /// Тап 1 не прочитался (`TagReading.readFailed`) или не прочитался pre-write guard тапа 2.
+    static let readFailedTapAgain = "Не удалось прочитать, приложите снова"
+    /// Запись на тапе 2 не удалась (`failed`/`unsupported`) — pending-write сохранён.
+    static let writeFailedTapAgain = "Не удалось записать, приложите снова"
+    /// Подсказка тапа 2 по умолчанию, экран КП.
+    static let kpWriteAgainHint = "Приложите чип ещё раз"
+    /// Подсказка тапа 2 по умолчанию, экран браслетов (зона скана и системная NFC-шторка).
+    static let memberWriteAgainHint = "Приложите браслет ещё раз"
+    /// На экране браслетов приложен чип КП.
+    static let kpChipNotBracelet = "Это чип КП, а не браслет"
+    /// На экране КП приложен браслет участника.
+    static let memberBracelet = "Это браслет участника"
+    /// На чипе K24-запись неизвестного типа.
+    static let otherChipType = "Чип другого типа"
+}
+
+/// Отказ записи из-за K24-записи типа [type], уже лежащей на чипе. Чистая.
+func wrongChipTypeMessage(type: Int) -> String {
+    switch type {
+    case CHIP_TYPE_KP: return ProvisionMessage.kpChipNotBracelet
+    case CHIP_TYPE_PARTICIPANT: return ProvisionMessage.memberBracelet
+    default: return ProvisionMessage.otherChipType
+    }
+}
+
 /// Короткая метка свежезаписанного чипа — последние 4 hex-символа нормализованного [uid] (уже
 /// в верхнем регистре). Более короткий uid возвращается целиком. Чистая.
 func chipTokenLabel(uid: String) -> String {
