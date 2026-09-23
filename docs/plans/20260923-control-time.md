@@ -156,17 +156,17 @@ func controlTimeState(
 - Modify: `kolco24Tests/Data/Repositories/TeamRepositoryTests.swift`
 - Modify: `kolco24/Model/Race.swift` (комментарий «первая iOS-only колонка … v2»)
 
-- [ ] `CategoryDto`: `let controlTime: Int?` + `CodingKeys` `controlTime = "control_time"`
-- [ ] `Category`: `let controlTime: Int` + явный `init` с дефолтом `controlTime: Int = 0` (как `Team.swift`); в шапке — серверное поле сверх Room v5 (минуты, `0` = не задано)
-- [ ] `Category+GRDB`: читать `row["controlTime"] ?? 0`, писать `controlTime`
-- [ ] `AppDatabase`: миграция `v3` — `ALTER TABLE categories ADD COLUMN controlTime INTEGER` (nullable, без DEFAULT); обновить устаревшие «до v2»-комментарии (`AppDatabase.swift:6-11`, `:93`, `:303-306`)
-- [ ] `TeamRepository.toCategory`: `controlTime: controlTime ?? 0`
-- [ ] тест декодирования `CategoryDto`: с `control_time: 480` и без ключа (→ `nil`)
-- [ ] `AppDatabaseSchemaTests`: `Col("controlTime", "INTEGER", notNull: false)` в `categories`; `applied == ["v1","v2","v3"]` (`:214`, `:274`); шапка теста
-- [ ] новый тест апгрейда по образцу `migrationV1ToV2AddsMapUrlAndPreservesRows`: мигрировать `upTo: "v2"`, вставить категорию сырым SQL, догнать — строка жива, читается с `controlTime == 0`
-- [ ] `TeamRepositoryTests`: фикстура с `control_time` → `controlTime`; без ключа → `0`
-- [ ] `SimpleStoresTests:354`: round-trip `Category` с `controlTime`
-- [ ] run tests - must pass before task 2
+- [x] `CategoryDto`: `let controlTime: Int?` + `CodingKeys` `controlTime = "control_time"`
+- [x] `Category`: `let controlTime: Int` + явный `init` с дефолтом `controlTime: Int = 0` (как `Team.swift`); в шапке — серверное поле сверх Room v5 (минуты, `0` = не задано)
+- [x] `Category+GRDB`: читать `row["controlTime"] ?? 0`, писать `controlTime`
+- [x] `AppDatabase`: миграция `v3` — `ALTER TABLE categories ADD COLUMN controlTime INTEGER` (nullable, без DEFAULT); обновить устаревшие «до v2»-комментарии (`AppDatabase.swift:6-11`, `:93`, `:303-306`)
+- [x] `TeamRepository.toCategory`: `controlTime: controlTime ?? 0`
+- [x] тест декодирования `CategoryDto`: с `control_time: 480` и без ключа (→ `nil`)
+- [x] `AppDatabaseSchemaTests`: `Col("controlTime", "INTEGER", notNull: false)` в `categories`; `applied == ["v1","v2","v3"]` (`:214`, `:274`); шапка теста
+- [x] новый тест апгрейда по образцу `migrationV1ToV2AddsMapUrlAndPreservesRows`: мигрировать `upTo: "v2"`, вставить категорию сырым SQL, догнать — строка жива, читается с `controlTime == 0`
+- [x] `TeamRepositoryTests`: фикстура с `control_time` → `controlTime`; без ключа → `0`
+- [x] `SimpleStoresTests:354`: round-trip `Category` с `controlTime`
+- [x] run tests - must pass before task 2
 
 ### Task 2: Чистая функция `controlTimeState` и форматтер
 

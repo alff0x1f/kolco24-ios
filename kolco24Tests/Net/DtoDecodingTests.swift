@@ -155,6 +155,7 @@ struct DtoDecodingTests {
         #expect(cat.shortName == "М4")
         #expect(cat.name == "Мужчины, 4 чел.")
         #expect(cat.order == 1)
+        #expect(cat.controlTime == nil)       // ключа control_time нет → nil
         #expect(resp.teams.count == 1)
         let t = resp.teams[0]
         #expect(t.id == 123)
@@ -167,6 +168,19 @@ struct DtoDecodingTests {
         #expect(t.finishTime == 0)
         #expect(t.members.map(\.numberInTeam) == [1, 2])
         #expect(t.members[0].name == "Иванов Иван")
+    }
+
+    @Test func category_controlTime_decoded() throws {
+        // control_time — минуты (0 = не задано); поле сверх Room v5.
+        let json = """
+        {"race": 8, "categories": [
+          {"id": 45, "code": "m4", "short_name": "М4", "name": "М", "order": 1, "control_time": 480},
+          {"id": 46, "code": "w4", "short_name": "Ж4", "name": "Ж", "order": 2}
+        ], "teams": []}
+        """
+        let resp = try decode(TeamsResponse.self, json)
+        #expect(resp.categories[0].controlTime == 480)
+        #expect(resp.categories[1].controlTime == nil)
     }
 
     @Test func team_startNumber_null() throws {

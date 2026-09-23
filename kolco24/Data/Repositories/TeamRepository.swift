@@ -138,7 +138,8 @@ private extension CategoryDto {
             code: code,
             shortName: shortName,
             name: name,
-            sortOrder: order
+            sortOrder: order,
+            controlTime: controlTime ?? 0
         )
     }
 }

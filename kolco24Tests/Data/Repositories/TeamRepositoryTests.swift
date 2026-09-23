@@ -30,7 +30,9 @@ struct TeamRepositoryTests {
         {
           "race": 8,
           "categories": [
-            { "id": 1, "code": "M", "short_name": "Муж", "name": "Мужская", "order": 2 }
+            { "id": 1, "code": "M", "short_name": "Муж", "name": "Мужская", "order": 2,
+              "control_time": 480 },
+            { "id": 2, "code": "W", "short_name": "Жен", "name": "Женская", "order": 3 }
           ],
           "teams": [
             {
@@ -153,9 +155,11 @@ struct TeamRepositoryTests {
         #expect(team.members[1].numberInTeam == 2)
 
         let categories = try await storedCategories(h.dbWriter, raceId: 8)
-        #expect(categories.count == 1)
+        #expect(categories.count == 2)
         #expect(categories[0].shortName == "Муж")
         #expect(categories[0].sortOrder == 2)
+        #expect(categories[0].controlTime == 480)   // control_time → controlTime
+        #expect(categories[1].controlTime == 0)     // ключа нет → 0
 
         #expect(try await h.syncMetaStore.getEtag(origin: cloudOrigin, resource: "race/8/teams") == "\"v1\"")
     }

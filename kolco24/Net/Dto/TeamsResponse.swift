@@ -16,17 +16,20 @@ struct TeamsResponse: Codable, Equatable {
 }
 
 /// Категория гонки (дистанция/группа). `order` — зарезервированное SQL-слово, потому маппинг
-/// на `sortOrder` делает репозиторий; в DTO поле остаётся `order`.
+/// на `sortOrder` делает репозиторий; в DTO поле остаётся `order`. `control_time` — контрольное
+/// время в минутах (`0` = не задано); optional — ответ без ключа декодируется (`nil`).
 struct CategoryDto: Codable, Equatable {
     let id: Int
     let code: String
     let shortName: String
     let name: String
     let order: Int
+    let controlTime: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, code, name, order
         case shortName = "short_name"
+        case controlTime = "control_time"
     }
 }
 
