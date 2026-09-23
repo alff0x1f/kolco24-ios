@@ -46,6 +46,9 @@ final class MarksModel {
     private(set) var checkpoints: [Checkpoint] = []
     /// Агрегаты легенды текущей гонки (`total_cost`/`scoring_count`); `nil` до первой эмиссии.
     private(set) var legendMeta: LegendMeta?
+    /// Категории текущей гонки — источник КВ (`controlTime`) для ячейки «До КВ». Пусто между `rebind`
+    /// и первой эмиссией.
+    private(set) var categories: [Category] = []
     /// Привязки чипов текущей команды (ключ — `numberInTeam`) — источник строки «чипы» чек-листа готовности.
     private(set) var bindings: [Int: MemberChipBinding] = [:]
     /// Порт `loading`: true, пока observation взятий команды не эмитировал первую порцию. При `nil`-команде
@@ -80,6 +83,7 @@ final class MarksModel {
     @ObservationIgnored private var marksTask: Task<Void, Never>?
     @ObservationIgnored private var checkpointsTask: Task<Void, Never>?
     @ObservationIgnored private var legendMetaTask: Task<Void, Never>?
+    @ObservationIgnored private var categoriesTask: Task<Void, Never>?
     @ObservationIgnored private var bindingsTask: Task<Void, Never>?
     @ObservationIgnored private var mapUrlTask: Task<Void, Never>?
     /// `mapUrl` текущей гонки (одиночное чтение из БД в `rebind` и на каждом опросе); `nil` → пункта карты нет.
@@ -100,6 +104,7 @@ final class MarksModel {
         marksTask?.cancel()
         checkpointsTask?.cancel()
         legendMetaTask?.cancel()
+        categoriesTask?.cancel()
         bindingsTask?.cancel()
         mapUrlTask?.cancel()
     }
@@ -117,11 +122,13 @@ final class MarksModel {
         marksTask?.cancel()
         checkpointsTask?.cancel()
         legendMetaTask?.cancel()
+        categoriesTask?.cancel()
         bindingsTask?.cancel()
         mapUrlTask?.cancel()
         marks = []
         checkpoints = []
         legendMeta = nil
+        categories = []
         bindings = [:]
         // Stale-guard чек-листа: подложка прежней гонки не должна дожить до эмиссии новой.
         mapUrl = nil
@@ -159,6 +166,16 @@ final class MarksModel {
                     for try await meta in metaObservation {
                         guard let self, !Task.isCancelled else { return }
                         self.legendMeta = meta
+                    }
+                } catch {}
+            }
+
+            let categoriesObservation = env.teamStore.observeCategoriesForRace(raceId)
+            categoriesTask = Task { [weak self] in
+                do {
+                    for try await rows in categoriesObservation {
+                        guard let self, !Task.isCancelled, self.boundRaceId == raceId else { return }
+                        self.categories = rows
                     }
                 } catch {}
             }
@@ -234,6 +251,17 @@ final class MarksModel {
 
     /// ВЗЯТО (числитель) — число различных взятых scoring-КП (cost>0 по живой цене). Порт `takenPointCount`.
     var takenKp: Int { takenPointCount(marks, costOf: costOf) }
+
+    /// Состояние КВ команды на момент `nowMs` (шкала времени отметок, см. `Core/Marks/ControlTime`).
+    /// КВ берётся из категории команды; нет команды/категории/эмиссии категорий → `controlTime` 0 →
+    /// `.unknown` (или `.finished` без опоздания). Имя отличается от ядра, чтобы метод не затенял функцию.
+    func controlState(team: Team?, nowMs: Int64) -> ControlTimeState {
+        let minutes = team?.categoryId
+            .flatMap { id in categories.first { $0.id == id } }?
+            .controlTime ?? 0
+        return controlTimeState(marks: marks, checkpoints: checkpoints,
+                                controlMinutes: minutes, nowMs: nowMs)
+    }
 
     /// Знаменатель ВЗЯТО — `scoring_count` из `legend_meta` (0 до эмиссии; вьюха скрывает «/0»).
     var totalKp: Int { legendMeta?.scoringCount ?? 0 }

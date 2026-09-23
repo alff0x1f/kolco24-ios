@@ -188,12 +188,12 @@ func controlTimeState(
 - Modify: `kolco24/App/MarksModel.swift`
 - Modify: `kolco24Tests/App/MarksModelTests.swift`
 
-- [ ] `private(set) var categories: [Category] = []` + `categoriesTask`; подписка `env.teamStore.observeCategoriesForRace(raceId)` в `rebind`
-- [ ] stale-guard: в `rebind` отменить `categoriesTask` и очистить `categories` до новой подписки; в цикле перепроверять `self.boundRaceId == raceId` (как `checkpointsTask`); `categoriesTask?.cancel()` в `deinit`
-- [ ] `func controlState(team: Team?, nowMs: Int64) -> ControlTimeState` (другое имя — иначе метод затеняет функцию `Core`) — берёт `controlTime` категории `team.categoryId` (нет → `0`) и зовёт функцию из `Core`
-- [ ] тест: категория с `controlTime` в in-memory БД + отметка старта → `.running`
-- [ ] тест: команда без категории → `.unknown`; rebind на другую гонку очищает `categories`
-- [ ] run tests - must pass before task 4
+- [x] `private(set) var categories: [Category] = []` + `categoriesTask`; подписка `env.teamStore.observeCategoriesForRace(raceId)` в `rebind`
+- [x] stale-guard: в `rebind` отменить `categoriesTask` и очистить `categories` до новой подписки; в цикле перепроверять `self.boundRaceId == raceId` (как `checkpointsTask`); `categoriesTask?.cancel()` в `deinit`
+- [x] `func controlState(team: Team?, nowMs: Int64) -> ControlTimeState` (другое имя — иначе метод затеняет функцию `Core`) — берёт `controlTime` категории `team.categoryId` (нет → `0`) и зовёт функцию из `Core`
+- [x] тест: категория с `controlTime` в in-memory БД + отметка старта → `.running`
+- [x] тест: команда без категории → `.unknown`; rebind на другую гонку очищает `categories`
+- [x] run tests - must pass before task 4
 
 ### Task 4: UI ячейки «До КВ»
 
