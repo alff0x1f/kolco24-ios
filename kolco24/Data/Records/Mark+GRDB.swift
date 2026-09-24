@@ -110,7 +110,9 @@ extension Mark: FetchableRecord, PersistableRecord {
             locAltitude: row["locAltitude"],
             locVerticalAccuracy: row["locVerticalAccuracy"],
             locGpsTimeMs: row["locGpsTimeMs"],
-            locElapsedRealtimeAt: row["locElapsedRealtimeAt"]
+            locElapsedRealtimeAt: row["locElapsedRealtimeAt"],
+            checkMethod: row["checkMethod"],
+            confirmedAt: row["confirmedAt"]
         )
     }
 
@@ -145,5 +147,7 @@ extension Mark: FetchableRecord, PersistableRecord {
         container["locVerticalAccuracy"] = locVerticalAccuracy
         container["locGpsTimeMs"] = locGpsTimeMs
         container["locElapsedRealtimeAt"] = locElapsedRealtimeAt
+        container["checkMethod"] = checkMethod
+        container["confirmedAt"] = confirmedAt
     }
 }

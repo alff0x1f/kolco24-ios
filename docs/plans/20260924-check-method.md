@@ -186,19 +186,19 @@ private(set) var confirmState: ConfirmState?
 - Modify: `kolco24Tests/Data/AppDatabaseSchemaTests.swift`
 - Modify: `kolco24Tests/Data/MarkStoreTests.swift`
 
-- [ ] add `checkMethod: String = "offline"` and `confirmedAt: Int64? = nil` as the **last** defaulted params
+- [x] add `checkMethod: String = "offline"` and `confirmedAt: Int64? = nil` as the **last** defaulted params
       of `Mark.init` (~98 test call sites + `UploadView.swift:207-212` keep compiling)
-- [ ] map both columns in `Mark+GRDB` (decode + encode)
-- [ ] register migration `v4` (the two `ALTER TABLE` statements); no FKs
-- [ ] `MarkStore.addMember` (:84-116, the only row rebuild) carries `checkMethod` and `confirmedAt` through
+- [x] map both columns in `Mark+GRDB` (decode + encode)
+- [x] register migration `v4` (the two `ALTER TABLE` statements); no FKs
+- [x] `MarkStore.addMember` (:84-116, the only row rebuild) carries `checkMethod` and `confirmedAt` through
       unchanged; add `setConfirmedAt(id:at:)` as a column-scoped `UPDATE` that does **not** bump `updatedAt`
       and is not version-guarded (confirmation is a fact). Whole-row `upsert` callers only insert fresh ids.
-- [ ] tests: update `migrationRunsOnEmptyDatabase` (`AppDatabaseSchemaTests.swift:216`, now
+- [x] tests: update `migrationRunsOnEmptyDatabase` (`AppDatabaseSchemaTests.swift:216`, now
       `["v1","v2","v3","v4"]`); add a `v3 → v4` test in the v2/v3 pattern: old rows →
       `checkMethod == "offline"`, `confirmedAt == nil`
-- [ ] tests: `addMember` resets `uploaded*` but keeps `checkMethod` and `confirmedAt`; `setConfirmedAt`
+- [x] tests: `addMember` resets `uploaded*` but keeps `checkMethod` and `confirmedAt`; `setConfirmedAt`
       round-trip; `setConfirmedAt` on a missing id is a no-op
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 2: CheckMethod + isCounted in metrics and display
 

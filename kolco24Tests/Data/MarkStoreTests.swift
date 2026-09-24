@@ -361,6 +361,65 @@ struct MarkStoreTests {
         #expect(try await store.getById("nope") == nil)
     }
 
+    // MARK: - checkMethod / confirmedAt (миграция v4, iOS-only)
+
+    @Test func addMember_resetsUploadedButKeepsCheckMethodAndConfirmedAt() async throws {
+        let store = try makeStore()
+        try await store.upsert(Mark(
+            id: "m1", raceId: 1, teamId: 7, checkpointId: 10, checkpointNumber: 10,
+            cost: 5, method: "nfc", cpUid: "CPUID", cpCode: "CODE",
+            present: [1],
+            presentDetails: [MarkMemberSnapshot(numberInTeam: 1, nfcUid: "u1", number: 101)],
+            expectedCount: 2, complete: false,
+            takenAt: 1_000, updatedAt: 1_000,
+            uploadedLocal: true, uploadedCloud: true,
+            checkMethod: "cloud", confirmedAt: 1_500
+        ))
+
+        try await store.addMember(
+            id: "m1", numberInTeam: 2, nfcUid: "u2", number: 102, code: nil,
+            now: 5_000, expectedCount: 2
+        )
+
+        let row = try #require(try await store.getById("m1"))
+        #expect(row.present == [1, 2])
+        #expect(row.uploadedLocal == false)
+        #expect(row.uploadedCloud == false)
+        // Снимок метода и подтверждение переживают пересборку строки.
+        #expect(row.checkMethod == "cloud")
+        #expect(row.confirmedAt == 1_500)
+    }
+
+    @Test func setConfirmedAt_roundTrip_leavesUpdatedAtAndUploadedIntact() async throws {
+        let store = try makeStore()
+        try await store.upsert(Mark(
+            id: "m1", raceId: 1, teamId: 7, checkpointId: 10, checkpointNumber: 10,
+            cost: 5, method: "nfc", cpUid: "CPUID", cpCode: "CODE",
+            present: [1], expectedCount: 1, complete: true,
+            takenAt: 1_000, updatedAt: 1_000,
+            uploadedLocal: false, uploadedCloud: true,
+            checkMethod: "local"
+        ))
+        #expect(try await store.getById("m1")?.confirmedAt == nil)
+
+        try await store.setConfirmedAt(id: "m1", at: 7_000)
+
+        let row = try #require(try await store.getById("m1"))
+        #expect(row.confirmedAt == 7_000)
+        #expect(row.checkMethod == "local")
+        // Не version-guarded и не мутация: updatedAt/uploaded* не тронуты.
+        #expect(row.updatedAt == 1_000)
+        #expect(row.uploadedLocal == false)
+        #expect(row.uploadedCloud == true)
+    }
+
+    @Test func setConfirmedAt_missingRow_isNoOp() async throws {
+        let store = try makeStore()
+        try await store.setConfirmedAt(id: "nope", at: 7_000)
+        #expect(try await store.getById("nope") == nil)
+        #expect(try await store.allIds().isEmpty)
+    }
+
     @Test func attachLocation_writesLocColumns_resetsUploaded_leavesRest() async throws {
         let store = try makeStore()
         try await store.upsert(mark("nfc-1", method: "nfc", uploadedLocal: true, uploadedCloud: true))
