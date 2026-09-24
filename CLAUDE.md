@@ -147,7 +147,8 @@ server 200.
 - **Check method** (`docs/plans/completed/20260924-check-method.md`): "taken"/scoring uses `isCounted`
   (`Core/Marks/CheckMethod`), never bare `complete`. `confirmedAt` is set only by `MarkUploadRepository.confirm`
   from the open scan sheet — the background drain never sets it, `addMember` never resets it. Tag
-  `check_method` ∈ offline/cloud/local, unknown → offline.
+  `check_method` ∈ offline/cloud/local, unknown → offline. `confirm` is a one-mark POST that deliberately
+  bypasses the drain's `inFlight` lock; a POST already in flight when the sheet closes may still confirm.
 - **MBTiles TMS y-flip** (`tile_row = 2^z − 1 − y`) lives only in `Core/Map/MBTiles.tmsRow`.
 - **`Category` collision**: in test files importing `Testing`+`Foundation`, qualify the domain type as
   `kolco24.Category`.
@@ -188,3 +189,5 @@ server 200.
   shell env to the hosted simulator process.
 - КП map pins come from the take's own GPS fix (`Mark.locLat/locLon`) — the server has no checkpoint
   coordinates; a take without a fix is deliberately not shown.
+- Check method: until the server renames choices (`online`→`cloud`, `local_server`→`local`) old values parse as
+  offline; until `POST …/marks/` is deployed a cloud/local take can never be confirmed (dimmed tile, not scored).

@@ -48,5 +48,5 @@ func isCounted(_ m: Mark) -> Bool {
 /// Complete-взятие cloud/local КП, которое сервер не подтвердил: тайл остаётся,
 /// но в зачёт не идёт.
 func isUnconfirmed(_ m: Mark) -> Bool {
-    m.complete && CheckMethod(m.checkMethod) != .offline && m.confirmedAt == nil
+    m.complete && !isCounted(m)
 }

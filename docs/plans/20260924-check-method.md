@@ -123,12 +123,12 @@ func confirm(markId: String, target: UploadTarget, now: Int64) async -> UploadRe
 
 **ScanModel confirm state**
 ```swift
-enum ConfirmState: Equatable { case sending(target: UploadTarget, attempt: Int), confirmed, failed(target: UploadTarget) }
+enum ConfirmState: Equatable { case sending(target: UploadTarget, attempt: Int), confirmed, failed(offline: Bool) }
 private(set) var confirmState: ConfirmState?
 ```
 - Injected seams (all with prod defaults so existing `ScanModel(...)` call sites compile):
   `confirmMark: @Sendable (String, UploadTarget) async -> UploadResultKind`,
-  `confirmTimeoutMs` (default `CONFIRM_TIMEOUT_MS = 20_000`), `confirmRetryMs` (default `3_000`).
+  `confirmTimeoutMs` (default `defaultConfirmTimeoutMs = 20_000`), `confirmRetryMs` (default `3_000`).
   The deadline is measured with the existing injected `elapsedNowMs`, not wall time, so tests are
   deterministic with tiny ms values. Real upper bound = timeout + one request timeout (cloud client: 10 s,
   `URLSessionTransport.swift:71`).
@@ -155,14 +155,14 @@ private(set) var confirmState: ConfirmState?
   `.ok` → break; check `Task.isCancelled`; deadline passed → `.failed`; sleep `confirmRetryMs`; check
   `Task.isCancelled` again }. `confirmTask` holds `self` weakly.
   - success → `.confirmed` → fanfare, `didComplete = true`, success hold, then `requestClose()`.
-  - timeout → `.failed(target)`. No auto-close, no `didComplete`, no fanfare.
+  - timeout → `.failed(offline:)` (`offline` = last attempt got no response). No auto-close, no `didComplete`, no fanfare.
 - `retryConfirm()` (Повторить): only from `.failed`; starts a new 20 s cycle. The scanner is not restarted.
 - `stop()` and `deinit` cancel `confirmTask` (mirror the other tasks in `deinit`, `ScanModel.swift:190-207`).
   No new attempts start after that. A POST already in flight finishes by itself (see above).
 
 **Sheet texts**
 - sending: «Отправка на сервер…» (cloud) / «Отправка на локальный сервер…» (local), plus «попытка N».
-- failed: «Нет связи — КП не подтверждён», buttons «Повторить» / «Закрыть».
+- failed: «Нет связи — КП не подтверждён» (or «Сервер не принял — КП не подтверждён» when the server answered but refused), buttons «Повторить» / «Закрыть».
 
 **Marks tab**
 - `MarkTile.unconfirmed: Bool` (from `isUnconfirmed`). Tile: ~45% opacity + an `icloud.slash` corner icon.

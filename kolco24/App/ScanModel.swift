@@ -58,8 +58,9 @@ final class ScanModel: Identifiable {
         case sending(target: UploadTarget, attempt: Int)
         /// Сервер принял взятие — `confirmedAt` записан, оверлей закрывается с фанфарой.
         case confirmed
-        /// Дедлайн подтверждения истёк без `.ok` — ждём «Повторить»/«Закрыть».
-        case failed(target: UploadTarget)
+        /// Дедлайн подтверждения истёк без `.ok` — ждём «Повторить»/«Закрыть». `offline` — последняя
+        /// попытка не достучалась до сервера; `false` — сервер ответил, но отметку не принял.
+        case failed(offline: Bool)
     }
     /// `nil` — режима подтверждения нет (offline-взятие или взятие ещё не завершено). Не-`nil` — сканер
     /// остановлен, чтения игнорируются, конец стрима НЕ закрывает оверлей (закрывает сам confirm-флоу).
@@ -77,6 +78,14 @@ final class ScanModel: Identifiable {
 
     /// «Готово» активна, когда КП идентифицирован (порт `canFinish = session?.checkpointId != nil`).
     var canFinish: Bool { session?.checkpointId != nil }
+    /// Ростер полон, но cloud/local-взятие ещё не подтверждено сервером — включая зазор между завершающим
+    /// чипом и входом в режим подтверждения (`.completionCheck` идёт через FIFO-стрим). Пока `true`,
+    /// «Готово!» не показывается, кнопка «Готово» и свайп-закрытие выключены.
+    var confirmPending: Bool {
+        completed && takeCheckMethod.uploadTarget != nil && confirmState != .confirmed
+    }
+    /// «Готово!» на CP-карточке: взятие завершено и (offline или подтверждено сервером).
+    var showsDone: Bool { completed && !confirmPending }
     /// Номер идентифицированного КП (после `.kp`); `nil` — ждём чип КП.
     var checkpointNumber: Int? { session?.checkpointNumber }
     /// Цена идентифицированного КП; `nil` — ждём чип КП.
@@ -100,7 +109,10 @@ final class ScanModel: Identifiable {
 
     @ObservationIgnored private var markId: String?
     @ObservationIgnored private var takeCheckpointId: Int?
-    /// Метод проверки текущего взятия — снапшот `check_method` тега из `.kp`-события.
+    /// Метод проверки текущего взятия — снапшот `check_method` тега из `.kp`-события, открывшего взятие.
+    /// Первый тег побеждает: повтор того же КП в живом окне (даже другим тегом с другим методом) лишь
+    /// перештамповывает окно — метод уже записан в строку взятия, и зачёт (`isCounted`) читает её.
+    /// Не observable: меняется только вместе с `completed`/`session`, которые SwiftUI уже трекает.
     @ObservationIgnored private(set) var takeCheckMethod: CheckMethod = .offline
     @ObservationIgnored private var expectedCount = 0
     @ObservationIgnored private var buffer = Set<Int>()
@@ -184,7 +196,7 @@ final class ScanModel: Identifiable {
     /// Механизм холда (FIFO-пере-проверка `completionCheck`, Finding-1) не тронут — просто нулевая задержка.
     private static let defaultSuccessHoldMs: Int64 = 0
     /// Сколько оверлей пытается подтвердить cloud/local-взятие, прежде чем показать «Нет связи».
-    static let CONFIRM_TIMEOUT_MS: Int64 = 20_000
+    private static let defaultConfirmTimeoutMs: Int64 = 20_000
     private static let defaultConfirmRetryMs: Int64 = 3_000
 
     init(
@@ -203,7 +215,7 @@ final class ScanModel: Identifiable {
         successHoldMs: Int64 = ScanModel.defaultSuccessHoldMs,
         // Дефолт для превью/тестов без подтверждения; прод (`AppModel.makeScanModel`) подключает репозиторий.
         confirmMark: @escaping @Sendable (String, UploadTarget) async -> UploadResultKind = { _, _ in .error },
-        confirmTimeoutMs: Int64 = ScanModel.CONFIRM_TIMEOUT_MS,
+        confirmTimeoutMs: Int64 = ScanModel.defaultConfirmTimeoutMs,
         confirmRetryMs: Int64 = ScanModel.defaultConfirmRetryMs
     ) {
         self.raceId = raceId
@@ -426,7 +438,8 @@ final class ScanModel: Identifiable {
         switch event {
         case let .kp(checkpointId, number, cost, cpUid, cpCode, checkMethod):
             // Новый КП / истёкшее окно / смена КП → свежее взятие; повтор того же КП при живом окне —
-            // только перештамп окна (§3).
+            // только перештамп окна (§3). `checkMethod` повтора игнорируется — первый тег побеждает
+            // (см. `takeCheckMethod`).
             if expired || markId == nil || takeCheckpointId != checkpointId {
                 // Истёкшее окно: буфер принадлежит мёртвой сессии — сбрасываем, чтобы стейл-участники
                 // не кредитовались новому взятию.
@@ -667,15 +680,20 @@ final class ScanModel: Identifiable {
 
     /// «Повторить» после `.failed`: новый цикл с полным дедлайном. Сканер не перезапускается.
     func retryConfirm() {
-        guard case let .failed(target) = confirmState, let markId else { return }
+        guard case .failed = confirmState, let target = takeCheckMethod.uploadTarget, let markId else {
+            return
+        }
         confirmState = .sending(target: target, attempt: 1)
         runConfirmCycle(markId: markId, target: target)
     }
 
     /// Один цикл подтверждения: попытки до `.ok` или дедлайна `confirmTimeoutMs` (по `elapsedNowMs`).
-    /// Каждая попытка — отдельный неструктурированный `Task`, захвативший только замыкание репозитория
-    /// (§6): отмена цикла не обрывает летящий POST, и если сервер его примет, `confirmedAt` запишется.
+    /// Каждая попытка — отдельный `Task.detached`, захвативший только `@Sendable`-замыкание репозитория
+    /// (§6): отмена цикла не обрывает летящий POST (отмена не наследуется), и если сервер его примет,
+    /// `confirmedAt` запишется. `detached` — явно вне MainActor, даже если замыкание станет изолированным.
     /// Цикл держит `self` слабо и проверяет `Task.isCancelled` после каждого вызова и сна.
+    /// `.sending(attempt: 1)` уже выставил вызывающий (`enterConfirmMode`/`retryConfirm`) — цикл
+    /// обновляет состояние лишь со второй попытки.
     private func runConfirmCycle(markId: String, target: UploadTarget) {
         confirmTask?.cancel()
         let confirm = confirmMark
@@ -692,8 +710,7 @@ final class ScanModel: Identifiable {
             let deadline = await elapsedNow() + timeout
             var attempt = 1
             while true {
-                self?.confirmState = .sending(target: target, attempt: attempt)
-                let call = Task { await confirm(markId, target) }
+                let call = Task.detached { await confirm(markId, target) }
                 let result = await call.value
                 if Task.isCancelled { return }
                 if result == .ok {
@@ -701,12 +718,13 @@ final class ScanModel: Identifiable {
                     return
                 }
                 if await elapsedNow() >= deadline {
-                    self?.confirmState = .failed(target: target)
+                    self?.confirmState = .failed(offline: result == .offline)
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(Int(retry)))
                 if Task.isCancelled { return }
                 attempt += 1
+                self?.confirmState = .sending(target: target, attempt: attempt)
             }
         }
     }

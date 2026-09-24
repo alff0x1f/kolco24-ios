@@ -232,13 +232,19 @@ actor MarkUploadRepository {
         }
         do {
             try await markStore.setConfirmedAt(id: markId, at: now)
+        } catch {
+            uploadLog.error("confirm setConfirmedAt failed: \(String(describing: error))")
+            return .error
+        }
+        // Подтверждение уже записано — `.ok` при любом исходе `uploaded*`: это лишь оптимизация доставки
+        // (при сбое дренаж просто перешлёт марку, сервер дедупит по id).
+        do {
             switch target {
             case .cloud: try await markCloudGpsAware(batch: [mark], ids: [markId])
             case .local: try await markLocalGpsAware(batch: [mark], ids: [markId])
             }
         } catch {
-            uploadLog.error("confirm mark failed: \(String(describing: error))")
-            return .error
+            uploadLog.error("confirm uploaded-flag failed: \(String(describing: error))")
         }
         return .ok
     }

@@ -35,13 +35,6 @@ struct ScanSheet: View {
         model.roster.sorted { $0.numberInTeam < $1.numberInTeam }
     }
     private var scannedCount: Int { model.scannedSlots.count }
-    /// Идёт или провалилось подтверждение cloud/local-взятия: «Готово!» скрыт, кнопка «Готово» выключена.
-    private var confirmPending: Bool {
-        switch model.confirmState {
-        case .sending, .failed: true
-        case .confirmed, nil: false
-        }
-    }
 
     var body: some View {
         ScrollView {
@@ -55,16 +48,19 @@ struct ScanSheet: View {
 
                 header
 
-                // Timer hero — stays at the top so the iOS NFC system sheet doesn't cover it
-                TimerHeroView(
-                    seconds: Int(model.remainingSeconds.rounded()),
-                    total: Int(SCAN_WINDOW_MS / 1000),
-                    remainingScans: model.remainingScans,
-                    waitingForCheckpoint: !model.canFinish
-                )
-                .padding(.horizontal, DS.hPad)
-                .padding(.top, 4)
-                .padding(.bottom, 10)
+                // Timer hero — stays at the top so the iOS NFC system sheet doesn't cover it.
+                // В режиме подтверждения таймер окна остановлен — замершее кольцо не показываем.
+                if model.confirmState == nil {
+                    TimerHeroView(
+                        seconds: Int(model.remainingSeconds.rounded()),
+                        total: Int(SCAN_WINDOW_MS / 1000),
+                        remainingScans: model.remainingScans,
+                        waitingForCheckpoint: !model.canFinish
+                    )
+                    .padding(.horizontal, DS.hPad)
+                    .padding(.top, 4)
+                    .padding(.bottom, 10)
+                }
 
                 // Clock-skew notice (этап 11) — над CP-карточкой; `.ok` → нулевая высота.
                 ScanClockBanner(status: clockStatus)
@@ -75,13 +71,13 @@ struct ScanSheet: View {
                 CPCardView(
                     number: model.checkpointNumber,
                     cost: model.checkpointCost,
-                    completed: model.completed && !confirmPending
+                    completed: model.showsDone
                 )
                 .padding(.horizontal, DS.hPad)
                 .padding(.bottom, 10)
 
                 // Подтверждение cloud/local-взятия сервером (отправка / «Нет связи»).
-                if let state = model.confirmState, state != .confirmed {
+                if let state = model.confirmState {
                     ConfirmStatusView(
                         state: state,
                         onRetry: { model.retryConfirm() },
@@ -128,6 +124,9 @@ struct ScanSheet: View {
         .background(Color.paper)
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
+        // Пока cloud/local-взятие ждёт подтверждения, случайный свайп не должен молча оборвать его:
+        // закрыть можно только явно («Отменить»/«Закрыть»).
+        .interactiveDismissDisabled(model.confirmPending)
         .task {
             // Заранее запрашиваем гео-разрешение (один раз, ОС дедупит) и стартуем прод-сканер.
             model.requestGeoPermission()
@@ -208,7 +207,7 @@ struct ScanSheet: View {
     }
 
     /// «Готово» доступна, когда КП идентифицирован и подтверждение не идёт/не провалилось.
-    private var finishEnabled: Bool { model.canFinish && !confirmPending }
+    private var finishEnabled: Bool { model.canFinish && !model.confirmPending }
 
     private var actions: some View {
         HStack(spacing: 10) {
@@ -288,7 +287,8 @@ private struct CPCardView: View {
 
 // MARK: - Confirm status (cloud/local)
 /// Статус подтверждения взятия сервером под CP-карточкой: `.sending` — спиннер + текст цели +
-/// «попытка N»; `.failed` — «Нет связи — КП не подтверждён» + «Повторить»/«Закрыть».
+/// «попытка N»; `.failed` — «Нет связи — КП не подтверждён» (или «Сервер не принял — …», если
+/// сервер ответил отказом) + «Повторить»/«Закрыть».
 /// `.confirmed` не рисуется (CP-карточка показывает «Готово!», оверлей закрывается сам).
 private struct ConfirmStatusView: View {
     let state: ScanModel.ConfirmState
@@ -317,13 +317,13 @@ private struct ConfirmStatusView: View {
             .background(Color.card)
             .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
             .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
-        case .failed:
+        case let .failed(offline):
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "icloud.slash")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.brandRed)
-                    Text("Нет связи — КП не подтверждён")
+                    Text(offline ? "Нет связи — КП не подтверждён" : "Сервер не принял — КП не подтверждён")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.brandRed)
                     Spacer(minLength: 0)
@@ -612,8 +612,11 @@ private struct ScanSheetPreviewHost: View {
 }
 
 #Preview("Confirm failed") {
-    ConfirmStatusView(state: .failed(target: .cloud))
-        .padding(DS.hPad)
-        .background(Color.paper)
+    VStack(spacing: 10) {
+        ConfirmStatusView(state: .failed(offline: true))
+        ConfirmStatusView(state: .failed(offline: false))
+    }
+    .padding(DS.hPad)
+    .background(Color.paper)
 }
 #endif

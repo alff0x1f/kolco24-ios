@@ -559,6 +559,55 @@ struct MarkUploadRepositoryTests {
         #expect(mark.confirmedAt == nil)
     }
 
+    /// Строка изменилась (`addMember`) между `getById` и ответом сервера: подтверждение всё равно
+    /// записывается (оно не version-guarded), теряется лишь version-guarded `uploadedCloud` — дренаж
+    /// дошлёт свежую версию.
+    @Test func confirm_concurrentAddMember_keepsConfirmation_dropsOnlyUploadedFlag() async throws {
+        let db = try AppDatabase.makeInMemory()
+        let store = MarkStore(db.writer)
+        let gate = AcceptGate(accepted: acceptedBody(["m1"]))
+        let repo = MarkUploadRepository(
+            markStore: store,
+            cloud: makeClient(base: "https://cloud.test", transport: gate.handle),
+            local: makeClient(base: "http://local.test", transport: gate.handle),
+            installId: "install-abc", wallNow: { 5000 }
+        )
+        try await store.upsert(makeMark(id: "m1", present: [1], expectedCount: 2, checkMethod: "cloud"))
+
+        let confirm = Task { await repo.confirm(markId: "m1", target: .cloud, now: 9_000) }
+        try await waitUntil { gate.isWaiting }
+        try await store.addMember(
+            id: "m1", numberInTeam: 2, nfcUid: "M2", number: 102, code: nil, now: 8_000, expectedCount: 2
+        )
+        gate.release()
+
+        #expect(await confirm.value == .ok)
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == 9_000)
+        #expect(mark.present == [1, 2])
+        #expect(mark.uploadedCloud == false)
+    }
+
+    /// Сбой записи `uploaded*` после сохранённого `confirmedAt` — всё равно `.ok` (взятие уже засчитано).
+    @Test func confirm_uploadedFlagWriteFails_stillOk() async throws {
+        let (repo, store, cloudT, _) = try makeConfirmRepo()
+        try await store.upsert(makeMark(id: "m1"))
+        try await store.dbWriter.write { db in
+            try db.execute(sql: """
+                CREATE TRIGGER fail_uploaded_cloud BEFORE UPDATE OF uploadedCloud ON marks
+                BEGIN SELECT RAISE(ABORT, 'boom'); END
+                """)
+        }
+        cloudT.enqueue(statusCode: 200, bodyString: acceptedBody(["m1"]))
+
+        let kind = await repo.confirm(markId: "m1", target: .cloud, now: 9_000)
+
+        #expect(kind == .ok)
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == 9_000)
+        #expect(mark.uploadedCloud == false)
+    }
+
     /// Поллинг условия с таймаутом (~2 с) — для ожидания фоновых запросов в зажатом транспорте.
     private func waitUntil(_ condition: () -> Bool) async throws {
         for _ in 0..<400 {
@@ -952,5 +1001,36 @@ struct IsHardFrameFailureTests {
         #expect(isHardFrameFailure(PostResult<Void>.forbidden) == false)
         #expect(isHardFrameFailure(PostResult<Void>.conflict) == false)
         #expect(isHardFrameFailure(PostResult<Void>.rateLimited) == false)
+    }
+}
+
+/// Транспорт с гейтом: первый запрос висит до `release()`, затем все отвечают `200` с заданным телом.
+private final class AcceptGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private let accepted: String
+    private var pending: CheckedContinuation<Void, Never>?
+    private var released = false
+
+    init(accepted: String) { self.accepted = accepted }
+
+    var isWaiting: Bool { lock.lock(); defer { lock.unlock() }; return pending != nil }
+
+    func release() {
+        lock.lock()
+        released = true
+        let c = pending; pending = nil
+        lock.unlock()
+        c?.resume()
+    }
+
+    func handle(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            lock.lock()
+            if released { lock.unlock(); c.resume() } else { pending = c; lock.unlock() }
+        }
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:]
+        )!
+        return (Data(accepted.utf8), response)
     }
 }

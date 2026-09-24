@@ -403,13 +403,10 @@ final class AppModel {
             locationProvider: env.locationProvider,
             feedback: env.feedback,
             elapsedNowMs: { await clock.sample().elapsedMs },
-            // Подтверждение cloud/local-взятия из открытого оверлея; `confirmedAt` — доверенное время
-            // (фолбэк на стенное, если якоря ещё нет).
+            // Подтверждение cloud/local-взятия из открытого оверлея; `confirmedAt` — стенные мс
+            // (используется лишь как флаг `!= nil`).
             confirmMark: { markId, target in
-                let sample = await clock.sample()
-                return await uploads.confirm(
-                    markId: markId, target: target, now: sample.trustedMs ?? sample.wallMs
-                )
+                await uploads.confirm(markId: markId, target: target, now: await clock.sample().wallMs)
             }
         )
         // Прод-сканер `NfcChipScanner` (из `Nfc/`) инстанцируется здесь — App-слой в одном модуле,
