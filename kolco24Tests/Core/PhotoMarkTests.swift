@@ -130,4 +130,14 @@ struct PhotoMarkTests {
         #expect(tiles.count == 1)
         #expect(tiles[0].kind == .photo)
     }
+
+    /// Фото-взятие всегда offline (даже для cloud/local КП): подтверждения не ждёт, идёт в зачёт,
+    /// а photo-only КП уходят на судейскую проверку.
+    @Test func createPhotoMark_isOfflineAndCounted() {
+        let mark = make()
+        #expect(mark.checkMethod == "offline")
+        #expect(mark.confirmedAt == nil)
+        #expect(isCounted(mark))
+        #expect(!isUnconfirmed(mark))
+    }
 }

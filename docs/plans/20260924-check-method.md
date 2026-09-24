@@ -331,12 +331,12 @@ private(set) var confirmState: ConfirmState?
 - [x] run tests - must pass before next task
 
 ### Task 8: Verify acceptance criteria
-- [ ] verify all requirements from Overview are implemented
-- [ ] verify edge cases: retake confirms the КП and drops it from the notice; legend method change doesn't
+- [x] verify all requirements from Overview are implemented
+- [x] verify edge cases: retake confirms the КП and drops it from the notice; legend method change doesn't
       affect old takes; unknown method string = offline; photo takes = offline
-- [ ] grep invariants: no `import GRDB` outside `Data/`; `Core/` and `App/` only `Foundation`/`Observation`
-- [ ] run full test suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] run the build
+- [x] grep invariants: no `import GRDB` outside `Data/`; `Core/` and `App/` only `Foundation`/`Observation`
+- [x] run full test suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
+- [x] run the build
 
 ### Task 9: [Final] Update documentation
 - [ ] CLAUDE.md (keep compact): migration list gets `v4` = `marks.checkMethod` + `marks.confirmedAt`;

@@ -260,6 +260,47 @@ struct ScanModelTests {
         #expect(model.takeCheckMethod == .cloud)
     }
 
+    /// Метод — снимок на строке взятия: смена `check_method` тега в легенде не трогает старые взятия
+    /// (зачтённое offline-взятие остаётся зачтённым), а новое взятие берёт уже новый метод.
+    @Test func legendMethodChangeDoesNotAffectOldTake() async throws {
+        let env = try makeEnv()
+        let code = kpCode(22)
+        try await registerKp(env, cpId: 100, number: 32, cost: 4, code: code, checkMethod: "offline")
+        try await bind(env, slot: 1, uid: "M1", pnum: 101)
+
+        let scanner = FakeChipScanner()
+        let model = makeModel(env: env, roster: members([1]), scanner: scanner)
+        model.start(scanner: scanner)
+        await poll { model.bindings["M1"] == 1 }
+        scanner.emit(reading(code: code, uid: "CP", elapsed: 0))
+        scanner.emit(reading(code: nil, uid: "M1", elapsed: 100))
+        await poll { (try? await env.markStore.getById("mark-1"))??.complete == true }
+        model.stop()
+
+        // Легенда обновилась: тот же тег теперь cloud.
+        try await env.tagStore.replaceAllForRace(raceId: race, tags: [
+            Tag(raceId: race, bid: LegendCrypto.bid(code: code), checkpointId: 100,
+                checkMethod: "cloud", iv: nil, ct: nil)
+        ])
+
+        let old = try #require(try await env.markStore.getById("mark-1"))
+        #expect(old.checkMethod == "offline")
+        #expect(isCounted(old))
+
+        // Новое взятие того же КП снапшотит новый метод (ростер из двух — без confirm-флоу).
+        let scanner2 = FakeChipScanner()
+        let ids2 = IdGen()
+        _ = ids2.next()
+        let model2 = makeModel(env: env, roster: members([1, 2]), scanner: scanner2, ids: ids2)
+        model2.start(scanner: scanner2)
+        scanner2.emit(reading(code: code, uid: "CP", elapsed: 0))
+        await poll { (try? await env.markStore.getById("mark-2")) != nil }
+        let fresh = try #require(try await env.markStore.getById("mark-2"))
+        #expect(fresh.checkMethod == "cloud")
+        #expect(try #require(try await env.markStore.getById("mark-1")).checkMethod == "offline")
+        model2.stop()
+    }
+
     // MARK: - Участники до КП → буфер сливается в present
 
     @Test func membersBeforeKpDrainIntoPresent() async throws {

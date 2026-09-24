@@ -32,7 +32,8 @@ struct MarkUploadRepositoryTests {
         uploadedCloud: Bool = false,
         updatedAt: Int64 = 1000,
         takenAt: Int64 = 1000,
-        locLat: Double? = nil
+        locLat: Double? = nil,
+        checkMethod: String = "offline"
     ) -> Mark {
         Mark(
             id: id,
@@ -56,7 +57,8 @@ struct MarkUploadRepositoryTests {
             elapsedRealtimeAt: nil,
             bootCount: nil,
             locLat: locLat,
-            locLon: locLat == nil ? nil : 37.61
+            locLon: locLat == nil ? nil : 37.61,
+            checkMethod: checkMethod
         )
     }
 
@@ -112,6 +114,22 @@ struct MarkUploadRepositoryTests {
         #expect(mark.uploadedLocal == true)
         #expect(mark.uploadedCloud == true)
         #expect(transport.callCount == 2)
+    }
+
+    /// Фоновый дренаж выгружает cloud-взятие, но **не** подтверждает его: `confirmedAt` ставит только
+    /// confirm из открытого скан-листа.
+    @Test func drainAcceptingCloudTake_doesNotConfirm() async throws {
+        let (repo, store, transport, _) = try makeRepo()
+        try await store.upsert(makeMark(id: "m1", checkMethod: "cloud"))
+        transport.enqueue(statusCode: 200, bodyString: acceptedBody(["m1"])) // Local
+        transport.enqueue(statusCode: 200, bodyString: acceptedBody(["m1"])) // Cloud
+
+        await repo.uploadPending(raceId: 7, teamId: 42)
+
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.uploadedCloud == true)
+        #expect(mark.uploadedLocal == true)
+        #expect(mark.confirmedAt == nil)
     }
 
     // MARK: - Частичный accept (пересечение с батчем)
