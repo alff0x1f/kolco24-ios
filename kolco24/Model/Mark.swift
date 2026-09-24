@@ -100,7 +100,7 @@ struct Mark: Equatable {
         locVerticalAccuracy: Float? = nil,
         locGpsTimeMs: Int64? = nil,
         locElapsedRealtimeAt: Int64? = nil,
-        checkMethod: String = "offline",
+        checkMethod: String = CheckMethod.offline.rawValue,
         confirmedAt: Int64? = nil
     ) {
         self.id = id

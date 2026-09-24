@@ -27,6 +27,18 @@ final class FakeTransport: @unchecked Sendable {
     private let lock = NSLock()
     private var _queue: [Result<Prepared, Error>] = []
     private var _recorded: [URLRequest] = []
+    private let responder: (@Sendable (URLRequest) -> (statusCode: Int, body: Data))?
+
+    /// Очередь заготовленных ответов (обычный режим).
+    init() {
+        responder = nil
+    }
+
+    /// Режим ответчика: вместо очереди каждый запрос отвечается [responder] — для сквозных тестов,
+    /// где набор/порядок запросов (старт `AppModel`: refresh-fan-out + дрены) заранее не предсказуем.
+    init(responder: @escaping @Sendable (URLRequest) -> (statusCode: Int, body: Data)) {
+        self.responder = responder
+    }
 
     /// Журнал перехваченных запросов в порядке отправки (проверка заголовков/пути/тела/подписи).
     var recorded: [URLRequest] {
@@ -61,6 +73,10 @@ final class FakeTransport: @unchecked Sendable {
         let next: Result<Prepared, Error> = {
             lock.lock(); defer { lock.unlock() }
             _recorded.append(request)
+            if let responder {
+                let (statusCode, body) = responder(request)
+                return .success(Prepared(statusCode: statusCode, headers: [:], body: body))
+            }
             precondition(!_queue.isEmpty, "FakeTransport: очередь ответов пуста")
             return _queue.removeFirst()
         }()

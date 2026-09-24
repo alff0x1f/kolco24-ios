@@ -10,7 +10,7 @@
 //
 //  «Взято» не пишется обратно на строку КП: оно team-scoped (общий на гонку КП
 //  иначе протёк бы прогрессом одной команды на другую), поэтому легенда выводит
-//  его из complete-взятий этой команды через [takenPoints].
+//  его из зачтённых ([isCounted]) взятий этой команды через [takenPoints].
 //
 //  «Зачтено» = [isCounted] (`CheckMethod.swift`), а не голый `complete`:
 //  неподтверждённое взятие cloud/local КП не идёт ни в «ВЗЯТО», ни в СУММУ.
@@ -19,7 +19,7 @@
 import Foundation
 
 /// Множество id КП (пунктов), зачтённых этими взятиями — «взято» команды,
-/// выведенное из её собственных complete-взятий. Легенда использует это вместо
+/// выведенное из её собственных зачтённых ([isCounted]) взятий. Легенда использует это вместо
 /// персистентного флага на КП, чтобы смена команды в гонке показывала прогресс
 /// именно этой команды. Порт `takenPoints`.
 func takenPoints(_ marks: [Mark]) -> Set<Int> {
@@ -30,17 +30,17 @@ func takenPoints(_ marks: [Mark]) -> Set<Int> {
     return result
 }
 
-/// Число различных зачтённых (complete) КП. Порт `takenPointCount(marks)`.
+/// Число различных зачтённых ([isCounted]) КП. Порт `takenPointCount(marks)`.
 func takenPointCount(_ marks: [Mark]) -> Int {
-    distinctCompleteCheckpointIds(marks).count
+    distinctCountedCheckpointIds(marks).count
 }
 
-/// Число различных зачтённых (complete) КП c **живым** резолвером цены, считая
+/// Число различных зачтённых ([isCounted]) КП c **живым** резолвером цены, считая
 /// только scoring-КП (`cost > 0`) — технические КП (cost 0: тест-пункт, зона
 /// передачи) не идут в «ВЗЯТО». [costOf] зеркалит резолвер перегрузки
 /// [totalScore]. Порт `takenPointCount(marks, costOf)`.
 func takenPointCount(_ marks: [Mark], costOf: (Mark) -> Int) -> Int {
-    distinctCompleteMarks(marks).filter { costOf($0) > 0 }.count
+    distinctCountedMarks(marks).filter { costOf($0) > 0 }.count
 }
 
 /// Сумма cost по различным зачтённым КП — повторное взятие того же пункта не
@@ -56,11 +56,11 @@ func totalScore(_ marks: [Mark]) -> Int {
 /// легенде — держит «Отметки» СУММА в шаге с «Легенда» после серверной правки
 /// цены. Порт `totalScore(marks, costOf)`.
 func totalScore(_ marks: [Mark], costOf: (Mark) -> Int) -> Int {
-    distinctCompleteMarks(marks).reduce(0) { $0 + costOf($1) }
+    distinctCountedMarks(marks).reduce(0) { $0 + costOf($1) }
 }
 
-/// Complete-взятия, различные по `checkpointId`, в порядке первого появления.
-private func distinctCompleteMarks(_ marks: [Mark]) -> [Mark] {
+/// Зачтённые ([isCounted]) взятия, различные по `checkpointId`, в порядке первого появления.
+private func distinctCountedMarks(_ marks: [Mark]) -> [Mark] {
     var seen = Set<Int>()
     var result: [Mark] = []
     for mark in marks where isCounted(mark) {
@@ -71,8 +71,8 @@ private func distinctCompleteMarks(_ marks: [Mark]) -> [Mark] {
     return result
 }
 
-/// Множество различных id complete-взятий.
-private func distinctCompleteCheckpointIds(_ marks: [Mark]) -> Set<Int> {
+/// Множество различных id КП зачтённых ([isCounted]) взятий.
+private func distinctCountedCheckpointIds(_ marks: [Mark]) -> Set<Int> {
     var seen = Set<Int>()
     for mark in marks where isCounted(mark) {
         seen.insert(mark.checkpointId)

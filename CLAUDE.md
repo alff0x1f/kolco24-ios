@@ -60,10 +60,10 @@ Four tabs: Отметки (`MarksView` — taken-КП grid + NFC/photo scan), Л
 - **`kolco24/Core/`** — pure-Foundation logic, grouped by concern (stages 1, 4–11, map): `Util` (HexBytes,
   PluralRu, RaceDates), `Nfc` (ChipRecord/K24 format, NfcUid), `Api` (HMAC signing), `Crypto` (LegendCrypto),
   `Scan` (ScanSession reducer, ChipScanning seams), `Team` (BindDecision, TeamPickerLogic), `Legend`,
-  `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay, ControlTime, CheckMethod), `Sync`, `Track` (Segments, TrackPoints,
-  GpxExport, TrackEngine seam), `Upload`, `Time` (TrustedClock actor, ServerTimeSampler, SkewFormat), `Lease`,
-  `Stores` (InstallId, ClockAnchorStore, ThemePreference, RaceLeaseStore, AdminTokenStore), `Admin`,
-  `Map` (MBTiles math), `Readiness` (start-readiness checklist).
+  `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay, ControlTime, CheckMethod), `Sync`,
+  `Track` (Segments, TrackPoints, GpxExport, TrackEngine seam), `Upload`, `Time` (TrustedClock actor,
+  ServerTimeSampler, SkewFormat), `Lease`, `Stores` (InstallId, ClockAnchorStore, ThemePreference,
+  RaceLeaseStore, AdminTokenStore), `Admin`, `Map` (MBTiles math), `Readiness` (start-readiness checklist).
 - **`kolco24/Model/`** — domain value types mirroring Room v5 (GRDB-free; conformances live in `Data/Records/`)
   (stages 1–2).
 - **`kolco24/Data/`** (stages 2–3, 6–10, map) — `AppDatabase` (migration `v1` = Room v5 snapshot,

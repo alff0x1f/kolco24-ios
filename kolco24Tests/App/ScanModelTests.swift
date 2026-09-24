@@ -1303,31 +1303,20 @@ struct ScanModelTests {
 
     // MARK: - Сквозной путь: AppModel.makeScanModel → MarkUploadRepository.confirm → БД
 
-    /// Транспорт: POST `…/marks/` принимает все id из тела (200 `accepted`), остальное — `304`.
-    final class AcceptingMarksTransport: @unchecked Sendable {
-        private let lock = NSLock()
-        private var _posts: [String] = []
-        var marksPosts: [String] { lock.lock(); defer { lock.unlock() }; return _posts }
+    /// Ответчик `FakeTransport`: POST `…/marks/` принимает все id из тела (200 `accepted`), остальное — `304`.
+    nonisolated private static func isMarksPost(_ request: URLRequest) -> Bool {
+        request.httpMethod == "POST" && request.url!.absoluteString.hasSuffix("/marks/")
+    }
 
-        func handle(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-            let url = request.url!
-            let isMarksPost = request.httpMethod == "POST" && url.absoluteString.hasSuffix("/marks/")
-            var body = Data()
-            var status = 304
-            if isMarksPost {
-                lock.lock(); _posts.append(url.absoluteString); lock.unlock()
-                let json = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
-                let ids = (json?["marks"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
-                body = try JSONSerialization.data(withJSONObject: ["accepted": ids])
-                status = 200
-            }
-            let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: [:])!
-            return (body, response)
-        }
+    nonisolated private static func acceptMarks(_ request: URLRequest) -> (statusCode: Int, body: Data) {
+        guard isMarksPost(request) else { return (304, Data()) }
+        let json = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+        let ids = (json?["marks"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? String }
+        return (200, try! JSONSerialization.data(withJSONObject: ["accepted": ids]))
     }
 
     @Test func productionWiringConfirmsCloudTakeInDatabase() async throws {
-        let transport = AcceptingMarksTransport()
+        let transport = FakeTransport(responder: Self.acceptMarks)
         let wall: Int64 = 1_700_000_000_000
         let clock = TrustedClock(elapsedProvider: { 0 }, wallProvider: { wall }, bootCountProvider: { nil })
         let env = try AppEnvironment.inMemory(transport: transport.handle, trustedClock: clock)
@@ -1357,22 +1346,15 @@ struct ScanModelTests {
         #expect(model.confirmState == .confirmed)
         #expect(model.didComplete == true)
 
-        #expect(transport.marksPosts.contains { $0.hasPrefix("https://cloud.test") })
-        let ids = try await env.markStore.allIds()
-        let marks = try await ids.asyncCompactMap { try await env.markStore.getById($0) }
+        #expect(transport.recorded.contains {
+            Self.isMarksPost($0) && $0.url!.absoluteString.hasPrefix("https://cloud.test")
+        })
+        let marks = try await firstValue(env.markStore.observeForTeam(team))
         let mark = try #require(marks.first { $0.checkpointId == 100 })
         #expect(mark.checkMethod == "cloud")
         #expect(mark.confirmedAt == wall)     // стенные мс TrustedClock-семпла
         #expect(isCounted(mark))
         #expect(takenPoints(marks).contains(100))
         model.stop()
-    }
-}
-
-private extension Array {
-    func asyncCompactMap<T>(_ transform: (Element) async throws -> T?) async rethrows -> [T] {
-        var out: [T] = []
-        for element in self { if let value = try await transform(element) { out.append(value) } }
-        return out
     }
 }

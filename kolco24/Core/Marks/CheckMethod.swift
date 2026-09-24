@@ -17,17 +17,14 @@ import Foundation
 
 /// Способ проверки взятия КП. Неизвестные / старые значения читаются как
 /// [offline] (обратная совместимость: `online` / `local_server` / `nfc` / пусто).
-enum CheckMethod: Equatable {
+enum CheckMethod: String, Equatable {
     case offline
     case cloud
     case local
 
+    /// Разбор wire-строки; неизвестное / пустое значение — [offline].
     init(_ raw: String) {
-        switch raw {
-        case "cloud": self = .cloud
-        case "local": self = .local
-        default: self = .offline
-        }
+        self = CheckMethod(rawValue: raw) ?? .offline
     }
 
     /// Сервер, который должен подтвердить взятие; `nil` для offline.

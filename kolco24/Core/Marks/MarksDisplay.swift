@@ -133,7 +133,7 @@ struct PhotoReviewSummary: Equatable {
     let tokens: [String]
 }
 
-/// Чистая сводка **КП**, требующих проверки судьёй — зачтённых (`complete`)
+/// Чистая сводка **КП**, требующих проверки судьёй — зачтённых ([isCounted])
 /// только фото-взятиями (`method == "photo"`: чип КП не читался, фото —
 /// единственное доказательство). По-КП, зеркаля `distinctBy { checkpointId }`
 /// метрик: повторное фото-взятие того же КП считается однажды, а КП, у которого
@@ -167,15 +167,11 @@ func photoReviewSummary(
     return PhotoReviewSummary(
         count: photoOnly.count,
         points: photoOnly.reduce(0) { $0 + costOf($1) },
-        tokens: photoOnly.map { m in
-            let cost = costOf(m)
-            let number = paddedNumber(m.checkpointNumber)
-            return cost > 0 ? "\(cost)-\(number)" : number
-        }
+        tokens: photoOnly.map { costToken($0, costOf: costOf) }
     )
 }
 
-/// Чистые токены **взятых-но-всё-ещё-скрытых** КП — `complete`-взятия, чей КП
+/// Чистые токены **взятых-но-всё-ещё-скрытых** КП — зачтённые ([isCounted]) взятия, чей КП
 /// всё ещё locked в легенде ([lockedIds]), поэтому его цена неизвестна клиенту и
 /// взятие даёт 0 в СУММУ до раскрытия. По-КП (`distinctBy checkpointId`),
 /// oldest-first как сетка. Токен — «?-NN» (`?` там, где стояла бы цифра цены).
@@ -200,7 +196,7 @@ func hiddenTakenTokens(_ marks: [Mark], lockedIds: Set<Int>) -> [String] {
 /// ([isCounted]) взятие, исключается (повторное взятие уже подтвердило КП).
 /// [marks] приходит newest-first: dedupe по `checkpointId` оставляет новейшее
 /// взятие, reverse даёт oldest-first. Токен — «стоимость-NN» по живому [costOf],
-/// для нулевой цены — голый «NN» (как `photoReviewSummary`). iOS-only.
+/// для нулевой цены — голый «NN» (общий `costToken`). iOS-only.
 func unconfirmedTokens(
     _ marks: [Mark],
     costOf: (Mark) -> Int = { $0.cost }
@@ -211,9 +207,7 @@ func unconfirmedTokens(
     for mark in marks
     where isUnconfirmed(mark) && !counted.contains(mark.checkpointId) {
         if seen.insert(mark.checkpointId).inserted {
-            let cost = costOf(mark)
-            let number = paddedNumber(mark.checkpointNumber)
-            result.append(cost > 0 ? "\(cost)-\(number)" : number)
+            result.append(costToken(mark, costOf: costOf))
         }
     }
     return result.reversed()
@@ -274,6 +268,13 @@ func tileFill(_ color: CheckpointColor?, darkTheme: Bool) -> TileFill {
 private func paddedNumber(_ number: Int) -> String {
     let s = String(number)
     return s.count >= 2 ? s : String(repeating: "0", count: 2 - s.count) + s
+}
+
+/// Токен нотиса «стоимость-NN» по живому [costOf]; для нулевой цены — голый «NN».
+private func costToken(_ m: Mark, costOf: (Mark) -> Int) -> String {
+    let cost = costOf(m)
+    let number = paddedNumber(m.checkpointNumber)
+    return cost > 0 ? "\(cost)-\(number)" : number
 }
 
 /// `HH:mm`, Locale US, локальный часовой пояс — как `SimpleDateFormat` в Kotlin.

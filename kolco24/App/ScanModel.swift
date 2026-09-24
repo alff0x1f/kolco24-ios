@@ -691,7 +691,7 @@ final class ScanModel: Identifiable {
     /// Каждая попытка — отдельный `Task.detached`, захвативший только `@Sendable`-замыкание репозитория
     /// (§6): отмена цикла не обрывает летящий POST (отмена не наследуется), и если сервер его примет,
     /// `confirmedAt` запишется. `detached` — явно вне MainActor, даже если замыкание станет изолированным.
-    /// Цикл держит `self` слабо и проверяет `Task.isCancelled` после каждого вызова и сна.
+    /// Цикл держит `self` слабо: после каждого вызова и сна — `guard let self, !Task.isCancelled`.
     /// `.sending(attempt: 1)` уже выставил вызывающий (`enterConfirmMode`/`retryConfirm`) — цикл
     /// обновляет состояние лишь со второй попытки.
     private func runConfirmCycle(markId: String, target: UploadTarget) {
@@ -714,17 +714,20 @@ final class ScanModel: Identifiable {
                 let result = await call.value
                 if Task.isCancelled { return }
                 if result == .ok {
-                    self?.onConfirmed()
+                    guard let self, !Task.isCancelled else { return }
+                    self.onConfirmed()
                     return
                 }
                 if await elapsedNow() >= deadline {
-                    self?.confirmState = .failed(offline: result == .offline)
+                    guard let self, !Task.isCancelled else { return }
+                    self.confirmState = .failed(offline: result == .offline)
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(Int(retry)))
-                if Task.isCancelled { return }
+                // Сильная ссылка живёт лишь до конца итерации — через следующий `await` не держится.
+                guard let self, !Task.isCancelled else { return }
                 attempt += 1
-                self?.confirmState = .sending(target: target, attempt: attempt)
+                self.confirmState = .sending(target: target, attempt: attempt)
             }
         }
     }

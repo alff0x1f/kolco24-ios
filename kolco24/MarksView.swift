@@ -968,13 +968,7 @@ private struct PhotoTileView: View {
         .overlay(alignment: .topTrailing) {
             // Глиф камеры — эксклюзив photo-взятия (NFC-взятие с фото им не помечается).
             if tile.kind == .photo {
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(5)
-                    .background(Color.black.opacity(0.45))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .padding(4)
+                TileCornerGlyph(systemName: "camera.fill")
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -1019,10 +1013,27 @@ private struct PhotoReviewNotice: View {
     }
 
     var body: some View {
+        NoticeCard(
+            icon: "camera.fill",
+            title: title,
+            subtitle: "Баллы засчитают после проверки судьями"
+        )
+    }
+}
+
+// MARK: - Notice card
+// Общая вёрстка brand-red нотисов под метриками (`PhotoReviewNotice`, `UnconfirmedNotice`):
+// иконка в красной плашке + заголовок/подзаголовок на brandRed-тонированной карточке.
+private struct NoticeCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
         HStack(spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8).fill(Color.brandRed)
-                Image(systemName: "camera.fill")
+                Image(systemName: icon)
                     .font(.system(size: 13))
                     .foregroundStyle(.white)
             }
@@ -1032,7 +1043,7 @@ private struct PhotoReviewNotice: View {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.ink)
-                Text("Баллы засчитают после проверки судьями")
+                Text(subtitle)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.sub)
             }
@@ -1052,29 +1063,11 @@ private struct UnconfirmedNotice: View {
     let tokens: [String]
 
     var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8).fill(Color.brandRed)
-                Image(systemName: "icloud.slash")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 28, height: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Не подтверждены сервером (\(tokens.count)): \(tokensLabel(tokens))")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.ink)
-                Text("Отметьтесь на КП ещё раз при наличии связи")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.sub)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.brandRed.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+        NoticeCard(
+            icon: "icloud.slash",
+            title: "Не подтверждены сервером (\(tokens.count)): \(tokensLabel(tokens))",
+            subtitle: "Отметьтесь на КП ещё раз при наличии связи"
+        )
     }
 }
 
@@ -1085,20 +1078,34 @@ private struct UnconfirmedNotice: View {
 private struct UnconfirmedTileStyle: ViewModifier {
     let unconfirmed: Bool
 
+    /// Непрозрачность приглушённого неподтверждённого тайла.
+    private let dimmedOpacity = 0.45
+
     func body(content: Content) -> some View {
         content
-            .opacity(unconfirmed ? 0.45 : 1)
+            .opacity(unconfirmed ? dimmedOpacity : 1)
             .overlay(alignment: .topTrailing) {
                 if unconfirmed {
-                    Image(systemName: "icloud.slash")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(5)
-                        .background(Color.black.opacity(0.55))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .padding(4)
+                    TileCornerGlyph(systemName: "icloud.slash")
                 }
             }
+    }
+}
+
+// MARK: - Tile corner glyph
+// Белый глиф в тёмной плашке для top-right угла тайла (камера photo-взятия, `icloud.slash`
+// неподтверждённого взятия) — одна вёрстка для обоих.
+private struct TileCornerGlyph: View {
+    let systemName: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(5)
+            .background(Color.black.opacity(0.45))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .padding(4)
     }
 }
 
