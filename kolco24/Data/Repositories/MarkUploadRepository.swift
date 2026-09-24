@@ -196,6 +196,53 @@ actor MarkUploadRepository {
         }
     }
 
+    // MARK: - Подтверждение взятия (из открытого скан-листа)
+
+    /// Подтвердить одно взятие cloud/local-КП на требуемом сервере: POST батча из одной марки
+    /// (тот же `MarkDto` + `sourceInstallId`, что у дренажа). Id в `accepted` → `confirmedAt = now` +
+    /// GPS-aware `uploaded*`-пометка этой цели → `.ok`. Иначе — `uploadResultKind` (`.offline`/`.error`);
+    /// `200` без id → `.error`; марки нет / ошибка БД → `.error` + лог.
+    ///
+    /// Намеренно **не** берёт `inFlight`: идущий дренаж не должен молча съесть подтверждение
+    /// (скан-лист ждёт ответа). Повторный POST уже выгруженного id безопасен — сервер дедупит по id.
+    /// Вызывается только из скан-листа; фоновый дренаж `confirmedAt` не ставит никогда.
+    func confirm(markId: String, target: UploadTarget, now: Int64) async -> UploadResultKind {
+        let mark: Mark
+        do {
+            guard let loaded = try await markStore.getById(markId) else {
+                uploadLog.error("confirm: mark \(markId) not found")
+                return .error
+            }
+            mark = loaded
+        } catch {
+            uploadLog.error("confirm getById failed: \(String(describing: error))")
+            return .error
+        }
+
+        let client = target == .cloud ? cloud : local
+        let result = await client.uploadMarks(
+            raceId: mark.raceId, teamId: mark.teamId, sourceInstallId: installId,
+            marks: [MarkDto(from: mark)]
+        ).mapSuccess { $0.accepted }
+        guard case .success(let accepted) = result else {
+            return uploadResultKind(result)
+        }
+        guard accepted.contains(markId) else {
+            return .error // сервер ответил 200, но марку не принял
+        }
+        do {
+            try await markStore.setConfirmedAt(id: markId, at: now)
+            switch target {
+            case .cloud: try await markCloudGpsAware(batch: [mark], ids: [markId])
+            case .local: try await markLocalGpsAware(batch: [mark], ids: [markId])
+            }
+        } catch {
+            uploadLog.error("confirm mark failed: \(String(describing: error))")
+            return .error
+        }
+        return .ok
+    }
+
     // MARK: - Дренаж скоупа
 
     /// Слить один скоуп в обе цели по очереди; цикл каждой цели независим от другой. Порт `flushScope`:

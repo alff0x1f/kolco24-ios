@@ -255,17 +255,17 @@ private(set) var confirmState: ConfirmState?
 - Modify: `kolco24/Data/Repositories/MarkUploadRepository.swift`
 - Modify: `kolco24Tests/Data/Repositories/MarkUploadRepositoryTests.swift`
 
-- [ ] add `confirm(markId:target:now:)` per Technical Details (no `inFlight` lock; load via the existing
+- [x] add `confirm(markId:target:now:)` per Technical Details (no `inFlight` lock; load via the existing
       `MarkStore.getById(_:)`, `MarkStore.swift:41`)
-- [ ] on accept: `setConfirmedAt` + the GPS-aware `uploaded*` setter for that target
-- [ ] tests: cloud → only the cloud transport is called, `confirmedAt` + `uploadedCloud` set, `.ok`
-- [ ] tests: local → only the local transport is called, `confirmedAt` + `uploadedLocal` set
-- [ ] tests: offline, 5xx, and 200 without the id → `confirmedAt == nil`, correct result kind;
+- [x] on accept: `setConfirmedAt` + the GPS-aware `uploaded*` setter for that target
+- [x] tests: cloud → only the cloud transport is called, `confirmedAt` + `uploadedCloud` set, `.ok`
+- [x] tests: local → only the local transport is called, `confirmedAt` + `uploadedLocal` set
+- [x] tests: offline, 5xx, and 200 without the id → `confirmedAt == nil`, correct result kind;
       missing mark → `.error`
-- [ ] tests: confirm while a drain is in flight (`GatedTransport`) still POSTs — assert 2 requests are
+- [x] tests: confirm while a drain is in flight (`GatedTransport`) still POSTs — assert 2 requests are
       recorded while the drain is gated (the gated path is the same `/marks/`, so only the request count is
       checkable)
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 5: ScanModel confirm state machine
 
