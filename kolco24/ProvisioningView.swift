@@ -9,6 +9,8 @@
 //
 //  DEVIATION от Android: `HorizontalPager` + rail-тики заменены списком/степпером (идиоматичный iOS).
 //  UI-референс — `ui/admin/ProvisioningScreen.kt`. `.task` стартует прод-сканер; `onDisappear` — `stop()`.
+//  NFC-шторка модальна и закрывает степпер: чтобы начать не с первого КП, админ закрывает шторку, выбирает
+//  КП и жмёт «Сканировать» (`resumeScanning`). Номер выбранного КП дублируется в строке шторки.
 //
 
 import SwiftUI
@@ -33,6 +35,9 @@ struct ProvisioningView: View {
                         heroCard(cp)
                     }
                     scanZone
+                    if !model.scanning {
+                        scanButton
+                    }
                 }
             }
             .padding(.horizontal, DS.hPad)
@@ -194,6 +199,22 @@ struct ProvisioningView: View {
             scanCard(icon: "xmark.circle.fill", tint: Color.brandRed,
                      title: "Ошибка", subtitle: reason)
         }
+    }
+
+    /// Шторку закрыл пользователь (например, чтобы выбрать КП) — открыть сессию заново для выбранного КП.
+    private var scanButton: some View {
+        Button {
+            model.resumeScanning()
+        } label: {
+            Label("Сканировать", systemImage: "wave.3.right")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.kolcoOrange)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
     }
 
     private func scanCard(icon: String, tint: Color, title: String, subtitle: String?, spinning: Bool = false) -> some View {

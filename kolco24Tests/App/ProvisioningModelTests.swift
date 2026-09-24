@@ -28,12 +28,17 @@ struct ProvisioningModelTests {
         private(set) var pendingUid: String?
         private(set) var pendingRecord: Data?
         private(set) var stopped = false
+        private(set) var startCount = 0
+        private(set) var statuses: [String] = []
         func readings() -> AsyncStream<TagReading> { AsyncStream { cont in self.continuation = cont } }
-        func start() {}
+        func start() { startCount += 1 }
         func stop() { stopped = true; continuation?.finish() }
+        func setStatus(_ text: String) { statuses.append(text) }
         func setPendingWrite(uid: String, record: Data) { pendingUid = uid; pendingRecord = record }
         func clearPendingWrite() { pendingUid = nil; pendingRecord = nil }
         func emit(_ reading: TagReading) { continuation?.yield(reading) }
+        /// Пользователь закрыл системную шторку: поток завершается без `stop()`.
+        func userCloses() { continuation?.finish() }
     }
 
     final class RecordingFeedback: ScanFeedbackPlaying, @unchecked Sendable {
@@ -469,5 +474,48 @@ struct ProvisioningModelTests {
         #expect(scanner.pendingUid == "U1")
         #expect(feedback.failureCount == 1)
         model.stop()
+    }
+
+    // MARK: - Закрытая шторка → выбор КП → «Сканировать»
+
+    @Test func userClosesSheet_selectsLaterKp_resumeBindsToIt() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 1), kp(2, number: 5), kp(3, number: 10)])
+        let bind = BindStub(okResponse(number: 10, code: goodCodeHex))
+        let model = makeModel(env: env, bind: bind)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { model.checkpoints.count == 3 }
+        #expect(model.scanning == true)
+
+        scanner.userCloses()
+        await waitUntil { !model.scanning }
+        #expect(model.scanning == false)
+
+        model.selectCheckpoint(index: 2)
+        model.resumeScanning()
+        await waitUntil { scanner.startCount == 2 }
+        #expect(model.scanning == true)
+        #expect(scanner.statuses.last == "КП 10 · Приложите чип")
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { if case .waitingForWrite = model.provisionState { return true }; return false }
+        #expect(bind.calls.first?.1 == 3)
+        model.stop()
+    }
+
+    @Test func resumeScanning_whileScanning_orAfterStop_isNoOp() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5)])
+        let model = makeModel(env: env, bind: BindStub(okResponse(code: goodCodeHex)))
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+
+        model.resumeScanning()
+        model.stop()
+        model.resumeScanning()
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(scanner.startCount == 1)
+        #expect(model.scanning == false)
     }
 }
