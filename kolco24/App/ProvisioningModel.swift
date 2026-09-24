@@ -43,12 +43,21 @@ final class ProvisioningModel: Identifiable {
     /// КП гонки (порядок `number, id`) — источник степпера. Пустой до первой эмиссии observation.
     private(set) var checkpoints: [Checkpoint] = []
     /// Индекс выбранного КП в [checkpoints]. Автопереход к следующему после успешной записи.
-    private(set) var selectedIndex = 0
+    private(set) var selectedIndex = 0 {
+        didSet { pushStatus() }
+    }
     /// Состояние провижинимого чипа против выбранного КП (двухтаповый флоу).
-    private(set) var provisionState: ProvisionState = .waitingForChip
+    private(set) var provisionState: ProvisionState = .waitingForChip {
+        didSet { pushStatus() }
+    }
     /// Вспомогательная подсказка зоны скана в `waitingForWrite` (тап 2): «Приложите тот же чип» /
     /// «Не удалось записать, приложите снова». `nil` — без подсказки.
-    private(set) var writeHint: String?
+    private(set) var writeHint: String? {
+        didSet { pushStatus() }
+    }
+    /// Открыта (или открывается) NFC-сессия. `false` — пользователь закрыл системную шторку (например,
+    /// чтобы выбрать другой КП в степпере); вьюха предлагает «Сканировать» (`resumeScanning`).
+    private(set) var scanning = false
     /// UID-множества свежезаписанных за сессию чипов, per-КП (`checkpoint.id`). Драйвит зелёные пилюли
     /// и участвует в max/subtract-логике счётчиков.
     private(set) var freshUids: [Int: [String]] = [:]
@@ -92,6 +101,11 @@ final class ProvisioningModel: Identifiable {
     @ObservationIgnored private var tagsTask: Task<Void, Never>?
     @ObservationIgnored private var bindTask: Task<Void, Never>?
     @ObservationIgnored private var advanceTask: Task<Void, Never>?
+    @ObservationIgnored private var resumeTask: Task<Void, Never>?
+    /// Поколение потока чтений: конец СТАРОГО потока (после рестарта) не сбрасывает `scanning`.
+    @ObservationIgnored private var streamGen = 0
+    /// Экран закрыт (`stop()`): отложенный `resumeScanning` не должен открыть шторку.
+    @ObservationIgnored private var closed = false
 
     /// Пауза «успех» по умолчанию перед автопереходом (мс).
     static let defaultSuccessHoldMs = 1200
@@ -124,6 +138,7 @@ final class ProvisioningModel: Identifiable {
         tagsTask?.cancel()
         bindTask?.cancel()
         advanceTask?.cancel()
+        resumeTask?.cancel()
         scanner?.stop()
     }
 
@@ -155,16 +170,26 @@ final class ProvisioningModel: Identifiable {
     // MARK: - Жизненный цикл
 
     /// Тестовый вход: стартует сканирование по инжектированному [scanner] (`FakeProvisioningScanner`).
+    /// Повторно входим: старый поток (если был) отменяется, берётся свежий `readings()`.
     func start(scanner: any ProvisioningScanning) {
         self.scanner = scanner
+        closed = false
         liveness.set(true)
+        streamTask?.cancel()
+        streamGen += 1
+        let gen = streamGen
         let readings = scanner.readings()
+        pushStatus() // до start(): шторка открывается с номером выбранного КП
         scanner.start()
+        scanning = true
         streamTask = Task { [weak self] in
             for await reading in readings {
                 guard let self else { return }
                 await self.processReading(reading)
             }
+            // Поток кончился не по воле модели (пользователь закрыл шторку / NFC недоступен).
+            guard let self, self.streamGen == gen else { return }
+            self.scanning = false
         }
     }
 
@@ -181,13 +206,32 @@ final class ProvisioningModel: Identifiable {
 
     /// Закрытие экрана: гасит liveness, отменяет задачи, разоружает pending-write и останавливает сканер.
     func stop() {
+        closed = true
         liveness.set(false)
+        streamGen += 1
+        scanning = false
         streamTask?.cancel()
         streamTask = nil
+        resumeTask?.cancel()
+        resumeTask = nil
         bindTask?.cancel()
         advanceTask?.cancel()
         scanner?.clearPendingWrite()
         scanner?.stop()
+    }
+
+    /// Возобновить сканирование («Сканировать»). No-op, если сессия уже открыта/открывается, экран
+    /// закрыт или сканера нет. Барьер `waitUntilStopped()` — прежняя платформенная сессия должна
+    /// фактически инвалидироваться, иначе её поздний `didInvalidate` завершил бы уже новый поток.
+    func resumeScanning() {
+        guard !closed, !scanning, let scanner else { return }
+        scanning = true
+        resumeTask = Task { [weak self] in
+            await scanner.waitUntilStopped()
+            guard let self, !Task.isCancelled, !self.closed else { return }
+            self.resumeTask = nil
+            self.start(scanner: scanner)
+        }
     }
 
     // MARK: - Выбор КП (степпер)
@@ -224,6 +268,7 @@ final class ProvisioningModel: Identifiable {
                     guard let self, !Task.isCancelled else { return }
                     self.checkpoints = rows
                     self.loaded = true
+                    self.pushStatus()
                     // Держим selectedIndex в границах после смены легенды.
                     if self.selectedIndex >= rows.count {
                         self.selectedIndex = max(0, rows.count - 1)
@@ -350,7 +395,7 @@ final class ProvisioningModel: Identifiable {
     }
 
     /// Запись прошла + подтверждена read-back'ом: пометить чип свежим, `success(number)`, разоружить
-    /// сканер, фидбек + фанфары, запланировать автопереход к следующему КП.
+    /// сканер, фидбек успеха (без фанфар), запланировать автопереход к следующему КП.
     private func completeWrite(uid: String) {
         if let cp = selectedCheckpoint, !(freshUids[cp.id] ?? []).contains(uid) {
             // Дедуп per-КП (порт `if (uid !in existing)` из ProvisioningScreen.kt): повторная запись
@@ -365,8 +410,12 @@ final class ProvisioningModel: Identifiable {
         lastWrittenUid = uid
         scanner?.clearPendingWrite()
         feedback.play(.success)
-        feedback.fanfare()
         scheduleAutoAdvance()
+    }
+
+    /// Строка системной NFC-шторки: шторка модальна и закрывает степпер — номер КП дублируется в ней.
+    private func pushStatus() {
+        scanner?.setStatus(kpProvisionStatusLine(provisionState, number: selectedCheckpoint?.number, hint: writeHint))
     }
 
     private func scheduleAutoAdvance() {

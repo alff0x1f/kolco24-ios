@@ -56,4 +56,18 @@ struct ProvisioningLogicTests {
         // length == 5 — первый случай, где suffix(4) отличается от самого uid.
         #expect(chipTokenLabel(uid: "ABCDE") == "BCDE")
     }
+
+    // MARK: - kpProvisionStatusLine (строка системной NFC-шторки)
+
+    @Test func kpProvisionStatusLine_showsSelectedKp() {
+        #expect(kpProvisionStatusLine(.waitingForChip, number: 10, hint: nil) == "КП 10 · Приложите чип")
+        #expect(kpProvisionStatusLine(.waitingForChip, number: nil, hint: nil) == "Приложите чип КП")
+        #expect(kpProvisionStatusLine(.binding(uid: "U1"), number: 3, hint: nil) == "Привязка на сервере…")
+        #expect(kpProvisionStatusLine(.waitingForWrite(uid: "U1", code: "AB"), number: 3, hint: nil)
+            == "КП 03 · Приложите чип ещё раз")
+        #expect(kpProvisionStatusLine(.waitingForWrite(uid: "U1", code: "AB"), number: 3, hint: "Приложите тот же чип")
+            == "КП 03 · Приложите тот же чип")
+        #expect(kpProvisionStatusLine(.success(number: 7), number: 7, hint: nil) == "Записано: КП 07")
+        #expect(kpProvisionStatusLine(.failed(reason: "Нет сети"), number: 7, hint: nil) == "Ошибка: Нет сети")
+    }
 }

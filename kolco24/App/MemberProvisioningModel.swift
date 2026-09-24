@@ -404,7 +404,7 @@ final class MemberProvisioningModel: Identifiable {
     }
 
     /// Запись подтверждена read-back'ом: лента (дедуп по UID — замена + наверх), автоинкремент номера,
-    /// `success(number)`, разоружение сканера, фидбек + фанфары, возврат в `waitingForChip` после паузы.
+    /// `success(number)`, разоружение сканера, фидбек успеха (без фанфар), возврат в `waitingForChip` после паузы.
     private func completeWrite(uid: String, number: Int) {
         freshFeed.removeAll { $0.uid == uid }
         freshFeed.insert(FreshBracelet(uid: uid, number: number), at: 0)
@@ -418,7 +418,6 @@ final class MemberProvisioningModel: Identifiable {
         writeHint = nil
         scanner?.clearPendingWrite()
         feedback.play(.success)
-        feedback.fanfare()
         scheduleReturn()
     }
 

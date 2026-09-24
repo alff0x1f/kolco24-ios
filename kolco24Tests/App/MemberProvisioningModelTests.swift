@@ -191,7 +191,7 @@ struct MemberProvisioningModelTests {
         #expect(model.nextNumber == 102)
         #expect(model.freshFeed == [.init(uid: "U1", number: 101)])
         #expect(feedback.successCount == 1)
-        #expect(feedback.fanfares == 1)
+        #expect(feedback.fanfares == 0)
 
         await waitUntil { model.provisionState == .waitingForChip }
         #expect(model.provisionState == .waitingForChip)

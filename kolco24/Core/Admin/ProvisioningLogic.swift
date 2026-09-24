@@ -64,6 +64,22 @@ func provisionErrorMessage<T>(_ result: PostResult<T>) -> String {
     }
 }
 
+/// Строка системной NFC-шторки для [state] против КП [number] (`nil` — список КП ещё пуст). Шторка
+/// модальна и закрывает экран — номер выбранного КП должен быть виден в ней. [hint] — подсказка тапа 2
+/// (`nil` → «Приложите чип ещё раз»). Чистая.
+func kpProvisionStatusLine(_ state: ProvisionState, number: Int?, hint: String?) -> String {
+    let kp = number.map { "КП \(String(format: "%02d", $0))" }
+    switch state {
+    case .waitingForChip: return kp.map { "\($0) · Приложите чип" } ?? "Приложите чип КП"
+    case .binding: return "Привязка на сервере…"
+    case .waitingForWrite:
+        let text = hint ?? ProvisionMessage.kpWriteAgainHint
+        return kp.map { "\($0) · \(text)" } ?? text
+    case let .success(n): return "Записано: КП \(String(format: "%02d", n))"
+    case let .failed(reason): return "Ошибка: \(reason)"
+    }
+}
+
 /// Общие RU-строки обоих экранов записи (чипы КП и браслеты участников) + pre-write guard'а
 /// сканера (``writeGuardDecision(currentPages:record:)``) — один источник для Core, моделей и вьюх.
 enum ProvisionMessage {
