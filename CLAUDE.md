@@ -60,14 +60,15 @@ Four tabs: Отметки (`MarksView` — taken-КП grid + NFC/photo scan), Л
 - **`kolco24/Core/`** — pure-Foundation logic, grouped by concern (stages 1, 4–11, map): `Util` (HexBytes,
   PluralRu, RaceDates), `Nfc` (ChipRecord/K24 format, NfcUid), `Api` (HMAC signing), `Crypto` (LegendCrypto),
   `Scan` (ScanSession reducer, ChipScanning seams), `Team` (BindDecision, TeamPickerLogic), `Legend`,
-  `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay, ControlTime), `Sync`, `Track` (Segments, TrackPoints,
+  `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay, ControlTime, CheckMethod), `Sync`, `Track` (Segments, TrackPoints,
   GpxExport, TrackEngine seam), `Upload`, `Time` (TrustedClock actor, ServerTimeSampler, SkewFormat), `Lease`,
   `Stores` (InstallId, ClockAnchorStore, ThemePreference, RaceLeaseStore, AdminTokenStore), `Admin`,
   `Map` (MBTiles math), `Readiness` (start-readiness checklist).
 - **`kolco24/Model/`** — domain value types mirroring Room v5 (GRDB-free; conformances live in `Data/Records/`)
   (stages 1–2).
 - **`kolco24/Data/`** (stages 2–3, 6–10, map) — `AppDatabase` (migration `v1` = Room v5 snapshot,
-  `v2` = `races.mapUrl`, `v3` = `categories.controlTime`; no FKs — Room parity, don't add), `Records/*+GRDB.swift`,
+  `v2` = `races.mapUrl`, `v3` = `categories.controlTime`, `v4` = `marks.checkMethod` + `marks.confirmedAt`;
+  no FKs — Room parity, don't add), `Records/*+GRDB.swift`,
   `Stores/` (12 DAO-analog structs, SQL transcribed verbatim from Kotlin), `Repositories/` (4 sync repos +
   Mark/Track/JudgeScan upload drains, AdminAuthRepository), `Sync/SyncCoordinator`, `MBTilesReader`.
 - **`kolco24/Net/`** (stage 3) — `ApiClient` (one pipeline replacing OkHttp interceptors: 6 signed `X-App-*`
@@ -143,6 +144,10 @@ server 200.
   on the dedicated NFC delegate/read queue — never main or the cooperative pool (deadlock).
 - **Lease `nowMs` is wall clock** (`Date()`), not `TrustedClock` — `isRacePinned` must be synchronous;
   the relative-TTL path is skew-immune anyway.
+- **Check method** (`docs/plans/completed/20260924-check-method.md`): "taken"/scoring uses `isCounted`
+  (`Core/Marks/CheckMethod`), never bare `complete`. `confirmedAt` is set only by `MarkUploadRepository.confirm`
+  from the open scan sheet — the background drain never sets it, `addMember` never resets it. Tag
+  `check_method` ∈ offline/cloud/local, unknown → offline.
 - **MBTiles TMS y-flip** (`tile_row = 2^z − 1 − y`) lives only in `Core/Map/MBTiles.tmsRow`.
 - **`Category` collision**: in test files importing `Testing`+`Foundation`, qualify the domain type as
   `kolco24.Category`.

@@ -339,9 +339,9 @@ private(set) var confirmState: ConfirmState?
 - [x] run the build
 
 ### Task 9: [Final] Update documentation
-- [ ] CLAUDE.md (keep compact): migration list gets `v4` = `marks.checkMethod` + `marks.confirmedAt`;
+- [x] CLAUDE.md (keep compact): migration list gets `v4` = `marks.checkMethod` + `marks.confirmedAt`;
       one line on `isCounted` replacing `complete` and on "confirmedAt is set only from the open scan sheet"
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/` (done by the orchestrator at completion)
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
