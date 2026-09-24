@@ -304,13 +304,13 @@ private(set) var confirmState: ConfirmState?
 **Files:**
 - Modify: `kolco24/ScanSheet.swift`
 
-- [ ] extract a `ConfirmStatusView(state:onRetry:onClose:)` subview
-- [ ] under the КП header, show the sending text (per target) + spinner + «попытка N»
-- [ ] on `.failed`: «Нет связи — КП не подтверждён» + «Повторить» (`retryConfirm`) and «Закрыть» buttons
-- [ ] hide «Готово!» (:233/:257) and disable the «Готово» button (:202-209) while `.sending`/`.failed`
-- [ ] `#Preview`s of `ConfirmStatusView` for `.sending` and `.failed` (next to the existing ones at :491-507)
-- [ ] no new unit tests (view only; logic covered in Task 5); build must pass
-- [ ] run tests - must pass before next task
+- [x] extract a `ConfirmStatusView(state:onRetry:onClose:)` subview
+- [x] under the КП header, show the sending text (per target) + spinner + «попытка N»
+- [x] on `.failed`: «Нет связи — КП не подтверждён» + «Повторить» (`retryConfirm`) and «Закрыть» buttons
+- [x] hide «Готово!» (:233/:257) and disable the «Готово» button (:202-209) while `.sending`/`.failed`
+- [x] `#Preview`s of `ConfirmStatusView` for `.sending` and `.failed` (next to the existing ones at :491-507)
+- [x] no new unit tests (view only; logic covered in Task 5); build must pass
+- [x] run tests - must pass before next task
 
 ### Task 7: Marks tab tile, notice, lightbox
 
