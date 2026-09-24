@@ -145,7 +145,6 @@ private struct LockedHeroView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background { DarkHeroBackground() }
         .clipShape(RoundedRectangle(cornerRadius: DS.heroRadius))
-        .padding(.horizontal, DS.hPad)
     }
 }
 
