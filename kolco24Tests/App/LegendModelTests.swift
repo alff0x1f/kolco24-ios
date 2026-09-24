@@ -131,6 +131,36 @@ struct LegendModelTests {
         #expect(model.takenIds == [1])
     }
 
+    // MARK: - Неподтверждённое cloud-взятие не отмечает КП взятым
+
+    @Test func unconfirmedTakeNotTakenUntilConfirmed() async throws {
+        let env = try makeEnv()
+        try await env.checkpointStore.insertCheckpoints([
+            openCP(id: 1, race: 7, number: 1, cost: 5),
+            openCP(id: 2, race: 7, number: 2, cost: 3),
+        ])
+        try await env.markStore.upsert(completeMark(id: "m1", race: 7, team: 42, cp: 1, cost: 5))
+        let cloud = Mark(id: "m2", raceId: 7, teamId: 42, checkpointId: 2, checkpointNumber: 2,
+                         cost: 3, method: "nfc", cpUid: "UID2", cpCode: "K24", present: [1],
+                         expectedCount: 1, complete: true, takenAt: 0, updatedAt: 0,
+                         checkMethod: "cloud")
+        try await env.markStore.upsert(cloud)
+
+        let model = LegendModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.checkpoints.count == 2 && model.marks.count == 2 }
+
+        #expect(model.takenIds == [1])                           // КП2 не подтверждён — не взят
+        #expect(model.takenScore == 5)
+        #expect(model.visibleCheckpoints(showOnlyOpen: true).map(\.id) == [2])   // остаётся «не взятым»
+
+        try await env.markStore.setConfirmedAt(id: "m2", at: 100)
+        await waitUntil { model.takenIds == [1, 2] }
+
+        #expect(model.takenIds == [1, 2])
+        #expect(model.takenScore == 8)
+    }
+
     // MARK: - Смена команды/гонки
 
     @Test func rebind_switchesRaceAndTeam() async throws {

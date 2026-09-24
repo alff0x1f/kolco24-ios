@@ -95,7 +95,19 @@ struct PhotoLightboxView: View {
         VStack {
             HStack(alignment: .top) {
                 if let current {
-                    PhotoKpChip(token: markTileToken(current.tile), scale: 1.35)
+                    VStack(alignment: .leading, spacing: 6) {
+                        PhotoKpChip(token: markTileToken(current.tile), scale: 1.35)
+                        // Неподтверждённое cloud/local-взятие: кадр — лишь довод, КП не засчитан.
+                        if current.tile.unconfirmed {
+                            Label("не подтверждён сервером", systemImage: "icloud.slash")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.55))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
                 }
                 Spacer()
                 if photos.count > 1 {

@@ -321,14 +321,14 @@ private(set) var confirmState: ConfirmState?
 - Modify: `kolco24Tests/App/MarksModelTests.swift`
 - Modify: `kolco24Tests/App/LegendModelTests.swift`
 
-- [ ] `MarksModel.unconfirmedTokens` (live `costOf`), next to `photoReview`
-- [ ] tile: dimmed + `icloud.slash` corner icon when `tile.unconfirmed`
-- [ ] notice card in the photo-review style, hidden when empty
-- [ ] lightbox caption «не подтверждён сервером» for unconfirmed tiles
-- [ ] tests: `MarksModel` — an unconfirmed cloud take shows in `tiles`, not in the score/count, and
+- [x] `MarksModel.unconfirmedTokens` (live `costOf`), next to `photoReview`
+- [x] tile: dimmed + `icloud.slash` corner icon when `tile.unconfirmed`
+- [x] notice card in the photo-review style, hidden when empty
+- [x] lightbox caption «не подтверждён сервером» for unconfirmed tiles
+- [x] tests: `MarksModel` — an unconfirmed cloud take shows in `tiles`, not in the score/count, and
       appears in `unconfirmedTokens`; after `setConfirmedAt` it counts and leaves the notice
-- [ ] tests: `LegendModel` — an unconfirmed take does not mark the КП as taken; a confirmed one does
-- [ ] run tests - must pass before next task
+- [x] tests: `LegendModel` — an unconfirmed take does not mark the КП as taken; a confirmed one does
+- [x] run tests - must pass before next task
 
 ### Task 8: Verify acceptance criteria
 - [ ] verify all requirements from Overview are implemented

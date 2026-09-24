@@ -454,6 +454,7 @@ struct MarksView: View {
         let members = team?.members.sorted { $0.numberInTeam < $1.numberInTeam } ?? []
         let tiles = model?.tiles ?? []
         let hidden = model?.hiddenTakenTokens ?? []
+        let unconfirmed = model?.unconfirmedTokens ?? []
 
         return ScrollView {
             VStack(spacing: 0) {
@@ -470,6 +471,12 @@ struct MarksView: View {
 
                 if let review = model?.photoReview {
                     PhotoReviewNotice(summary: review)
+                        .padding(.horizontal, DS.hPad)
+                        .padding(.bottom, 14)
+                }
+
+                if !unconfirmed.isEmpty {
+                    UnconfirmedNotice(tokens: unconfirmed)
                         .padding(.horizontal, DS.hPad)
                         .padding(.bottom, 14)
                 }
@@ -499,15 +506,18 @@ struct MarksView: View {
                             // Порт `ColorTile`: тайл с кадрами (любого вида — фото-взятие ИЛИ NFC-взятие
                             // с доклеенным фото) показывает первый кадр и открывает лайтбокс; голое
                             // NFC-взятие остаётся chip-картой.
-                            if tile.photoCount > 0 {
-                                PhotoTileView(
-                                    tile: tile,
-                                    urlFor: { rel in model?.photoURL(rel) },
-                                    onTap: { openLightbox(tile: tile) }
-                                )
-                            } else {
-                                NFCTileView(tile: tile)
+                            Group {
+                                if tile.photoCount > 0 {
+                                    PhotoTileView(
+                                        tile: tile,
+                                        urlFor: { rel in model?.photoURL(rel) },
+                                        onTap: { openLightbox(tile: tile) }
+                                    )
+                                } else {
+                                    NFCTileView(tile: tile)
+                                }
                             }
+                            .modifier(UnconfirmedTileStyle(unconfirmed: tile.unconfirmed))
                         }
                     }
                     .padding(.bottom, 14)
@@ -1032,6 +1042,63 @@ private struct PhotoReviewNotice: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.brandRed.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+    }
+}
+
+// MARK: - Unconfirmed Notice («не подтверждены сервером»)
+// Нотис под метриками, пока есть неподтверждённые cloud/local-взятия: тайл остаётся в сетке, но в
+// СУММУ/ВЗЯТО не идёт. Палитра и вёрстка — как у `PhotoReviewNotice` (те же баллы-под-вопросом).
+private struct UnconfirmedNotice: View {
+    let tokens: [String]
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(Color.brandRed)
+                Image(systemName: "icloud.slash")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Не подтверждены сервером (\(tokens.count)): \(tokensLabel(tokens))")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.ink)
+                Text("Отметьтесь на КП ещё раз при наличии связи")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.sub)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.brandRed.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+    }
+}
+
+// MARK: - Unconfirmed tile style
+// Неподтверждённое cloud/local-взятие: тайл приглушён (~45%) + глиф `icloud.slash` top-right.
+// Глиф ставится ПОСЛЕ приглушения — он сам должен читаться. Угол свободен: камера top-right бывает
+// лишь у photo-взятия, а оно всегда offline (не бывает неподтверждённым).
+private struct UnconfirmedTileStyle: ViewModifier {
+    let unconfirmed: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(unconfirmed ? 0.45 : 1)
+            .overlay(alignment: .topTrailing) {
+                if unconfirmed {
+                    Image(systemName: "icloud.slash")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(5)
+                        .background(Color.black.opacity(0.55))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .padding(4)
+                }
+            }
     }
 }
 
