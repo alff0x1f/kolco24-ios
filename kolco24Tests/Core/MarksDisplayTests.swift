@@ -24,7 +24,9 @@ struct MarksDisplayTests {
         method: String = "nfc",
         complete: Bool = true,
         takenAt: Int64 = 1_000,
-        trustedTakenAt: Int64? = nil
+        trustedTakenAt: Int64? = nil,
+        checkMethod: String = "offline",
+        confirmedAt: Int64? = nil
     ) -> Mark {
         Mark(
             id: id,
@@ -41,7 +43,9 @@ struct MarksDisplayTests {
             complete: complete,
             takenAt: takenAt,
             updatedAt: takenAt,
-            trustedTakenAt: trustedTakenAt
+            trustedTakenAt: trustedTakenAt,
+            checkMethod: checkMethod,
+            confirmedAt: confirmedAt
         )
     }
 
@@ -318,5 +322,74 @@ struct MarksDisplayTests {
             #expect(tileFill(c, darkTheme: false).fill == tileFill(c, darkTheme: true).fill)
             #expect(tileFill(c, darkTheme: false).text == tileFill(c, darkTheme: true).text)
         }
+    }
+
+    // MARK: - check method (iOS-only): unconfirmed-тайл, нотис, фото-сводка
+
+    @Test func marksToTilesKeepsUnconfirmedTakeAndFlagsIt() {
+        let marks = [
+            mark(id: "c", point: 3, number: 7, cost: 5, takenAt: 3_000, checkMethod: "local", confirmedAt: 3_500),
+            mark(id: "b", point: 2, number: 5, cost: 3, takenAt: 2_000, checkMethod: "cloud"),
+            mark(id: "a", point: 1, number: 4, cost: 2, takenAt: 1_000),
+            mark(id: "x", point: 9, number: 9, cost: 1, complete: false, checkMethod: "cloud"),
+        ]
+        let tiles = marksToTiles(marks)
+        #expect(tiles.map(\.number) == ["04", "05", "07"])
+        #expect(tiles.map(\.unconfirmed) == [false, true, false])
+    }
+
+    @Test func markTileUnconfirmedDefaultsToFalse() {
+        #expect(MarkTile(number: "01", cost: 1, kind: .nfc, time: "10:00").unconfirmed == false)
+    }
+
+    @Test func unconfirmedTokens_dedupesPerPointOldestFirstWithLiveCost() {
+        let marks = [
+            mark(id: "a", point: 1, number: 4, cost: 2, takenAt: 4_000, checkMethod: "cloud"), // newest
+            mark(id: "b", point: 3, number: 7, cost: 5, takenAt: 3_000, checkMethod: "local"),
+            mark(id: "c", point: 1, number: 4, cost: 2, takenAt: 2_000, checkMethod: "cloud"), // repeat
+            mark(id: "d", point: 5, number: 12, cost: 0, takenAt: 1_000, checkMethod: "cloud"), // cost 0
+        ]
+        // Порядок по новейшему взятию: КП5(1000), КП3(3000), КП1(4000).
+        #expect(unconfirmedTokens(marks) == ["12", "5-07", "2-04"])
+        // Живая цена: КП3 подорожал до 6.
+        #expect(unconfirmedTokens(marks) { $0.checkpointId == 3 ? 6 : $0.cost } == ["12", "6-07", "2-04"])
+    }
+
+    @Test func unconfirmedTokens_excludesPointWithCountedTake() {
+        let marks = [
+            mark(id: "a", point: 1, number: 4, cost: 2, takenAt: 4_000, checkMethod: "cloud", confirmedAt: 4_100),
+            mark(id: "b", point: 1, number: 4, cost: 2, takenAt: 3_000, checkMethod: "cloud"),
+            mark(id: "c", point: 2, number: 5, cost: 3, takenAt: 2_000), // offline — зачтён
+            mark(id: "d", point: 2, number: 5, cost: 3, takenAt: 1_000, checkMethod: "local"),
+        ]
+        #expect(unconfirmedTokens(marks).isEmpty)
+    }
+
+    @Test func unconfirmedTokens_skipsIncompleteAndOffline() {
+        let marks = [
+            mark(id: "a", point: 1, number: 4, cost: 2, complete: false, checkMethod: "cloud"),
+            mark(id: "b", point: 2, number: 5, cost: 3),
+        ]
+        #expect(unconfirmedTokens(marks).isEmpty)
+        #expect(unconfirmedTokens([]).isEmpty)
+    }
+
+    @Test func hiddenTakenTokens_skipsUnconfirmedTake() {
+        let marks = [mark(id: "a", point: 1, number: 4, cost: 0, checkMethod: "cloud")]
+        #expect(hiddenTakenTokens(marks, lockedIds: Set([1])).isEmpty)
+    }
+
+    @Test func photoReviewSummary_unconfirmedNfcTakeDoesNotChipVerify() {
+        let marks = [
+            mark(id: "n", point: 1, number: 4, cost: 2, method: "nfc", takenAt: 2_000, checkMethod: "cloud"),
+            mark(id: "p", point: 1, number: 4, cost: 2, method: "photo", takenAt: 1_000),
+        ]
+        #expect(photoReviewSummary(marks) == PhotoReviewSummary(count: 1, points: 2, tokens: ["2-04"]))
+        // Подтверждённое NFC-взятие доказывает КП — нотис исчезает.
+        let confirmed = [
+            mark(id: "n", point: 1, number: 4, cost: 2, method: "nfc", takenAt: 2_000, checkMethod: "cloud", confirmedAt: 2_100),
+            mark(id: "p", point: 1, number: 4, cost: 2, method: "photo", takenAt: 1_000),
+        ]
+        #expect(photoReviewSummary(confirmed) == nil)
     }
 }

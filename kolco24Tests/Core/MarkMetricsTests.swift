@@ -20,7 +20,9 @@ struct MarkMetricsTests {
         id: String,
         point: Int,
         cost: Int,
-        complete: Bool = true
+        complete: Bool = true,
+        checkMethod: String = "offline",
+        confirmedAt: Int64? = nil
     ) -> Mark {
         Mark(
             id: id,
@@ -36,7 +38,9 @@ struct MarkMetricsTests {
             expectedCount: 0,
             complete: complete,
             takenAt: 1_000,
-            updatedAt: 1_000
+            updatedAt: 1_000,
+            checkMethod: checkMethod,
+            confirmedAt: confirmedAt
         )
     }
 
@@ -95,5 +99,50 @@ struct MarkMetricsTests {
         ]
         #expect(takenPointCount(marks) { $0.cost } == takenPointCount(marks))
         #expect(totalScore(marks) { $0.cost } == totalScore(marks))
+    }
+
+    // MARK: - check method (iOS-only): зачёт по isCounted, а не по complete
+
+    @Test func metricsExcludeUnconfirmedCloudTake() {
+        let marks = [
+            mark(id: "a", point: 1, cost: 2),                                   // offline
+            mark(id: "b", point: 2, cost: 3, checkMethod: "cloud"),             // не подтверждён
+            mark(id: "c", point: 3, cost: 5, checkMethod: "local"),             // не подтверждён
+        ]
+        #expect(takenPoints(marks) == Set([1]))
+        #expect(takenPointCount(marks) == 1)
+        #expect(takenPointCount(marks) { $0.cost } == 1)
+        #expect(totalScore(marks) == 2)
+        #expect(totalScore(marks) { $0.cost } == 2)
+    }
+
+    @Test func metricsIncludeConfirmedCloudAndLocalTakes() {
+        let marks = [
+            mark(id: "a", point: 1, cost: 2),
+            mark(id: "b", point: 2, cost: 3, checkMethod: "cloud", confirmedAt: 9_000),
+            mark(id: "c", point: 3, cost: 5, checkMethod: "local", confirmedAt: 9_000),
+        ]
+        #expect(takenPoints(marks) == Set([1, 2, 3]))
+        #expect(takenPointCount(marks) == 3)
+        #expect(takenPointCount(marks) { $0.cost } == 3)
+        #expect(totalScore(marks) == 10)
+        #expect(totalScore(marks) { $0.cost } == 10)
+    }
+
+    @Test func confirmedRetakeCountsPointOnceAlongsideUnconfirmedTake() {
+        // Новейшее взятие подтверждено, старое — нет: КП зачтён один раз.
+        let marks = [
+            mark(id: "new", point: 2, cost: 3, checkMethod: "cloud", confirmedAt: 9_000),
+            mark(id: "old", point: 2, cost: 3, checkMethod: "cloud"),
+        ]
+        #expect(takenPoints(marks) == Set([2]))
+        #expect(takenPointCount(marks) == 1)
+        #expect(totalScore(marks) == 3)
+    }
+
+    @Test func unknownCheckMethodCountsAsOffline() {
+        let marks = [mark(id: "a", point: 1, cost: 2, checkMethod: "online")]
+        #expect(takenPointCount(marks) == 1)
+        #expect(totalScore(marks) == 2)
     }
 }

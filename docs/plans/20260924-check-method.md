@@ -210,18 +210,18 @@ private(set) var confirmState: ConfirmState?
 - Modify: `kolco24Tests/Core/MarkMetricsTests.swift`
 - Modify: `kolco24Tests/Core/MarksDisplayTests.swift`
 
-- [ ] create `CheckMethod` (parse, `uploadTarget`), `isCounted`, `isUnconfirmed`
-- [ ] `takenPoints`, `takenPointCount` (both overloads), `totalScore` (both), `photoReviewSummary`,
+- [x] create `CheckMethod` (parse, `uploadTarget`), `isCounted`, `isUnconfirmed`
+- [x] `takenPoints`, `takenPointCount` (both overloads), `totalScore` (both), `photoReviewSummary`,
       `hiddenTakenTokens`: use `isCounted` where they use `complete`
-- [ ] `marksToTiles`: keep showing all `complete` takes; add `MarkTile.unconfirmed` (default false)
-- [ ] add `unconfirmedTokens(_:costOf:)` per Technical Details
-- [ ] tests: parse `"offline"`, `"cloud"`, `"local"`, `"nfc"` (unknown → offline); `uploadTarget` mapping;
+- [x] `marksToTiles`: keep showing all `complete` takes; add `MarkTile.unconfirmed` (default false)
+- [x] add `unconfirmedTokens(_:costOf:)` per Technical Details
+- [x] tests: parse `"offline"`, `"cloud"`, `"local"`, `"nfc"` (unknown → offline); `uploadTarget` mapping;
       the `isCounted` / `isUnconfirmed` matrix (complete × method × confirmedAt)
-- [ ] tests: metrics exclude an unconfirmed cloud take, include a confirmed one, offline unchanged;
+- [x] tests: metrics exclude an unconfirmed cloud take, include a confirmed one, offline unchanged;
       `marksToTiles` sets `unconfirmed` and keeps the tile
-- [ ] tests: `unconfirmedTokens` dedupe per КП, excludes КП with a counted take, oldest-first, cost-0 token
-- [ ] existing `MarksDisplay*` / `MarkMetrics` tests stay green
-- [ ] run tests - must pass before next task
+- [x] tests: `unconfirmedTokens` dedupe per КП, excludes КП with a counted take, oldest-first, cost-0 token
+- [x] existing `MarksDisplay*` / `MarkMetrics` tests stay green
+- [x] run tests - must pass before next task
 
 ### Task 3: Tag method flows into the take
 

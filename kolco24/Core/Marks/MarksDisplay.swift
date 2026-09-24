@@ -42,6 +42,9 @@ struct MarkTile: Equatable {
     /// **любым** взятием (NFC-взятие тоже может нести фото-доказательство),
     /// так что бейдж «+N» гонится [photoCount] независимо от [kind].
     let photoPaths: [String]
+    /// Complete-взятие cloud/local КП без подтверждения сервером ([isUnconfirmed]):
+    /// тайл показывается приглушённым, в зачёт не идёт.
+    let unconfirmed: Bool
 
     /// Число кадров взятия — выводится из списка, отдельного поля в БД нет.
     var photoCount: Int { photoPaths.count }
@@ -53,7 +56,8 @@ struct MarkTile: Equatable {
         time: String,
         dateTime: String = "",
         color: CheckpointColor? = nil,
-        photoPaths: [String] = []
+        photoPaths: [String] = [],
+        unconfirmed: Bool = false
     ) {
         self.number = number
         self.cost = cost
@@ -62,6 +66,7 @@ struct MarkTile: Equatable {
         self.dateTime = dateTime
         self.color = color
         self.photoPaths = photoPaths
+        self.unconfirmed = unconfirmed
     }
 }
 
@@ -95,7 +100,8 @@ func marksToTiles(
                 time: timeFmt.string(from: date),
                 dateTime: dateTimeFmt.string(from: date),
                 color: colorOf(m),
-                photoPaths: PhotoPaths.decode(m.photoPath)
+                photoPaths: PhotoPaths.decode(m.photoPath),
+                unconfirmed: isUnconfirmed(m)
             )
         }
 }
@@ -143,13 +149,14 @@ func photoReviewSummary(
     _ marks: [Mark],
     costOf: (Mark) -> Int = { $0.cost }
 ) -> PhotoReviewSummary? {
-    let complete = marks.filter { $0.complete }
-    let chipVerified = Set(complete.filter { $0.method != "photo" }.map { $0.checkpointId })
+    // Зачтённые (`isCounted`): неподтверждённое NFC-взятие cloud/local КП чип не доказывает.
+    let counted = marks.filter(isCounted)
+    let chipVerified = Set(counted.filter { $0.method != "photo" }.map { $0.checkpointId })
     // [marks] приходит newest-first; dedupe оставляет новейшее взятие каждого КП,
     // reverse даёт oldest-first — токены следуют порядку тайловой сетки.
     var seen = Set<Int>()
     var photoOnly: [Mark] = []
-    for mark in complete
+    for mark in counted
     where mark.method == "photo" && !chipVerified.contains(mark.checkpointId) {
         if seen.insert(mark.checkpointId).inserted {
             photoOnly.append(mark)
@@ -180,9 +187,33 @@ func hiddenTakenTokens(_ marks: [Mark], lockedIds: Set<Int>) -> [String] {
     var seen = Set<Int>()
     var result: [String] = []
     for mark in marks
-    where mark.complete && lockedIds.contains(mark.checkpointId) {
+    where isCounted(mark) && lockedIds.contains(mark.checkpointId) {
         if seen.insert(mark.checkpointId).inserted {
             result.append("?-\(paddedNumber(mark.checkpointNumber))")
+        }
+    }
+    return result.reversed()
+}
+
+/// Чистые токены КП, взятых **без подтверждения сервером** ([isUnconfirmed]) —
+/// нотис «Не подтверждены сервером». КП, у которого есть хоть одно зачтённое
+/// ([isCounted]) взятие, исключается (повторное взятие уже подтвердило КП).
+/// [marks] приходит newest-first: dedupe по `checkpointId` оставляет новейшее
+/// взятие, reverse даёт oldest-first. Токен — «стоимость-NN» по живому [costOf],
+/// для нулевой цены — голый «NN» (как `photoReviewSummary`). iOS-only.
+func unconfirmedTokens(
+    _ marks: [Mark],
+    costOf: (Mark) -> Int = { $0.cost }
+) -> [String] {
+    let counted = Set(marks.filter(isCounted).map { $0.checkpointId })
+    var seen = Set<Int>()
+    var result: [String] = []
+    for mark in marks
+    where isUnconfirmed(mark) && !counted.contains(mark.checkpointId) {
+        if seen.insert(mark.checkpointId).inserted {
+            let cost = costOf(mark)
+            let number = paddedNumber(mark.checkpointNumber)
+            result.append(cost > 0 ? "\(cost)-\(number)" : number)
         }
     }
     return result.reversed()

@@ -12,6 +12,9 @@
 //  иначе протёк бы прогрессом одной команды на другую), поэтому легенда выводит
 //  его из complete-взятий этой команды через [takenPoints].
 //
+//  «Зачтено» = [isCounted] (`CheckMethod.swift`), а не голый `complete`:
+//  неподтверждённое взятие cloud/local КП не идёт ни в «ВЗЯТО», ни в СУММУ.
+//
 
 import Foundation
 
@@ -21,7 +24,7 @@ import Foundation
 /// именно этой команды. Порт `takenPoints`.
 func takenPoints(_ marks: [Mark]) -> Set<Int> {
     var result = Set<Int>()
-    for mark in marks where mark.complete {
+    for mark in marks where isCounted(mark) {
         result.insert(mark.checkpointId)
     }
     return result
@@ -60,7 +63,7 @@ func totalScore(_ marks: [Mark], costOf: (Mark) -> Int) -> Int {
 private func distinctCompleteMarks(_ marks: [Mark]) -> [Mark] {
     var seen = Set<Int>()
     var result: [Mark] = []
-    for mark in marks where mark.complete {
+    for mark in marks where isCounted(mark) {
         if seen.insert(mark.checkpointId).inserted {
             result.append(mark)
         }
@@ -71,7 +74,7 @@ private func distinctCompleteMarks(_ marks: [Mark]) -> [Mark] {
 /// Множество различных id complete-взятий.
 private func distinctCompleteCheckpointIds(_ marks: [Mark]) -> Set<Int> {
     var seen = Set<Int>()
-    for mark in marks where mark.complete {
+    for mark in marks where isCounted(mark) {
         seen.insert(mark.checkpointId)
     }
     return seen
