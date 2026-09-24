@@ -71,6 +71,53 @@ struct ScanModelTests {
         func next() -> String { n += 1; return "mark-\(n)" }
     }
 
+    /// Фейк `confirmMark`: пишет вызовы, по желанию держит N-й вызов на гейте (тест отпускает его сам),
+    /// двигает управляемое время на `advanceMs` за вызов и снимает `present[]` строки на момент вызова.
+    actor ConfirmRecorder {
+        private(set) var ids: [String] = []
+        private(set) var targets: [UploadTarget] = []
+        private(set) var presentSeen: [[Int]] = []
+        private var results: [UploadResultKind]
+        private var fallback: UploadResultKind
+        private let elapsed: FakeElapsed?
+        private let advanceMs: Int64
+        private let gatedCalls: Set<Int>
+        private let store: MarkStore?
+        private var gates: [Int: CheckedContinuation<Void, Never>] = [:]
+
+        init(results: [UploadResultKind] = [], fallback: UploadResultKind = .ok,
+             elapsed: FakeElapsed? = nil, advanceMs: Int64 = 0,
+             gatedCalls: Set<Int> = [], store: MarkStore? = nil) {
+            self.results = results
+            self.fallback = fallback
+            self.elapsed = elapsed
+            self.advanceMs = advanceMs
+            self.gatedCalls = gatedCalls
+            self.store = store
+        }
+
+        func call(_ markId: String, _ target: UploadTarget) async -> UploadResultKind {
+            ids.append(markId)
+            targets.append(target)
+            let n = ids.count
+            if let store {
+                presentSeen.append(((try? await store.getById(markId)) ?? nil)?.present.sorted() ?? [])
+            }
+            if gatedCalls.contains(n) {
+                await withCheckedContinuation { gates[n] = $0 }
+            }
+            if let elapsed, advanceMs > 0 {
+                await elapsed.set(await elapsed.get() + advanceMs)
+            }
+            return results.isEmpty ? fallback : results.removeFirst()
+        }
+
+        func release(_ n: Int) { gates.removeValue(forKey: n)?.resume() }
+        func isWaiting(_ n: Int) -> Bool { gates[n] != nil }
+        func setFallback(_ value: UploadResultKind) { fallback = value }
+        var callCount: Int { ids.count }
+    }
+
     // MARK: - Фикстуры
 
     private let race = 7
@@ -128,15 +175,24 @@ struct ScanModelTests {
         ids: IdGen = IdGen(),
         tickMs: Int64 = 3_600_000,
         fanfareDelayMs: Int64 = 0,
-        successHoldMs: Int64 = 3_600_000
+        successHoldMs: Int64 = 3_600_000,
+        confirm: ConfirmRecorder? = nil,
+        confirmTimeoutMs: Int64 = 3_600_000,
+        confirmRetryMs: Int64 = 0
     ) -> ScanModel {
+        let confirmMark: @Sendable (String, UploadTarget) async -> UploadResultKind = { id, target in
+            guard let confirm else { return .error }
+            return await confirm.call(id, target)
+        }
+        return
         ScanModel(
             raceId: race, teamId: team, roster: roster,
             legendRepository: env.legendRepository, markStore: env.markStore,
             bindingStore: env.memberChipBindingStore, locationProvider: location,
             feedback: feedback, elapsedNowMs: { await elapsed.get() },
             newMarkId: { ids.next() },
-            tickMs: tickMs, fanfareDelayMs: fanfareDelayMs, successHoldMs: successHoldMs
+            tickMs: tickMs, fanfareDelayMs: fanfareDelayMs, successHoldMs: successHoldMs,
+            confirmMark: confirmMark, confirmTimeoutMs: confirmTimeoutMs, confirmRetryMs: confirmRetryMs
         )
     }
 
@@ -790,5 +846,207 @@ struct ScanModelTests {
         // Несмотря на stop() до истечения задержки — фанфара всё равно доигрывает.
         await poll { feedback.fanfares >= 1 }
         #expect(feedback.fanfares == 1)
+    }
+
+    // MARK: - Подтверждение cloud/local-взятия из открытого оверлея
+
+    /// КП (метод из тега) + ОДИН участник в ростере: завершающий чип участника запускает completion-check.
+    private func startCompletingTake(
+        env: AppEnvironment, checkMethod: String, scanner: FakeChipScanner,
+        feedback: RecordingFeedback = RecordingFeedback(), elapsed: FakeElapsed = FakeElapsed(),
+        confirm: ConfirmRecorder, confirmTimeoutMs: Int64 = 3_600_000, confirmRetryMs: Int64 = 0
+    ) async throws -> ScanModel {
+        let code = kpCode(40)
+        try await registerKp(env, cpId: 100, number: 12, cost: 3, code: code, checkMethod: checkMethod)
+        try await bind(env, slot: 1, uid: "M1", pnum: 101)
+        let model = makeModel(
+            env: env, roster: members([1]), scanner: scanner, feedback: feedback, elapsed: elapsed,
+            successHoldMs: 0, confirm: confirm,
+            confirmTimeoutMs: confirmTimeoutMs, confirmRetryMs: confirmRetryMs
+        )
+        model.start(scanner: scanner)
+        await poll { model.bindings["M1"] == 1 }
+        scanner.emit(reading(code: code, uid: "CP", elapsed: 0))
+        await poll { model.session?.checkpointId == 100 }
+        scanner.emit(reading(code: nil, uid: "M1", elapsed: 100))
+        return model
+    }
+
+    @Test func offlineTakeClosesWithFanfareWithoutConfirm() async throws {
+        let env = try makeEnv()
+        let scanner = FakeChipScanner()
+        let feedback = RecordingFeedback()
+        let confirm = ConfirmRecorder()
+        let model = try await startCompletingTake(
+            env: env, checkMethod: "offline", scanner: scanner, feedback: feedback, confirm: confirm
+        )
+        await poll { model.closeRequested }
+        await poll { feedback.fanfares >= 1 }
+        #expect(model.closeRequested == true)
+        #expect(model.didComplete == true)
+        #expect(model.confirmState == nil)
+        #expect(feedback.fanfares == 1)
+        #expect(await confirm.callCount == 0)
+    }
+
+    @Test func cloudTakeRetriesThenConfirmsAndCloses() async throws {
+        let env = try makeEnv()
+        let scanner = FakeChipScanner()
+        let feedback = RecordingFeedback()
+        let confirm = ConfirmRecorder(results: [.offline, .ok], gatedCalls: [1, 2])
+        let model = try await startCompletingTake(
+            env: env, checkMethod: "cloud", scanner: scanner, feedback: feedback, confirm: confirm
+        )
+
+        await poll { await confirm.isWaiting(1) }
+        #expect(model.confirmState == .sending(target: .cloud, attempt: 1))
+        #expect(model.completed == true)          // ростер полон — бит «Готово» всё равно ставится
+        #expect(scanner.stopped == true)          // CoreNFC-шторка модальна — сканер остановлен
+        await confirm.release(1)
+
+        await poll { await confirm.isWaiting(2) }
+        #expect(model.confirmState == .sending(target: .cloud, attempt: 2))
+        // Остановка сканера закончила стрим, но оверлей НЕ закрыт; фанфары до подтверждения нет.
+        #expect(model.closeRequested == false)
+        #expect(model.didComplete == false)
+        #expect(feedback.fanfares == 0)
+        await confirm.release(2)
+
+        await poll { model.closeRequested }
+        await poll { feedback.fanfares >= 1 }
+        #expect(model.confirmState == .confirmed)
+        #expect(model.didComplete == true)
+        #expect(model.closeRequested == true)
+        #expect(feedback.fanfares == 1)
+        #expect(await confirm.ids == ["mark-1", "mark-1"])
+        #expect(await confirm.targets == [.cloud, .cloud])
+    }
+
+    @Test func scannerStreamEndDuringSendingDoesNotClose() async throws {
+        let env = try makeEnv()
+        let scanner = FakeChipScanner()
+        let confirm = ConfirmRecorder(gatedCalls: [1])
+        let model = try await startCompletingTake(
+            env: env, checkMethod: "cloud", scanner: scanner, confirm: confirm
+        )
+        await poll { await confirm.isWaiting(1) }
+        // Повторное завершение стрима сканера (как отмена шторки) — оверлей всё ещё не закрыт.
+        scanner.finish()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(model.closeRequested == false)
+        #expect(model.confirmState == .sending(target: .cloud, attempt: 1))
+        await confirm.release(1)
+        await poll { model.closeRequested }
+        #expect(model.confirmState == .confirmed)
+    }
+
+    @Test func alwaysFailingConfirmFailsAfterTimeoutThenRetrySucceeds() async throws {
+        let env = try makeEnv()
+        let scanner = FakeChipScanner()
+        let feedback = RecordingFeedback()
+        let elapsed = FakeElapsed()
+        // Каждый вызов двигает монотонное время на 100 мс; дедлайн 250 мс → ровно 3 попытки.
+        let confirm = ConfirmRecorder(fallback: .offline, elapsed: elapsed, advanceMs: 100)
+        let model = try await startCompletingTake(
+            env: env, checkMethod: "cloud", scanner: scanner, feedback: feedback, elapsed: elapsed,
+            confirm: confirm, confirmTimeoutMs: 250, confirmRetryMs: 1
+        )
+        await poll { model.confirmState == .failed(target: .cloud) }
+        #expect(model.confirmState == .failed(target: .cloud))
+        #expect(await confirm.callCount == 3)
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(await confirm.callCount == 3)     // после .failed новых попыток нет
+        #expect(model.closeRequested == false)
+        #expect(model.didComplete == false)
+        #expect(feedback.fanfares == 0)
+
+        // «Повторить» — новый цикл с полным дедлайном; сеть появилась.
+        await confirm.setFallback(.ok)
+        model.retryConfirm()
+        #expect(model.confirmState == .sending(target: .cloud, attempt: 1))
+        await poll { model.closeRequested }
+        await poll { feedback.fanfares >= 1 }
+        #expect(model.confirmState == .confirmed)
+        #expect(model.didComplete == true)
+        #expect(feedback.fanfares == 1)
+        #expect(await confirm.callCount == 4)
+    }
+
+    @Test func retryConfirmIsNoOpOutsideFailed() async throws {
+        let env = try makeEnv()
+        let scanner = FakeChipScanner()
+        let confirm = ConfirmRecorder(gatedCalls: [1])
+        let model = try await startCompletingTake(
+            env: env, checkMethod: "cloud", scanner: scanner, confirm: confirm
+        )
+        await poll { await confirm.isWaiting(1) }
+        model.retryConfirm()   // идёт отправка — повтор игнорируется
+        await confirm.release(1)
+        await poll { model.closeRequested }
+        #expect(await confirm.callCount == 1)
+    }
+
+    @Test func lateKpReadingDuringConfirmOpensNoNewTake() async throws {
+        let env = try makeEnv()
+        let otherCode = kpCode(41)
+        try await registerKp(env, cpId: 200, number: 44, cost: 5, code: otherCode)
+        let scanner = FakeChipScanner()
+        let confirm = ConfirmRecorder(gatedCalls: [1])
+        let model = try await startCompletingTake(
+            env: env, checkMethod: "cloud", scanner: scanner, confirm: confirm
+        )
+        await poll { await confirm.isWaiting(1) }
+
+        // Чтение, форварднутое до остановки сканера, дренируется в process() — игнорируется.
+        await model.process(reading(code: otherCode, uid: "CP2", elapsed: 200))
+        #expect(model.session?.checkpointId == 100)
+        #expect(try await env.markStore.getById("mark-2") == nil)
+        #expect(model.confirmState == .sending(target: .cloud, attempt: 1))
+
+        await confirm.release(1)
+        await poll { model.closeRequested }
+        #expect(await confirm.ids == ["mark-1"])
+    }
+
+    @Test func confirmSeesFullPresentAfterAllMemberWrites() async throws {
+        let env = try makeEnv()
+        let code = kpCode(42)
+        try await registerKp(env, cpId: 100, number: 7, cost: 2, code: code, checkMethod: "cloud")
+        for slot in 1...3 { try await bind(env, slot: slot, uid: "M\(slot)", pnum: 100 + slot) }
+        let scanner = FakeChipScanner()
+        let confirm = ConfirmRecorder(store: env.markStore)
+        let model = makeModel(
+            env: env, roster: members([1, 2, 3]), scanner: scanner, successHoldMs: 0, confirm: confirm
+        )
+        model.start(scanner: scanner)
+        await poll { model.bindings.count == 3 }
+
+        // Участники подряд без ожидания: их addMember-Task'и летят параллельно и могут лечь в любом порядке.
+        scanner.emit(reading(code: code, uid: "CP", elapsed: 0))
+        scanner.emit(reading(code: nil, uid: "M3", elapsed: 10))
+        scanner.emit(reading(code: nil, uid: "M1", elapsed: 20))
+        scanner.emit(reading(code: nil, uid: "M2", elapsed: 30))
+        await poll { model.closeRequested }
+        #expect(model.confirmState == .confirmed)
+        #expect(await confirm.presentSeen == [[1, 2, 3]])
+    }
+
+    @Test func stopDuringSendingStartsNoMoreAttemptsAndUsesLocalTarget() async throws {
+        let env = try makeEnv()
+        let scanner = FakeChipScanner()
+        let confirm = ConfirmRecorder(fallback: .offline, gatedCalls: [1])
+        let model = try await startCompletingTake(
+            env: env, checkMethod: "local", scanner: scanner, confirm: confirm
+        )
+        await poll { await confirm.isWaiting(1) }
+        #expect(model.confirmState == .sending(target: .local, attempt: 1))
+
+        model.stop()               // «Закрыть»/свайп посреди отправки
+        await confirm.release(1)   // летящий вызов доживает сам, но цикл отменён
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await confirm.callCount == 1)
+        #expect(await confirm.targets == [.local])
+        #expect(model.confirmState == .sending(target: .local, attempt: 1))
+        #expect(model.didComplete == false)
     }
 }

@@ -392,6 +392,7 @@ final class AppModel {
               let teamId = selectedTeamId
         else { return nil }
         let clock = env.trustedClock
+        let uploads = env.markUploadRepository
         let model = ScanModel(
             raceId: raceId,
             teamId: teamId,
@@ -401,7 +402,15 @@ final class AppModel {
             bindingStore: env.memberChipBindingStore,
             locationProvider: env.locationProvider,
             feedback: env.feedback,
-            elapsedNowMs: { await clock.sample().elapsedMs }
+            elapsedNowMs: { await clock.sample().elapsedMs },
+            // Подтверждение cloud/local-взятия из открытого оверлея; `confirmedAt` — доверенное время
+            // (фолбэк на стенное, если якоря ещё нет).
+            confirmMark: { markId, target in
+                let sample = await clock.sample()
+                return await uploads.confirm(
+                    markId: markId, target: target, now: sample.trustedMs ?? sample.wallMs
+                )
+            }
         )
         // Прод-сканер `NfcChipScanner` (из `Nfc/`) инстанцируется здесь — App-слой в одном модуле,
         // импорт CoreNFC не нужен (grep-инвариант). Семпл доверенного времени берётся ДО чтения чипа

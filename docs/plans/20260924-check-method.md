@@ -275,29 +275,29 @@ private(set) var confirmState: ConfirmState?
   + a `TrustedClock`/wall `now`)
 - Modify: `kolco24Tests/App/ScanModelTests.swift`
 
-- [ ] add `ConfirmState`, `confirmState`, the injected `confirmMark` / `confirmTimeoutMs` / `confirmRetryMs`
+- [x] add `ConfirmState`, `confirmState`, the injected `confirmMark` / `confirmTimeoutMs` / `confirmRetryMs`
       (defaulted init params; ScanSheet preview and `ScanModelTests` :131, :556 keep compiling)
-- [ ] track `memberWrites`; the confirm waits for `takePersistTask` + all member writes
-- [ ] `applyFeedback`: skip `scheduleFanfare()` on the completing transition for a cloud/local take
-- [ ] `handleCompletionCheck`: offline → unchanged; cloud/local → set `.sending` first, stop the scanner and
+- [x] track `memberWrites`; the confirm waits for `takePersistTask` + all member writes
+- [x] `applyFeedback`: skip `scheduleFanfare()` on the completing transition for a cloud/local take
+- [x] `handleCompletionCheck`: offline → unchanged; cloud/local → set `.sending` first, stop the scanner and
       timer, run `confirmTask` (one confirm call per unstructured `Task`, `Task.isCancelled` after every call
       and sleep, deadline via `elapsedNowMs`, weak `self`)
-- [ ] guard the stream-end `requestClose()` (`ScanModel.swift:259`) with `confirmState == nil`;
+- [x] guard the stream-end `requestClose()` (`ScanModel.swift:259`) with `confirmState == nil`;
       `process()` returns early when `confirmState != nil`
-- [ ] success → `.confirmed` → fanfare, `didComplete`, hold, close; timeout → `.failed`, no close, no fanfare
-- [ ] `retryConfirm()`; `stop()` and `deinit` cancel `confirmTask`
-- [ ] add a fanfare counter to `RecordingFeedback` in `ScanModelTests`
-- [ ] tests: offline take auto-closes with fanfare as before (regression)
-- [ ] tests: cloud take, confirm fails once then `.ok` → `.sending(…,1)` → `.sending(…,2)` → `.confirmed`,
+- [x] success → `.confirmed` → fanfare, `didComplete`, hold, close; timeout → `.failed`, no close, no fanfare
+- [x] `retryConfirm()`; `stop()` and `deinit` cancel `confirmTask`
+- [x] add a fanfare counter to `RecordingFeedback` in `ScanModelTests`
+- [x] tests: offline take auto-closes with fanfare as before (regression)
+- [x] tests: cloud take, confirm fails once then `.ok` → `.sending(…,1)` → `.sending(…,2)` → `.confirmed`,
       `didComplete`, close requested, scanner stopped, fanfare called only after `.confirmed`
-- [ ] tests: the scanner stop (its stream finishes) during `.sending` does **not** set `closeRequested`
-- [ ] tests: always failing → `.failed` after the timeout, no close, no `didComplete`, no fanfare;
+- [x] tests: the scanner stop (its stream finishes) during `.sending` does **not** set `closeRequested`
+- [x] tests: always failing → `.failed` after the timeout, no close, no `didComplete`, no fanfare;
       `retryConfirm` starts a new cycle and can succeed
-- [ ] tests: a `.kp` reading for another КП delivered after confirm starts opens no new take
-- [ ] tests: the confirm call sees the full `present[]` when member writes finish out of order
-- [ ] tests: `stop()` during `.sending` → no more confirm calls; confirm is called with the right target
+- [x] tests: a `.kp` reading for another КП delivered after confirm starts opens no new take
+- [x] tests: the confirm call sees the full `present[]` when member writes finish out of order
+- [x] tests: `stop()` during `.sending` → no more confirm calls; confirm is called with the right target
       (`.local` for a local tag)
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 6: ScanSheet confirm UI
 
