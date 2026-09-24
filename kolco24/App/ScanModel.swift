@@ -52,6 +52,20 @@ final class ScanModel: Identifiable {
     /// истечение окна его НЕ выставляет.
     private(set) var didComplete = false
 
+    /// Состояние подтверждения cloud/local-взятия сервером прямо из открытого оверлея.
+    enum ConfirmState: Equatable {
+        /// Идёт попытка `attempt` отправки взятия на `target`.
+        case sending(target: UploadTarget, attempt: Int)
+        /// Сервер принял взятие — `confirmedAt` записан, оверлей закрывается с фанфарой.
+        case confirmed
+        /// Дедлайн подтверждения истёк без `.ok` — ждём «Повторить»/«Закрыть». `offline` — последняя
+        /// попытка не достучалась до сервера; `false` — сервер ответил, но отметку не принял.
+        case failed(offline: Bool)
+    }
+    /// `nil` — режима подтверждения нет (offline-взятие или взятие ещё не завершено). Не-`nil` — сканер
+    /// остановлен, чтения игнорируются, конец стрима НЕ закрывает оверлей (закрывает сам confirm-флоу).
+    private(set) var confirmState: ConfirmState?
+
     /// Потокобезопасное зеркало «оверлей жив» для `NfcChipScanner.shouldRestart` (читается на делегатной
     /// NFC-очереди, пишется здесь на MainActor). `true` с момента создания (оверлей открыт) → `false` на
     /// любом `closeRequested`. Заменяет прямое чтение @MainActor `closeRequested` с чужой очереди (гонка).
@@ -64,6 +78,14 @@ final class ScanModel: Identifiable {
 
     /// «Готово» активна, когда КП идентифицирован (порт `canFinish = session?.checkpointId != nil`).
     var canFinish: Bool { session?.checkpointId != nil }
+    /// Ростер полон, но cloud/local-взятие ещё не подтверждено сервером — включая зазор между завершающим
+    /// чипом и входом в режим подтверждения (`.completionCheck` идёт через FIFO-стрим). Пока `true`,
+    /// «Готово!» не показывается, кнопка «Готово» и свайп-закрытие выключены.
+    var confirmPending: Bool {
+        completed && takeCheckMethod.uploadTarget != nil && confirmState != .confirmed
+    }
+    /// «Готово!» на CP-карточке: взятие завершено и (offline или подтверждено сервером).
+    var showsDone: Bool { completed && !confirmPending }
     /// Номер идентифицированного КП (после `.kp`); `nil` — ждём чип КП.
     var checkpointNumber: Int? { session?.checkpointNumber }
     /// Цена идентифицированного КП; `nil` — ждём чип КП.
@@ -87,12 +109,21 @@ final class ScanModel: Identifiable {
 
     @ObservationIgnored private var markId: String?
     @ObservationIgnored private var takeCheckpointId: Int?
+    /// Метод проверки текущего взятия — снапшот `check_method` тега из `.kp`-события, открывшего взятие.
+    /// Первый тег побеждает: повтор того же КП в живом окне (даже другим тегом с другим методом) лишь
+    /// перештамповывает окно — метод уже записан в строку взятия, и зачёт (`isCounted`) читает её.
+    /// Не observable: меняется только вместе с `completed`/`session`, которые SwiftUI уже трекает.
+    @ObservationIgnored private(set) var takeCheckMethod: CheckMethod = .offline
     @ObservationIgnored private var expectedCount = 0
     @ObservationIgnored private var buffer = Set<Int>()
     @ObservationIgnored private var takePresent = Set<Int>()
     @ObservationIgnored private var snapshots = [Int: MarkMemberSnapshot]()
     /// Монотонный `elapsedMs` последнего ПРИНЯТОГО скана — источник `isWindowExpired` (§1). `nil` — не было.
     @ObservationIgnored private var takeLastScanAt: Int64?
+    /// Записи `addMember` текущего взятия. Раньше были fire-and-forget и могли лечь в любом порядке —
+    /// подтверждение ждёт их все (и `takePersistTask`), чтобы на сервер ушла строка с полным `present[]`.
+    /// Сбрасывается на новом взятии.
+    @ObservationIgnored private var memberWrites: [Task<Void, Never>] = []
 
     // MARK: - Зависимости (граф — через AppModel.makeScanModel)
 
@@ -110,12 +141,19 @@ final class ScanModel: Identifiable {
     @ObservationIgnored private let elapsedNowMs: @Sendable () async -> Int64
     /// Генератор id взятия (UUID в проде; детерминированный в тестах).
     @ObservationIgnored private let newMarkId: () -> String
+    /// Отправка ОДНОГО взятия на цель (`MarkUploadRepository.confirm` в проде). Захватывается в отдельный
+    /// неструктурированный `Task` на каждую попытку (не `self`, §6) — начатый POST не обрывается закрытием.
+    @ObservationIgnored private let confirmMark: @Sendable (String, UploadTarget) async -> UploadResultKind
 
     // MARK: - Тюнинг таймингов (тестируемое время)
 
     @ObservationIgnored private let tickMs: Int64
     @ObservationIgnored private let fanfareDelayMs: Int64
     @ObservationIgnored private let successHoldMs: Int64
+    /// Дедлайн цикла подтверждения (по монотонному `elapsedNowMs`, не по стенным часам).
+    @ObservationIgnored private let confirmTimeoutMs: Int64
+    /// Пауза между неудачными попытками подтверждения.
+    @ObservationIgnored private let confirmRetryMs: Int64
 
     // MARK: - Задачи
 
@@ -145,6 +183,9 @@ final class ScanModel: Identifiable {
     /// ждут её `.value`, чтобы строка гарантированно существовала до их записи (см. §6-порядок ниже).
     /// НЕ отменяется на `stop()`/`deinit` — запись должна пережить закрытие оверлея (§6).
     @ObservationIgnored private var takePersistTask: Task<Void, Never>?
+    /// Цикл подтверждения (ретраи до дедлайна). Отменяется на `stop()`/`deinit` — новые попытки после
+    /// закрытия не стартуют; уже летящий POST доживает в своём Task'е.
+    @ObservationIgnored private var confirmTask: Task<Void, Never>?
 
     /// `TIMER_TICK_MS` из `ScanScreen.kt`.
     private static let defaultTickMs: Int64 = 250
@@ -154,6 +195,9 @@ final class ScanModel: Identifiable {
     /// «Готово!» остаётся видимым лишь на время анимации закрытия шита, конфетти играет на «Отметках».
     /// Механизм холда (FIFO-пере-проверка `completionCheck`, Finding-1) не тронут — просто нулевая задержка.
     private static let defaultSuccessHoldMs: Int64 = 0
+    /// Сколько оверлей пытается подтвердить cloud/local-взятие, прежде чем показать «Нет связи».
+    private static let defaultConfirmTimeoutMs: Int64 = 20_000
+    private static let defaultConfirmRetryMs: Int64 = 3_000
 
     init(
         raceId: Int,
@@ -168,7 +212,11 @@ final class ScanModel: Identifiable {
         newMarkId: @escaping () -> String = { UUID().uuidString },
         tickMs: Int64 = ScanModel.defaultTickMs,
         fanfareDelayMs: Int64 = ScanModel.defaultFanfareDelayMs,
-        successHoldMs: Int64 = ScanModel.defaultSuccessHoldMs
+        successHoldMs: Int64 = ScanModel.defaultSuccessHoldMs,
+        // Дефолт для превью/тестов без подтверждения; прод (`AppModel.makeScanModel`) подключает репозиторий.
+        confirmMark: @escaping @Sendable (String, UploadTarget) async -> UploadResultKind = { _, _ in .error },
+        confirmTimeoutMs: Int64 = ScanModel.defaultConfirmTimeoutMs,
+        confirmRetryMs: Int64 = ScanModel.defaultConfirmRetryMs
     ) {
         self.raceId = raceId
         self.teamId = teamId
@@ -184,6 +232,9 @@ final class ScanModel: Identifiable {
         self.tickMs = tickMs
         self.fanfareDelayMs = fanfareDelayMs
         self.successHoldMs = successHoldMs
+        self.confirmMark = confirmMark
+        self.confirmTimeoutMs = confirmTimeoutMs
+        self.confirmRetryMs = confirmRetryMs
         startBindingsObservation()
     }
 
@@ -200,6 +251,7 @@ final class ScanModel: Identifiable {
         timerTask?.cancel()
         bindingsTask?.cancel()
         completionTask?.cancel()
+        confirmTask?.cancel()
         // `fanfareTask` НЕ отменяем: фанфара завершения должна доиграть независимо от dealloc (§6 —
         // Task захватил `feedback`, не `self`).
         inputContinuation?.finish()
@@ -256,7 +308,9 @@ final class ScanModel: Identifiable {
                 case .completionCheck: self.handleCompletionCheck()
                 }
             }
-            self?.requestClose()
+            // В режиме подтверждения конец стрима — это НАШ `scanner.stop()`, а не отмена пользователем:
+            // оверлей не закрываем (его закроет confirm-флоу на успехе или пользователь на неудаче).
+            if self?.confirmState == nil { self?.requestClose() }
         }
 
         // Таймер только КЛАДЁТ тик в общий стрим — само решение об истечении принимает потребитель в
@@ -278,6 +332,7 @@ final class ScanModel: Identifiable {
         forwardTask?.cancel()
         timerTask?.cancel()
         completionTask?.cancel()
+        confirmTask?.cancel()
         // `fanfareTask` НЕ отменяем: при быстром автозакрытии (этап 11) `stop()` наступает раньше
         // `fanfareDelayMs` — фанфара завершения должна доиграть (§6, Task захватил `feedback`, не `self`).
         // `streamTask` НЕ отменяем: `finish()` даёт ему дренировать уже форварднутые (в т.ч. near-deadline,
@@ -354,6 +409,10 @@ final class ScanModel: Identifiable {
         // вклиниться — они снимаются потребителем ПОСЛЕ завершения этого вызова (Finding-1).
         let now = reading.sample.elapsedMs
 
+        // Режим подтверждения: чтения, форварднутые до остановки сканера, дренируются сюда — игнорируем,
+        // чтобы поздний `.kp` не открыл новое взятие и не сбил подтверждение текущего.
+        guard confirmState == nil else { return }
+
         // Гвард «команда не выбрана» (§2): пустой ростер — нечего зачитывать, открывать взятие с
         // expectedCount = 0 нельзя (оно никогда не завершится и осиротит строку).
         guard !roster.isEmpty else {
@@ -377,9 +436,10 @@ final class ScanModel: Identifiable {
         let expired = isWindowExpired(lastScanAt: takeLastScanAt, now: now)
 
         switch event {
-        case let .kp(checkpointId, number, cost, cpUid, cpCode):
+        case let .kp(checkpointId, number, cost, cpUid, cpCode, checkMethod):
             // Новый КП / истёкшее окно / смена КП → свежее взятие; повтор того же КП при живом окне —
-            // только перештамп окна (§3).
+            // только перештамп окна (§3). `checkMethod` повтора игнорируется — первый тег побеждает
+            // (см. `takeCheckMethod`).
             if expired || markId == nil || takeCheckpointId != checkpointId {
                 // Истёкшее окно: буфер принадлежит мёртвой сессии — сбрасываем, чтобы стейл-участники
                 // не кредитовались новому взятию.
@@ -398,7 +458,8 @@ final class ScanModel: Identifiable {
                 let mark = makeKpTakeMark(
                     id: id, raceId: raceId, teamId: teamId, checkpointId: checkpointId,
                     number: number, cost: cost, cpUid: cpUid, cpCode: cpCode,
-                    buffered: bufferedMembers, expectedCount: rosterSize, sample: reading.sample
+                    buffered: bufferedMembers, expectedCount: rosterSize, checkMethod: checkMethod,
+                    sample: reading.sample
                 )
                 // Персист в неструктурированном Task, захватившем стор (переживает закрытие оверлея, §6).
                 // Ссылку держим в `takePersistTask`: последующие `addMember` в этом же взятии ждут её
@@ -409,11 +470,13 @@ final class ScanModel: Identifiable {
                 let store = markStore
                 let persist = Task { () -> Void in try? await store.upsert(mark) }
                 takePersistTask = persist
+                memberWrites = []
                 markId = id
                 // Анти-фрод: один свежий GPS-фикс на ЭТО новое взятие (не перештамп, не addMember).
                 // Fire-and-forget — медленный GPS не блокирует окно; nil-фикс = no-op.
                 attachLocationForNewTake(markId: id, persist: persist)
                 takeCheckpointId = checkpointId
+                takeCheckMethod = CheckMethod(checkMethod)
                 expectedCount = rosterSize
                 // Снимки уже потреблены `bufferedMembers`; чистим, чтобы стейл не копился между сменами КП.
                 snapshots.removeAll()
@@ -453,13 +516,14 @@ final class ScanModel: Identifiable {
                 // отсутствующей строке (MarkStore ~119), поэтому без этого гейта участник может молча
                 // выпасть, если его Task опередит `upsert` на серийной очереди writer'а (§6-порядок).
                 let persist = takePersistTask
-                Task {
+                let write = Task {
                     await persist?.value
                     try? await store.addMember(
                         id: markId, numberInTeam: numberInTeam, nfcUid: uid,
                         number: snapshot.number, code: nil, now: wall, expectedCount: expected
                     )
                 }
+                memberWrites.append(write)
             } else {
                 // Ещё нет КП: держим участника в буфере. Повтор уже буферизованного — идемпотентен, окно
                 // не трогаем.
@@ -520,7 +584,8 @@ final class ScanModel: Identifiable {
                 feedback.play(feedbackFor(event: event))
             }
             if completing {
-                scheduleFanfare()
+                // cloud/local-взятие празднуем только после подтверждения сервером (`.confirmed`).
+                if takeCheckMethod.uploadTarget == nil { scheduleFanfare() }
                 beginCompletionHold()
             } else if !nowComplete {
                 cancelCompletionHold()
@@ -580,8 +645,13 @@ final class ScanModel: Identifiable {
     /// Пере-проверка автозакрытия из общего стрима (после холда, в порядке FIFO). Смена КП, поднятая до
     /// этого события, уже применена и отменила холд (`cancelCompletionHold` → `completed == false`).
     private func handleCompletionCheck() {
-        guard completed else { return }
+        guard completed, confirmState == nil else { return }
         if isComplete(session: session, rosterSize: roster.count) {
+            // cloud/local-взятие: засчитывается, только если сервер принял его, пока оверлей открыт.
+            if let target = takeCheckMethod.uploadTarget, let markId {
+                enterConfirmMode(markId: markId, target: target)
+                return
+            }
             // Успешное завершение (весь ростер present) — помечаем, чтобы `MarksView` мог отличить его
             // от истечения окна/конца стрима и запустить конфетти после dismiss. `finalizeSession()` тут
             // НЕ зовём: `session`/`completed` должны остаться как есть, иначе «Готово!» на CP-карточке
@@ -592,6 +662,87 @@ final class ScanModel: Identifiable {
             requestClose()
         } else {
             completed = false
+        }
+    }
+
+    // MARK: - Подтверждение cloud/local-взятия
+
+    /// Вход в режим подтверждения: `.sending` ПЕРВЫМ (чтобы конец стрима от `scanner.stop()` уже видел
+    /// режим и не закрыл оверлей), затем стоп сканера (CoreNFC-шторка модальна — кнопки за ней не нажать)
+    /// и таймера окна, затем цикл подтверждения.
+    private func enterConfirmMode(markId: String, target: UploadTarget) {
+        confirmState = .sending(target: target, attempt: 1)
+        timerTask?.cancel()
+        liveness.set(false)
+        scanner?.stop()
+        runConfirmCycle(markId: markId, target: target)
+    }
+
+    /// «Повторить» после `.failed`: новый цикл с полным дедлайном. Сканер не перезапускается.
+    func retryConfirm() {
+        guard case .failed = confirmState, let target = takeCheckMethod.uploadTarget, let markId else {
+            return
+        }
+        confirmState = .sending(target: target, attempt: 1)
+        runConfirmCycle(markId: markId, target: target)
+    }
+
+    /// Один цикл подтверждения: попытки до `.ok` или дедлайна `confirmTimeoutMs` (по `elapsedNowMs`).
+    /// Каждая попытка — отдельный `Task.detached`, захвативший только `@Sendable`-замыкание репозитория
+    /// (§6): отмена цикла не обрывает летящий POST (отмена не наследуется), и если сервер его примет,
+    /// `confirmedAt` запишется. `detached` — явно вне MainActor, даже если замыкание станет изолированным.
+    /// Цикл держит `self` слабо: после каждого вызова и сна — `guard let self, !Task.isCancelled`.
+    /// `.sending(attempt: 1)` уже выставил вызывающий (`enterConfirmMode`/`retryConfirm`) — цикл
+    /// обновляет состояние лишь со второй попытки.
+    private func runConfirmCycle(markId: String, target: UploadTarget) {
+        confirmTask?.cancel()
+        let confirm = confirmMark
+        let elapsedNow = elapsedNowMs
+        let timeout = confirmTimeoutMs
+        let retry = confirmRetryMs
+        // На сервер должна уйти строка с полным `present[]`: ждём персист взятия и ВСЕ записи участников.
+        let persist = takePersistTask
+        let writes = memberWrites
+        confirmTask = Task { [weak self] in
+            await persist?.value
+            for write in writes { await write.value }
+            if Task.isCancelled { return }
+            let deadline = await elapsedNow() + timeout
+            var attempt = 1
+            while true {
+                let call = Task.detached { await confirm(markId, target) }
+                let result = await call.value
+                if Task.isCancelled { return }
+                if result == .ok {
+                    guard let self, !Task.isCancelled else { return }
+                    self.onConfirmed()
+                    return
+                }
+                if await elapsedNow() >= deadline {
+                    guard let self, !Task.isCancelled else { return }
+                    self.confirmState = .failed(offline: result == .offline)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(Int(retry)))
+                // Сильная ссылка живёт лишь до конца итерации — через следующий `await` не держится.
+                guard let self, !Task.isCancelled else { return }
+                attempt += 1
+                self.confirmState = .sending(target: target, attempt: attempt)
+            }
+        }
+    }
+
+    /// Успех подтверждения: фанфара (отложенная с завершающего перехода), `didComplete`, удержание, закрытие.
+    /// Стрим уже закрыт (сканер остановлен), поэтому закрываемся напрямую, а не через `.completionCheck`.
+    private func onConfirmed() {
+        confirmState = .confirmed
+        scheduleFanfare()
+        didComplete = true
+        let hold = successHoldMs
+        completionTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(Int(hold)))
+            guard let self, !Task.isCancelled else { return }
+            self.requestClose()
         }
     }
 
@@ -607,6 +758,8 @@ final class ScanModel: Identifiable {
     /// инкрементально. Сериализовано с чтениями (§7): любое чтение, поднятое ДО этого тика, уже применено,
     /// поэтому near-deadline скан продлевает окно и не теряется/не мисклассифицируется (Finding-1).
     private func handleExpiryTick() async {
+        // Тик, поднятый до остановки таймера, не должен закрыть оверлей посреди подтверждения.
+        guard confirmState == nil else { return }
         guard let last = session?.lastScanAt else {
             remainingMillis = SCAN_WINDOW_MS
             return

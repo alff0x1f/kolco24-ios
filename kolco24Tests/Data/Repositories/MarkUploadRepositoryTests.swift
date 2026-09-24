@@ -32,7 +32,8 @@ struct MarkUploadRepositoryTests {
         uploadedCloud: Bool = false,
         updatedAt: Int64 = 1000,
         takenAt: Int64 = 1000,
-        locLat: Double? = nil
+        locLat: Double? = nil,
+        checkMethod: String = "offline"
     ) -> Mark {
         Mark(
             id: id,
@@ -56,7 +57,8 @@ struct MarkUploadRepositoryTests {
             elapsedRealtimeAt: nil,
             bootCount: nil,
             locLat: locLat,
-            locLon: locLat == nil ? nil : 37.61
+            locLon: locLat == nil ? nil : 37.61,
+            checkMethod: checkMethod
         )
     }
 
@@ -112,6 +114,22 @@ struct MarkUploadRepositoryTests {
         #expect(mark.uploadedLocal == true)
         #expect(mark.uploadedCloud == true)
         #expect(transport.callCount == 2)
+    }
+
+    /// Фоновый дренаж выгружает cloud-взятие, но **не** подтверждает его: `confirmedAt` ставит только
+    /// confirm из открытого скан-листа.
+    @Test func drainAcceptingCloudTake_doesNotConfirm() async throws {
+        let (repo, store, transport, _) = try makeRepo()
+        try await store.upsert(makeMark(id: "m1", checkMethod: "cloud"))
+        transport.enqueue(statusCode: 200, bodyString: acceptedBody(["m1"])) // Local
+        transport.enqueue(statusCode: 200, bodyString: acceptedBody(["m1"])) // Cloud
+
+        await repo.uploadPending(raceId: 7, teamId: 42)
+
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.uploadedCloud == true)
+        #expect(mark.uploadedLocal == true)
+        #expect(mark.confirmedAt == nil)
     }
 
     // MARK: - Частичный accept (пересечение с батчем)
@@ -409,6 +427,194 @@ struct MarkUploadRepositoryTests {
         let outcome = received?[TrackScope(raceId: 7, teamId: 42)]?[.local]
         #expect(outcome?.kind == .ok)
         #expect(outcome?.atWallMs == 5000)
+    }
+
+    // MARK: - confirm (подтверждение из скан-листа)
+
+    /// Граф с РАЗДЕЛЬНЫМИ транспортами cloud/local — чтобы проверить, в какую цель ушёл confirm.
+    private func makeConfirmRepo() throws
+        -> (repo: MarkUploadRepository, store: MarkStore, cloud: FakeTransport, local: FakeTransport)
+    {
+        let db = try AppDatabase.makeInMemory()
+        let store = MarkStore(db.writer)
+        let cloudT = FakeTransport()
+        let localT = FakeTransport()
+        let repo = MarkUploadRepository(
+            markStore: store,
+            cloud: makeClient(base: "https://cloud.test", transport: cloudT.handle),
+            local: makeClient(base: "http://local.test", transport: localT.handle),
+            installId: "install-abc", wallNow: { 5000 }
+        )
+        return (repo, store, cloudT, localT)
+    }
+
+    @Test func confirm_cloud_postsOnlyToCloud_setsConfirmedAtAndUploadedCloud() async throws {
+        let (repo, store, cloudT, localT) = try makeConfirmRepo()
+        try await store.upsert(makeMark(id: "m1"))
+        cloudT.enqueue(statusCode: 200, bodyString: acceptedBody(["m1"]))
+
+        let kind = await repo.confirm(markId: "m1", target: .cloud, now: 9_000)
+
+        #expect(kind == .ok)
+        #expect(cloudT.callCount == 1)
+        #expect(localT.callCount == 0)
+        #expect(cloudT.last?.url?.absoluteString.hasSuffix("/marks/") == true)
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == 9_000)
+        #expect(mark.uploadedCloud == true)
+        #expect(mark.uploadedLocal == false)
+    }
+
+    @Test func confirm_local_postsOnlyToLocal_setsConfirmedAtAndUploadedLocal() async throws {
+        let (repo, store, cloudT, localT) = try makeConfirmRepo()
+        try await store.upsert(makeMark(id: "m1", locLat: 55.75))
+        localT.enqueue(statusCode: 200, bodyString: acceptedBody(["m1"]))
+
+        let kind = await repo.confirm(markId: "m1", target: .local, now: 9_000)
+
+        #expect(kind == .ok)
+        #expect(localT.callCount == 1)
+        #expect(cloudT.callCount == 0)
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == 9_000)
+        #expect(mark.uploadedLocal == true)
+        #expect(mark.uploadedCloud == false)
+    }
+
+    @Test func confirm_offline_leavesUnconfirmed() async throws {
+        let (repo, store, cloudT, _) = try makeConfirmRepo()
+        try await store.upsert(makeMark(id: "m1"))
+        cloudT.enqueueError(URLError(.notConnectedToInternet))
+
+        let kind = await repo.confirm(markId: "m1", target: .cloud, now: 9_000)
+
+        #expect(kind == .offline)
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == nil)
+        #expect(mark.uploadedCloud == false)
+    }
+
+    @Test func confirm_serverError_leavesUnconfirmed() async throws {
+        let (repo, store, cloudT, _) = try makeConfirmRepo()
+        try await store.upsert(makeMark(id: "m1"))
+        cloudT.enqueue(statusCode: 503)
+
+        let kind = await repo.confirm(markId: "m1", target: .cloud, now: 9_000)
+
+        #expect(kind == .error)
+        #expect(cloudT.callCount == 1) // POST не ретраится
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == nil)
+        #expect(mark.uploadedCloud == false)
+    }
+
+    @Test func confirm_200WithoutId_isError_leavesUnconfirmed() async throws {
+        let (repo, store, _, localT) = try makeConfirmRepo()
+        try await store.upsert(makeMark(id: "m1"))
+        localT.enqueue(statusCode: 200, bodyString: acceptedBody(["other"]))
+
+        let kind = await repo.confirm(markId: "m1", target: .local, now: 9_000)
+
+        #expect(kind == .error)
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == nil)
+        #expect(mark.uploadedLocal == false)
+    }
+
+    @Test func confirm_missingMark_isError_noRequest() async throws {
+        let (repo, _, cloudT, localT) = try makeConfirmRepo()
+
+        let kind = await repo.confirm(markId: "ghost", target: .cloud, now: 9_000)
+
+        #expect(kind == .error)
+        #expect(cloudT.callCount == 0)
+        #expect(localT.callCount == 0)
+    }
+
+    /// Идущий дренаж (зажат на `/marks/`) не блокирует confirm: он не берёт `inFlight`, и его POST
+    /// уходит, пока дренаж висит. Гейт тот же `/marks/`, поэтому проверяем только счёт запросов.
+    @Test func confirm_whileDrainInFlight_stillPosts() async throws {
+        let db = try AppDatabase.makeInMemory()
+        let store = MarkStore(db.writer)
+        let gated = GatedTransport(gateSuffix: "/marks/")
+        let repo = MarkUploadRepository(
+            markStore: store,
+            cloud: makeClient(base: "https://cloud.test", transport: gated.handle),
+            local: makeClient(base: "http://local.test", transport: gated.handle),
+            installId: "install-abc", wallNow: { 5000 }
+        )
+        try await store.upsert(makeMark(id: "m1"))
+
+        let drain = Task { await repo.uploadPending(raceId: 7, teamId: 42) }
+        try await waitUntil { gated.recorded.count == 1 } // дренаж висит на Local-POST
+
+        let confirm = Task { await repo.confirm(markId: "m1", target: .cloud, now: 9_000) }
+        try await waitUntil { gated.recorded.count == 2 }
+        #expect(gated.recorded.count == 2) // confirm POST ушёл, пока дренаж зажат
+
+        gated.release(statusCode: 503)
+        #expect(await confirm.value == .error)
+        await drain.value
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == nil)
+    }
+
+    /// Строка изменилась (`addMember`) между `getById` и ответом сервера: подтверждение всё равно
+    /// записывается (оно не version-guarded), теряется лишь version-guarded `uploadedCloud` — дренаж
+    /// дошлёт свежую версию.
+    @Test func confirm_concurrentAddMember_keepsConfirmation_dropsOnlyUploadedFlag() async throws {
+        let db = try AppDatabase.makeInMemory()
+        let store = MarkStore(db.writer)
+        let gate = AcceptGate(accepted: acceptedBody(["m1"]))
+        let repo = MarkUploadRepository(
+            markStore: store,
+            cloud: makeClient(base: "https://cloud.test", transport: gate.handle),
+            local: makeClient(base: "http://local.test", transport: gate.handle),
+            installId: "install-abc", wallNow: { 5000 }
+        )
+        try await store.upsert(makeMark(id: "m1", present: [1], expectedCount: 2, checkMethod: "cloud"))
+
+        let confirm = Task { await repo.confirm(markId: "m1", target: .cloud, now: 9_000) }
+        try await waitUntil { gate.isWaiting }
+        try await store.addMember(
+            id: "m1", numberInTeam: 2, nfcUid: "M2", number: 102, code: nil, now: 8_000, expectedCount: 2
+        )
+        gate.release()
+
+        #expect(await confirm.value == .ok)
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == 9_000)
+        #expect(mark.present == [1, 2])
+        #expect(mark.uploadedCloud == false)
+    }
+
+    /// Сбой записи `uploaded*` после сохранённого `confirmedAt` — всё равно `.ok` (взятие уже засчитано).
+    @Test func confirm_uploadedFlagWriteFails_stillOk() async throws {
+        let (repo, store, cloudT, _) = try makeConfirmRepo()
+        try await store.upsert(makeMark(id: "m1"))
+        try await store.dbWriter.write { db in
+            try db.execute(sql: """
+                CREATE TRIGGER fail_uploaded_cloud BEFORE UPDATE OF uploadedCloud ON marks
+                BEGIN SELECT RAISE(ABORT, 'boom'); END
+                """)
+        }
+        cloudT.enqueue(statusCode: 200, bodyString: acceptedBody(["m1"]))
+
+        let kind = await repo.confirm(markId: "m1", target: .cloud, now: 9_000)
+
+        #expect(kind == .ok)
+        let mark = try #require(try await store.getById("m1"))
+        #expect(mark.confirmedAt == 9_000)
+        #expect(mark.uploadedCloud == false)
+    }
+
+    /// Поллинг условия с таймаутом (~2 с) — для ожидания фоновых запросов в зажатом транспорте.
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        for _ in 0..<400 {
+            if condition() { return }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        Issue.record("waitUntil timed out")
     }
 
     // MARK: - Frame-дренаж (этап 7) — зеркала `MarkRepositoryUploadTest.kt`
@@ -795,5 +1001,36 @@ struct IsHardFrameFailureTests {
         #expect(isHardFrameFailure(PostResult<Void>.forbidden) == false)
         #expect(isHardFrameFailure(PostResult<Void>.conflict) == false)
         #expect(isHardFrameFailure(PostResult<Void>.rateLimited) == false)
+    }
+}
+
+/// Транспорт с гейтом: первый запрос висит до `release()`, затем все отвечают `200` с заданным телом.
+private final class AcceptGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private let accepted: String
+    private var pending: CheckedContinuation<Void, Never>?
+    private var released = false
+
+    init(accepted: String) { self.accepted = accepted }
+
+    var isWaiting: Bool { lock.lock(); defer { lock.unlock() }; return pending != nil }
+
+    func release() {
+        lock.lock()
+        released = true
+        let c = pending; pending = nil
+        lock.unlock()
+        c?.resume()
+    }
+
+    func handle(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            lock.lock()
+            if released { lock.unlock(); c.resume() } else { pending = c; lock.unlock() }
+        }
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:]
+        )!
+        return (Data(accepted.utf8), response)
     }
 }

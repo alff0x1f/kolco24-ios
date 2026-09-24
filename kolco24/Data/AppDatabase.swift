@@ -3,7 +3,7 @@
 //  kolco24
 //
 //  Слой данных на GRDB — аналог Android `data/db/AppDatabase.kt` (Room v5).
-//  Держит `any DatabaseWriter` + `DatabaseMigrator` с тремя миграциями. `"v1"` —
+//  Держит `any DatabaseWriter` + `DatabaseMigrator` с четырьмя миграциями. `"v1"` —
 //  снимок финальной схемы Room v5 (`schemas/…/5.json`); историю Room-миграций
 //  1→5 не повторяем, iOS-база стартует сразу с v5. `"v2"` — ПЕРВАЯ iOS-only
 //  дивергенция от Room v5: `ALTER TABLE races ADD COLUMN mapUrl TEXT` (оффлайн-
@@ -11,6 +11,8 @@
 //  существующие установки догоняют миграции на старте, `makeInMemory()` тоже до конца.
 //  `"v3"` — вторая iOS-only колонка: `ALTER TABLE categories ADD COLUMN controlTime
 //  INTEGER` (контрольное время категории, минуты; `NULL` у старых строк читается как `0`).
+//  `"v4"` — `marks.checkMethod` (снимок метода проверки тега, `DEFAULT 'offline'`) и
+//  `marks.confirmedAt` (подтверждение взятия сервером из скан-листа).
 //
 //  Порт-инвариант: имена таблиц/колонок 1:1 с Room v5 (camelCase-колонки), SQL из
 //  DAO переносится дословно. FK нет нигде — связи по id в запросах (см. план этапа 2).
@@ -93,7 +95,8 @@ struct AppDatabase {
     // MARK: - Миграции
 
     /// Миграции: `"v1"` — снимок схемы Room v5 (все 13 таблиц + индексы); `"v2"` —
-    /// iOS-only `races.mapUrl`; `"v3"` — iOS-only `categories.controlTime` (см. шапку файла).
+    /// iOS-only `races.mapUrl`; `"v3"` — iOS-only `categories.controlTime`; `"v4"` —
+    /// iOS-only `marks.checkMethod`/`marks.confirmedAt` (см. шапку файла).
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
@@ -315,6 +318,15 @@ struct AppDatabase {
         // читает его как `0`.
         migrator.registerMigration("v3") { db in
             try db.execute(sql: "ALTER TABLE categories ADD COLUMN controlTime INTEGER")
+        }
+
+        // v4 — метод проверки взятия (снимок `Tag.checkMethod`) и серверное подтверждение.
+        // `checkMethod` NOT NULL — SQLite требует SQL-DEFAULT для такого `ADD COLUMN`
+        // (единственное исключение из «дефолты в Swift»): старые строки → `'offline'`.
+        // `confirmedAt` — wall ms, `NULL` = не подтверждено.
+        migrator.registerMigration("v4") { db in
+            try db.execute(sql: "ALTER TABLE marks ADD COLUMN checkMethod TEXT NOT NULL DEFAULT 'offline'")
+            try db.execute(sql: "ALTER TABLE marks ADD COLUMN confirmedAt INTEGER")
         }
 
         return migrator

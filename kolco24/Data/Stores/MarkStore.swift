@@ -112,7 +112,10 @@ struct MarkStore {
                 locAltitude: mark.locAltitude,
                 locVerticalAccuracy: mark.locVerticalAccuracy,
                 locGpsTimeMs: mark.locGpsTimeMs,
-                locElapsedRealtimeAt: mark.locElapsedRealtimeAt
+                locElapsedRealtimeAt: mark.locElapsedRealtimeAt,
+                // Снимок метода и подтверждение — факты взятия, новый участник их не сбрасывает.
+                checkMethod: mark.checkMethod,
+                confirmedAt: mark.confirmedAt
             )
             try updated.upsert(db)
         }
@@ -160,6 +163,18 @@ struct MarkStore {
                 sql: "UPDATE marks SET photoPath = ?, updatedAt = ?, "
                     + "photosUploadedLocal = 0, photosUploadedCloud = 0 WHERE id = ?",
                 arguments: [PhotoPaths.encode(merged), now, id]
+            )
+        }
+    }
+
+    /// Column-scoped UPDATE `confirmedAt` — сервер принял взятие из открытого скан-листа.
+    /// Не version-guarded и не трогает `updatedAt`/`uploaded*`: подтверждение — факт, а не
+    /// мутация взятия. Отсутствующая строка — no-op.
+    func setConfirmedAt(id: String, at: Int64) async throws {
+        try await dbWriter.write { db in
+            try db.execute(
+                sql: "UPDATE marks SET confirmedAt = ? WHERE id = ?",
+                arguments: [at, id]
             )
         }
     }

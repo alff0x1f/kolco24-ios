@@ -281,6 +281,10 @@ final class MarksModel {
     /// `nil`, когда ни одного photo-only КП (нотис исчезает целиком). Порт `photoReviewSummary`.
     var photoReview: PhotoReviewSummary? { photoReviewSummary(marks, costOf: costOf) }
 
+    /// Токены КП с неподтверждённым сервером cloud/local-взятием (без зачтённого взятия того же КП),
+    /// oldest-first, по живой цене. Пусто — нотис «не подтверждены сервером» скрыт.
+    var unconfirmedTokens: [String] { kolco24.unconfirmedTokens(marks, costOf: costOf) }
+
     /// Глобальная лента лайтбокса — кадры всех взятий в порядке сетки (тайл несёт КП-чип страницы).
     /// Порт `lightboxPhotos(tiles)`.
     var lightboxPhotos: [LightboxPhoto] { kolco24.lightboxPhotos(tiles) }

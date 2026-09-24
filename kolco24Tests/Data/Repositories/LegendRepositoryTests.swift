@@ -397,12 +397,15 @@ struct LegendRepositoryTests {
                                        encIv: Vector.cp2EncIvB64, encCt: Vector.cp2EncCtB64)
         try await h.tagStore.insertTags([
             kolco24.Tag(raceId: 8, bid: Vector.expectedBid, checkpointId: Vector.cp1Id,
-                checkMethod: "nfc", iv: Vector.tagIvB64, ct: Vector.tagCtB64),
+                checkMethod: "cloud", iv: Vector.tagIvB64, ct: Vector.tagCtB64),
         ])
 
         let outcome = try await h.repo.unlock(raceId: 8, code: Vector.code)
 
-        #expect(outcome == .revealed(checkpointId: Vector.cp1Id, checkpointIds: [Vector.cp1Id, Vector.cp2Id]))
+        // Метод проверки берётся из локального тега (крипто-итог его не несёт).
+        #expect(outcome == .revealed(
+            checkpointId: Vector.cp1Id, checkpointIds: [Vector.cp1Id, Vector.cp2Id], checkMethod: "cloud"
+        ))
 
         let checkpoints = try await storedCheckpoints(h.dbWriter, raceId: 8)
         let cp1 = try #require(checkpoints.first { $0.id == Vector.cp1Id })
@@ -426,10 +429,10 @@ struct LegendRepositoryTests {
         let code = Data([UInt8](repeating: 2, count: 16))
         try await h.tagStore.insertTags([
             kolco24.Tag(raceId: 8, bid: LegendCrypto.bid(code: code), checkpointId: 101,
-                checkMethod: "nfc", iv: nil, ct: nil),
+                checkMethod: "local", iv: nil, ct: nil),
         ])
 
-        #expect(try await h.repo.unlock(raceId: 8, code: code) == .identityOnly(checkpointId: 101))
+        #expect(try await h.repo.unlock(raceId: 8, code: code) == .identityOnly(checkpointId: 101, checkMethod: "local"))
     }
 
     @Test func unlock_partialEnvelopeReturnsFailed() async throws {

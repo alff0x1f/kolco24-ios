@@ -38,6 +38,7 @@ struct KpTakeTests {
         cost: Int = 5,
         expectedCount: Int = 3,
         buffered: [MarkMemberSnapshot] = [],
+        checkMethod: String = "offline",
         sample: TimeSample? = nil
     ) -> Mark {
         makeKpTakeMark(
@@ -51,6 +52,7 @@ struct KpTakeTests {
             cpCode: "CODE\(point)",
             buffered: buffered,
             expectedCount: expectedCount,
+            checkMethod: checkMethod,
             sample: sample ?? self.sample()
         )
     }
@@ -60,13 +62,23 @@ struct KpTakeTests {
         // id — параметр (чистота): вызывающий даёт разные UUID разным взятиям.
         let a = makeKpTakeMark(
             id: "A", raceId: 1, teamId: 7, checkpointId: 10, number: 10, cost: 5,
-            cpUid: "U", cpCode: "C", buffered: [], expectedCount: 3, sample: sample()
+            cpUid: "U", cpCode: "C", buffered: [], expectedCount: 3, checkMethod: "offline", sample: sample()
         )
         let b = makeKpTakeMark(
             id: "B", raceId: 1, teamId: 7, checkpointId: 11, number: 11, cost: 5,
-            cpUid: "U", cpCode: "C", buffered: [], expectedCount: 3, sample: sample()
+            cpUid: "U", cpCode: "C", buffered: [], expectedCount: 3, checkMethod: "offline", sample: sample()
         )
         #expect(a.id != b.id)
+    }
+
+    @Test
+    func startKpTake_writesCheckMethodSnapshot() {
+        // Метод проверки тега снапшотится во взятие; подтверждения ещё нет.
+        let cloud = make(checkMethod: "cloud")
+        #expect(cloud.checkMethod == "cloud")
+        #expect(cloud.confirmedAt == nil)
+        #expect(make(checkMethod: "local").checkMethod == "local")
+        #expect(make().checkMethod == "offline")
     }
 
     @Test

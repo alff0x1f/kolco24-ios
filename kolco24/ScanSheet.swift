@@ -48,16 +48,19 @@ struct ScanSheet: View {
 
                 header
 
-                // Timer hero — stays at the top so the iOS NFC system sheet doesn't cover it
-                TimerHeroView(
-                    seconds: Int(model.remainingSeconds.rounded()),
-                    total: Int(SCAN_WINDOW_MS / 1000),
-                    remainingScans: model.remainingScans,
-                    waitingForCheckpoint: !model.canFinish
-                )
-                .padding(.horizontal, DS.hPad)
-                .padding(.top, 4)
-                .padding(.bottom, 10)
+                // Timer hero — stays at the top so the iOS NFC system sheet doesn't cover it.
+                // В режиме подтверждения таймер окна остановлен — замершее кольцо не показываем.
+                if model.confirmState == nil {
+                    TimerHeroView(
+                        seconds: Int(model.remainingSeconds.rounded()),
+                        total: Int(SCAN_WINDOW_MS / 1000),
+                        remainingScans: model.remainingScans,
+                        waitingForCheckpoint: !model.canFinish
+                    )
+                    .padding(.horizontal, DS.hPad)
+                    .padding(.top, 4)
+                    .padding(.bottom, 10)
+                }
 
                 // Clock-skew notice (этап 11) — над CP-карточкой; `.ok` → нулевая высота.
                 ScanClockBanner(status: clockStatus)
@@ -68,10 +71,21 @@ struct ScanSheet: View {
                 CPCardView(
                     number: model.checkpointNumber,
                     cost: model.checkpointCost,
-                    completed: model.completed
+                    completed: model.showsDone
                 )
                 .padding(.horizontal, DS.hPad)
                 .padding(.bottom, 10)
+
+                // Подтверждение cloud/local-взятия сервером (отправка / «Нет связи»).
+                if let state = model.confirmState {
+                    ConfirmStatusView(
+                        state: state,
+                        onRetry: { model.retryConfirm() },
+                        onClose: { close() }
+                    )
+                    .padding(.horizontal, DS.hPad)
+                    .padding(.bottom, 10)
+                }
 
                 // Diagnostic (badKp / unboundChip)
                 if let diagnostic = model.diagnostic {
@@ -110,6 +124,9 @@ struct ScanSheet: View {
         .background(Color.paper)
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
+        // Пока cloud/local-взятие ждёт подтверждения, случайный свайп не должен молча оборвать его:
+        // закрыть можно только явно («Отменить»/«Закрыть»).
+        .interactiveDismissDisabled(model.confirmPending)
         .task {
             // Заранее запрашиваем гео-разрешение (один раз, ОС дедупит) и стартуем прод-сканер.
             model.requestGeoPermission()
@@ -189,6 +206,9 @@ struct ScanSheet: View {
         .padding(.horizontal, DS.hPad)
     }
 
+    /// «Готово» доступна, когда КП идентифицирован и подтверждение не идёт/не провалилось.
+    private var finishEnabled: Bool { model.canFinish && !model.confirmPending }
+
     private var actions: some View {
         HStack(spacing: 10) {
             Button("Отменить") { close() }
@@ -204,9 +224,9 @@ struct ScanSheet: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(model.canFinish ? Color.kolcoOrange : Color.sub.opacity(0.25))
+                .background(finishEnabled ? Color.kolcoOrange : Color.sub.opacity(0.25))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                .disabled(!model.canFinish)
+                .disabled(!finishEnabled)
         }
         .padding(.horizontal, DS.hPad)
         .padding(.top, 8)
@@ -262,6 +282,83 @@ private struct CPCardView: View {
         .background(Color.card)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+    }
+}
+
+// MARK: - Confirm status (cloud/local)
+/// Статус подтверждения взятия сервером под CP-карточкой: `.sending` — спиннер + текст цели +
+/// «попытка N»; `.failed` — «Нет связи — КП не подтверждён» (или «Сервер не принял — …», если
+/// сервер ответил отказом) + «Повторить»/«Закрыть».
+/// `.confirmed` не рисуется (CP-карточка показывает «Готово!», оверлей закрывается сам).
+private struct ConfirmStatusView: View {
+    let state: ScanModel.ConfirmState
+    var onRetry: () -> Void = {}
+    var onClose: () -> Void = {}
+
+    var body: some View {
+        switch state {
+        case let .sending(target, attempt):
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(Color.kolcoOrange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Self.sendingText(target))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.ink)
+                    Text("попытка \(attempt)")
+                        .font(.mono(11, weight: .medium))
+                        .foregroundStyle(Color.sub)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.card)
+            .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+            .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+        case let .failed(offline):
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "icloud.slash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.brandRed)
+                    Text(offline ? "Нет связи — КП не подтверждён" : "Сервер не принял — КП не подтверждён")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.brandRed)
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 10) {
+                    Button("Повторить", action: onRetry)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(Color.kolcoOrange)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    Button("Закрыть", action: onClose)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.ink)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(Color.sub.opacity(0.2))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.brandRed.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+        case .confirmed:
+            EmptyView()
+        }
+    }
+
+    static func sendingText(_ target: UploadTarget) -> String {
+        switch target {
+        case .cloud: "Отправка на сервер…"
+        case .local: "Отправка на локальный сервер…"
+        }
     }
 }
 
@@ -503,5 +600,23 @@ private struct ScanSheetPreviewHost: View {
 
 #Preview("NoSync") {
     ScanSheetPreviewHost(clockStatus: .noSync)
+}
+
+#Preview("Confirm sending") {
+    VStack(spacing: 10) {
+        ConfirmStatusView(state: .sending(target: .cloud, attempt: 2))
+        ConfirmStatusView(state: .sending(target: .local, attempt: 1))
+    }
+    .padding(DS.hPad)
+    .background(Color.paper)
+}
+
+#Preview("Confirm failed") {
+    VStack(spacing: 10) {
+        ConfirmStatusView(state: .failed(offline: true))
+        ConfirmStatusView(state: .failed(offline: false))
+    }
+    .padding(DS.hPad)
+    .background(Color.paper)
 }
 #endif

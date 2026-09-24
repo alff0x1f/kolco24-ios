@@ -5,7 +5,8 @@
 //  Snapshot-тест схемы — замена Android `MigrationTest`. `"v1"` — снимок финальной
 //  схемы Room v5 (стартовая точка iOS-базы), `"v2"` — iOS-only `races.mapUrl` (см.
 //  `migrationV1ToV2AddsMapUrlAndPreservesRows`), `"v3"` — iOS-only
-//  `categories.controlTime` (см. `migrationV2ToV3AddsControlTimeAndPreservesRows`).
+//  `categories.controlTime` (см. `migrationV2ToV3AddsControlTimeAndPreservesRows`), `"v4"` —
+//  iOS-only `marks.checkMethod`/`marks.confirmedAt` (см. `migrationV3ToV4AddsCheckMethodAndPreservesRows`).
 //  Сверяет инвентарь таблиц/колонок/индексов/PK, транскрибированный дословно из
 //  `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/5.json` (+ колонки `mapUrl`
 //  от v2 и `controlTime` от v3), с тем, что реально создают миграции. Любое расхождение (тип, nullability,
@@ -26,11 +27,14 @@ struct AppDatabaseSchemaTests {
         let type: String
         let notNull: Bool
         let pk: Int
-        init(_ name: String, _ type: String, notNull: Bool, pk: Int = 0) {
+        /// Ожидаемый SQL-`DEFAULT` (как его отдаёт `PRAGMA table_info.dflt_value`); `nil` — нет.
+        let dflt: String?
+        init(_ name: String, _ type: String, notNull: Bool, pk: Int = 0, dflt: String? = nil) {
             self.name = name
             self.type = type
             self.notNull = notNull
             self.pk = pk
+            self.dflt = dflt
         }
     }
 
@@ -157,6 +161,9 @@ struct AppDatabaseSchemaTests {
             Col("locVerticalAccuracy", "REAL", notNull: false),
             Col("locGpsTimeMs", "INTEGER", notNull: false),
             Col("locElapsedRealtimeAt", "INTEGER", notNull: false),
+            // миграция v4 (iOS-only): NOT NULL ADD COLUMN требует SQL-DEFAULT.
+            Col("checkMethod", "TEXT", notNull: true, dflt: "'offline'"),
+            Col("confirmedAt", "INTEGER", notNull: false), // миграция v4 (iOS-only)
         ], indices: [
             "index_marks_teamId": ["teamId"],
             "index_marks_checkpointId": ["checkpointId"],
@@ -210,10 +217,10 @@ struct AppDatabaseSchemaTests {
     // MARK: - Тесты
 
     @Test func migrationRunsOnEmptyDatabase() throws {
-        // Не должно бросить: миграции "v1"+"v2"+"v3" отрабатывают на пустой базе.
+        // Не должно бросить: миграции "v1"…"v4" отрабатывают на пустой базе.
         let db = try AppDatabase.makeInMemory()
         let applied = try db.writer.read { try AppDatabase.migrator.appliedMigrations($0) }
-        #expect(applied == ["v1", "v2", "v3"])
+        #expect(applied == ["v1", "v2", "v3", "v4"])
     }
 
     @Test func tableInventoryMatchesRoomSchema() throws {
@@ -247,8 +254,14 @@ struct AppDatabaseSchemaTests {
                     #expect(type == col.type, "\(spec.name).\(col.name): type")
                     #expect((notNull == 1) == col.notNull, "\(spec.name).\(col.name): notnull")
                     #expect(pk == col.pk, "\(spec.name).\(col.name): pk position")
-                    // Инвариант плана: ни одного SQL-DEFAULT в схеме v1.
-                    #expect(dflt.isNull, "\(spec.name).\(col.name): unexpected SQL DEFAULT")
+                    // Инвариант плана: ни одного SQL-DEFAULT в схеме v1; исключение — явно
+                    // объявленный `dflt` (NOT NULL-колонки, добавленные ALTER TABLE, v4).
+                    if let expectedDflt = col.dflt {
+                        #expect(String.fromDatabaseValue(dflt) == expectedDflt,
+                                "\(spec.name).\(col.name): SQL DEFAULT")
+                    } else {
+                        #expect(dflt.isNull, "\(spec.name).\(col.name): unexpected SQL DEFAULT")
+                    }
                 }
             }
         }
@@ -273,7 +286,7 @@ struct AppDatabaseSchemaTests {
         try AppDatabase.migrator.migrate(queue)
 
         let applied = try queue.read { try AppDatabase.migrator.appliedMigrations($0) }
-        #expect(applied == ["v1", "v2", "v3"])
+        #expect(applied == ["v1", "v2", "v3", "v4"])
 
         // Колонка появилась, старые строки пережили миграцию с mapUrl == nil.
         let rows = try queue.read { db in
@@ -312,7 +325,7 @@ struct AppDatabaseSchemaTests {
         try AppDatabase.migrator.migrate(queue)
 
         let applied = try queue.read { try AppDatabase.migrator.appliedMigrations($0) }
-        #expect(applied == ["v1", "v2", "v3"])
+        #expect(applied == ["v1", "v2", "v3", "v4"])
 
         let rows = try queue.read { db in
             try kolco24.Category.fetchAll(db, sql: "SELECT * FROM categories ORDER BY id")
@@ -331,6 +344,52 @@ struct AppDatabaseSchemaTests {
             try kolco24.Category.fetchOne(db, sql: "SELECT * FROM categories WHERE id = 46")
         }
         #expect(c46?.controlTime == 480)
+    }
+
+    @Test func migrationV3ToV4AddsCheckMethodAndPreservesRows() throws {
+        // Обновление установки на v3: колонок checkMethod/confirmedAt ещё нет, вставляем взятие
+        // сырым SQL, догоняем до конца — строка жива, checkMethod == "offline", confirmedAt == nil.
+        let queue = try DatabaseQueue()
+        try AppDatabase.migrator.migrate(queue, upTo: "v3")
+
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO marks (id, raceId, teamId, checkpointId, checkpointNumber, cost, method,
+                                   cpUid, cpCode, present, presentDetails, expectedCount, complete,
+                                   photoPath, takenAt, updatedAt, uploadedLocal, uploadedCloud,
+                                   photosUploadedLocal, photosUploadedCloud)
+                VALUES ('m-old', 1, 7, 10, 10, 5, 'nfc', 'CPUID', 'CODE', '[1]', NULL, 1, 1,
+                        NULL, 1000, 1000, 1, 0, 0, 0)
+                """)
+        }
+
+        // v3 → v4: ALTER TABLE marks ADD COLUMN checkMethod … DEFAULT 'offline' + confirmedAt.
+        try AppDatabase.migrator.migrate(queue)
+
+        let applied = try queue.read { try AppDatabase.migrator.appliedMigrations($0) }
+        #expect(applied == ["v1", "v2", "v3", "v4"])
+
+        let old = try #require(try queue.read { db in
+            try Mark.fetchOne(db, sql: "SELECT * FROM marks WHERE id = 'm-old'")
+        })
+        #expect(old.present == [1])
+        #expect(old.complete == true)
+        #expect(old.uploadedLocal == true)
+        #expect(old.checkMethod == "offline")
+        #expect(old.confirmedAt == nil)
+
+        // Новую строку можно вставить уже с методом и подтверждением (encode(to:) пишет колонки).
+        try queue.write { db in
+            try Mark(id: "m-new", raceId: 1, teamId: 7, checkpointId: 11, checkpointNumber: 11,
+                     cost: 3, method: "nfc", cpUid: "U", cpCode: "C", present: [1],
+                     expectedCount: 1, complete: true, takenAt: 2_000, updatedAt: 2_000,
+                     checkMethod: "cloud", confirmedAt: 2_500).insert(db)
+        }
+        let fresh = try queue.read { db in
+            try Mark.fetchOne(db, sql: "SELECT * FROM marks WHERE id = 'm-new'")
+        }
+        #expect(fresh?.checkMethod == "cloud")
+        #expect(fresh?.confirmedAt == 2_500)
     }
 
     @Test func indexInventoryMatchesRoomSchema() throws {

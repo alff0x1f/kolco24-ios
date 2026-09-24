@@ -13,7 +13,7 @@ import Testing
 struct ScanSessionTests {
 
     private func kp(point: Int = 42, number: Int = 7, cost: Int = 50) -> ScanEvent {
-        .kp(checkpointId: point, number: number, cost: cost, cpUid: "04AABBCC", cpCode: "DEADBEEF")
+        .kp(checkpointId: point, number: number, cost: cost, cpUid: "04AABBCC", cpCode: "DEADBEEF", checkMethod: "offline")
     }
 
     @Test func kp_onNullSession_fillsCheckpointFields() {
@@ -167,7 +167,7 @@ struct ScanSessionTests {
         var s = reduce(session: nil, event: kp(), now: 0)
         s = reduce(session: s, event: .member(numberInTeam: 1), now: 10)
         s = reduce(session: s, event: .member(numberInTeam: 2), now: 20)
-        let kpB = ScanEvent.kp(checkpointId: 99, number: 12, cost: 80, cpUid: "04BBBBBB", cpCode: "CAFEBABE")
+        let kpB = ScanEvent.kp(checkpointId: 99, number: 12, cost: 80, cpUid: "04BBBBBB", cpCode: "CAFEBABE", checkMethod: "offline")
         s = reduce(session: s, event: kpB, now: 30)
         #expect(!isComplete(session: s, rosterSize: 2))
     }
@@ -196,7 +196,7 @@ struct ScanSessionTests {
     }
 
     @Test func kp_switchCP_resetsPresentAndBufferDrains() {
-        let kpB = ScanEvent.kp(checkpointId: 99, number: 12, cost: 80, cpUid: "04BBBBBB", cpCode: "CAFEBABE")
+        let kpB = ScanEvent.kp(checkpointId: 99, number: 12, cost: 80, cpUid: "04BBBBBB", cpCode: "CAFEBABE", checkMethod: "offline")
         var s = reduce(session: nil, event: kp(), now: 0)
         s = reduce(session: s, event: .member(numberInTeam: 1), now: 100)
         s = reduce(session: s, event: .member(numberInTeam: 2), now: 200)

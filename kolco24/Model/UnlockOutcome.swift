@@ -16,12 +16,13 @@
 /// одним тегом.
 enum UnlockOutcome: Equatable {
     /// Раскрытые [checkpointIds] расшифрованы и сохранены; тег принадлежит
-    /// [checkpointId].
-    case revealed(checkpointId: Int, checkpointIds: [Int])
+    /// [checkpointId]. [checkMethod] — сырой `check_method` тега (`offline`/`cloud`/`local`),
+    /// снапшотится во взятие КП.
+    case revealed(checkpointId: Int, checkpointIds: [Int], checkMethod: String)
 
     /// Open-CP тег: только идентифицирует свой [checkpointId], расшифровывать
-    /// нечего.
-    case identityOnly(checkpointId: Int)
+    /// нечего. [checkMethod] — как у [revealed].
+    case identityOnly(checkpointId: Int, checkMethod: String)
 
     /// Ни один тег не совпал со скан-`bid` (неизвестный тег для этого набора гонки).
     case unknown

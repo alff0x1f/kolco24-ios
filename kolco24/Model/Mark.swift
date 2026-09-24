@@ -61,6 +61,13 @@ struct Mark: Equatable {
     let locVerticalAccuracy: Float?
     let locGpsTimeMs: Int64?
     let locElapsedRealtimeAt: Int64?
+    /// iOS-only (миграция `v4`): снимок `Tag.checkMethod` сканированного тега на момент взятия
+    /// (`"offline"` / `"cloud"` / `"local"`; неизвестное читается как offline). Смена метода в
+    /// легенде старые взятия не трогает.
+    let checkMethod: String
+    /// iOS-only (миграция `v4`): wall ms подтверждения взятия сервером из открытого скан-листа;
+    /// `nil` — не подтверждено. Ставится только confirm-вызовом, фоновый дренаж его не пишет.
+    let confirmedAt: Int64?
 
     init(
         id: String,
@@ -92,7 +99,9 @@ struct Mark: Equatable {
         locAltitude: Double? = nil,
         locVerticalAccuracy: Float? = nil,
         locGpsTimeMs: Int64? = nil,
-        locElapsedRealtimeAt: Int64? = nil
+        locElapsedRealtimeAt: Int64? = nil,
+        checkMethod: String = CheckMethod.offline.rawValue,
+        confirmedAt: Int64? = nil
     ) {
         self.id = id
         self.raceId = raceId
@@ -124,5 +133,7 @@ struct Mark: Equatable {
         self.locVerticalAccuracy = locVerticalAccuracy
         self.locGpsTimeMs = locGpsTimeMs
         self.locElapsedRealtimeAt = locElapsedRealtimeAt
+        self.checkMethod = checkMethod
+        self.confirmedAt = confirmedAt
     }
 }

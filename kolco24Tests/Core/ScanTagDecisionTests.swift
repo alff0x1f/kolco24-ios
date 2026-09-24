@@ -39,22 +39,46 @@ struct ScanTagDecisionTests {
         let event = classifyTag(
             code: code,
             uid: uid,
-            unlock: .revealed(checkpointId: 42, checkpointIds: [42]),
+            unlock: .revealed(checkpointId: 42, checkpointIds: [42], checkMethod: "offline"),
             bindings: [:],
             checkpointsById: checkpoints
         )
-        #expect(event == .kp(checkpointId: 42, number: 7, cost: 50, cpUid: uid, cpCode: "DEADBEEF"))
+        #expect(event == .kp(checkpointId: 42, number: 7, cost: 50, cpUid: uid, cpCode: "DEADBEEF", checkMethod: "offline"))
     }
 
     @Test func code_identityOnly_resolvesNumberAndCost() {
         let event = classifyTag(
             code: code,
             uid: uid,
-            unlock: .identityOnly(checkpointId: 42),
+            unlock: .identityOnly(checkpointId: 42, checkMethod: "offline"),
             bindings: [:],
             checkpointsById: checkpoints
         )
-        #expect(event == .kp(checkpointId: 42, number: 7, cost: 50, cpUid: uid, cpCode: "DEADBEEF"))
+        #expect(event == .kp(checkpointId: 42, number: 7, cost: 50, cpUid: uid, cpCode: "DEADBEEF", checkMethod: "offline"))
+    }
+
+    @Test func code_revealed_carriesCheckMethod() {
+        // Метод проверки тега (сырая строка) доезжает до `.kp` как есть — нормализация в `CheckMethod`
+        // делается потребителем.
+        let event = classifyTag(
+            code: code,
+            uid: uid,
+            unlock: .revealed(checkpointId: 42, checkpointIds: [42], checkMethod: "cloud"),
+            bindings: [:],
+            checkpointsById: checkpoints
+        )
+        #expect(event == .kp(checkpointId: 42, number: 7, cost: 50, cpUid: uid, cpCode: "DEADBEEF", checkMethod: "cloud"))
+    }
+
+    @Test func code_identityOnly_carriesCheckMethod() {
+        let event = classifyTag(
+            code: code,
+            uid: uid,
+            unlock: .identityOnly(checkpointId: 42, checkMethod: "local"),
+            bindings: [:],
+            checkpointsById: checkpoints
+        )
+        #expect(event == .kp(checkpointId: 42, number: 7, cost: 50, cpUid: uid, cpCode: "DEADBEEF", checkMethod: "local"))
     }
 
     @Test func code_unknown_badKp() {
@@ -71,7 +95,7 @@ struct ScanTagDecisionTests {
         let event = classifyTag(
             code: code,
             uid: uid,
-            unlock: .revealed(checkpointId: 99, checkpointIds: [99]),
+            unlock: .revealed(checkpointId: 99, checkpointIds: [99], checkMethod: "offline"),
             bindings: [:],
             checkpointsById: checkpoints
         )
@@ -82,7 +106,7 @@ struct ScanTagDecisionTests {
         let event = classifyTag(
             code: code,
             uid: uid,
-            unlock: .revealed(checkpointId: 777, checkpointIds: [777]),
+            unlock: .revealed(checkpointId: 777, checkpointIds: [777], checkMethod: "offline"),
             bindings: [:],
             checkpointsById: checkpoints
         )

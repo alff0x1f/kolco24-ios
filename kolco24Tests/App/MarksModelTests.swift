@@ -34,11 +34,13 @@ struct MarksModelTests {
 
     private func mark(
         id: String, race: Int, team: Int, cp: Int, number: Int, cost: Int,
-        method: String = "nfc", complete: Bool = true, takenAt: Int64 = 0
+        method: String = "nfc", complete: Bool = true, takenAt: Int64 = 0,
+        checkMethod: String = "offline"
     ) -> Mark {
         Mark(id: id, raceId: race, teamId: team, checkpointId: cp, checkpointNumber: number,
              cost: cost, method: method, cpUid: "UID\(cp)", cpCode: "K24", present: [1],
-             expectedCount: 1, complete: complete, takenAt: takenAt, updatedAt: takenAt)
+             expectedCount: 1, complete: complete, takenAt: takenAt, updatedAt: takenAt,
+             checkMethod: checkMethod)
     }
 
     private func makeEnv() throws -> AppEnvironment {
@@ -194,6 +196,63 @@ struct MarksModelTests {
         #expect(review.count == 1)
         #expect(review.points == 4)          // живая цена КП5 (снимок взятия — 0)
         #expect(review.tokens == ["4-05"])
+    }
+
+    // MARK: - Неподтверждённое cloud-взятие: тайл есть, в метриках нет, в нотисе есть
+
+    @Test func unconfirmedCloudTakeShowsTileButNotScoreUntilConfirmed() async throws {
+        let env = try makeEnv()
+        try await env.checkpointStore.insertCheckpoints([
+            openCP(id: 1, race: 7, number: 1, cost: 5),
+            openCP(id: 2, race: 7, number: 2, cost: 3),
+        ])
+        try await env.markStore.upsert(mark(id: "off", race: 7, team: 42, cp: 1, number: 1, cost: 5, takenAt: 1_000))
+        try await env.markStore.upsert(mark(id: "cl", race: 7, team: 42, cp: 2, number: 2, cost: 3,
+                                            takenAt: 2_000, checkMethod: "cloud"))
+
+        let model = MarksModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.checkpoints.count == 2 && model.marks.count == 2 }
+
+        #expect(model.tiles.map(\.number) == ["01", "02"])      // тайл неподтверждённого остаётся
+        #expect(model.tiles.map(\.unconfirmed) == [false, true])
+        #expect(model.takenKp == 1)                              // только offline КП1
+        #expect(model.takenScore == 5)
+        #expect(model.unconfirmedTokens == ["3-02"])             // живая цена КП2
+
+        try await env.markStore.setConfirmedAt(id: "cl", at: 2_500)
+        await waitUntil { model.takenScore == 8 }
+
+        #expect(model.takenKp == 2)
+        #expect(model.takenScore == 8)
+        #expect(model.unconfirmedTokens.isEmpty)                 // нотис исчезает
+        #expect(model.tiles.map(\.unconfirmed) == [false, false])
+    }
+
+    /// Повторное взятие того же КП, подтверждённое сервером, засчитывает КП (один раз) и убирает его
+    /// из нотиса; старое неподтверждённое взятие остаётся приглушённым тайлом.
+    @Test func confirmedRetakeCountsPointAndLeavesNotice() async throws {
+        let env = try makeEnv()
+        try await env.checkpointStore.insertCheckpoints([openCP(id: 2, race: 7, number: 2, cost: 3)])
+        try await env.markStore.upsert(mark(id: "old", race: 7, team: 42, cp: 2, number: 2, cost: 3,
+                                            takenAt: 1_000, checkMethod: "cloud"))
+
+        let model = MarksModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.checkpoints.count == 1 && model.marks.count == 1 }
+        #expect(model.unconfirmedTokens == ["3-02"])
+        #expect(model.takenScore == 0)
+
+        // Повторное взятие из скан-листа: новая строка, confirm проставил confirmedAt.
+        try await env.markStore.upsert(mark(id: "new", race: 7, team: 42, cp: 2, number: 2, cost: 3,
+                                            takenAt: 2_000, checkMethod: "cloud"))
+        try await env.markStore.setConfirmedAt(id: "new", at: 2_100)
+        await waitUntil { model.takenScore == 3 }
+
+        #expect(model.takenKp == 1)
+        #expect(model.takenScore == 3)                            // КП засчитан один раз
+        #expect(model.unconfirmedTokens.isEmpty)                  // нотис исчезает
+        #expect(model.tiles.map(\.unconfirmed) == [true, false])  // старый тайл остаётся приглушённым
     }
 
     // MARK: - Реакция на новое взятие
