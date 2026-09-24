@@ -149,7 +149,7 @@ struct ProvisioningModelTests {
         #expect(model.provisionState == .success(number: 5))
         #expect(model.freshLabels(model.checkpoints[0]).count == 1)
         #expect(feedback.successCount == 1)
-        #expect(feedback.fanfares == 1)
+        #expect(feedback.fanfares == 0)
         #expect(scanner.pendingUid == nil) // разоружён после успеха
     }
 

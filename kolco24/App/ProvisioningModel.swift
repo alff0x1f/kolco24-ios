@@ -395,7 +395,7 @@ final class ProvisioningModel: Identifiable {
     }
 
     /// Запись прошла + подтверждена read-back'ом: пометить чип свежим, `success(number)`, разоружить
-    /// сканер, фидбек + фанфары, запланировать автопереход к следующему КП.
+    /// сканер, фидбек успеха (без фанфар), запланировать автопереход к следующему КП.
     private func completeWrite(uid: String) {
         if let cp = selectedCheckpoint, !(freshUids[cp.id] ?? []).contains(uid) {
             // Дедуп per-КП (порт `if (uid !in existing)` из ProvisioningScreen.kt): повторная запись
@@ -410,7 +410,6 @@ final class ProvisioningModel: Identifiable {
         lastWrittenUid = uid
         scanner?.clearPendingWrite()
         feedback.play(.success)
-        feedback.fanfare()
         scheduleAutoAdvance()
     }
 
