@@ -236,18 +236,18 @@ private(set) var confirmState: ConfirmState?
 - Modify: `kolco24Tests/Core/ScanSessionTests.swift` (:16, :170, :199), `kolco24Tests/Core/ScanFeedbackTests.swift`
   (:15, :33), `kolco24Tests/Core/KpTakeTests.swift`, `kolco24Tests/App/ScanModelTests.swift`
 
-- [ ] `UnlockOutcome.revealed` / `.identityOnly` gain `checkMethod: String`; `unlock` fills it from the local
+- [x] `UnlockOutcome.revealed` / `.identityOnly` gain `checkMethod: String`; `unlock` fills it from the local
       `tag` at both constructor sites (`LegendRepository.swift:155` and :176-178; `LegendCrypto.UnlockResult`
       has no method). `ScanModel.checkpointsMap` (:485) matches bare cases and needs no change.
-- [ ] `ScanEvent.kp` gains `checkMethod`; update the matches in `reduce` (`ScanSession.swift:122`) and
+- [x] `ScanEvent.kp` gains `checkMethod`; update the matches in `reduce` (`ScanSession.swift:122`) and
       `ScanModel.process` (:380). `ScanFeedback.swift:32` uses a bare `.kp` and compiles unchanged.
       Admin/judge flows have their own `.kpChip` enums and are not touched.
-- [ ] `makeKpTakeMark` takes `checkMethod` and writes it; `makePhotoMark` stays `"offline"` (model default)
-- [ ] `ScanModel.process`: pass it to `makeKpTakeMark` and keep `takeCheckMethod` in the take state
-- [ ] tests: `unlock` returns the tag's method for revealed and identity-only tags
-- [ ] tests: `classifyTag` carries the method; `makeKpTakeMark` writes it; a `ScanModel` take of a
+- [x] `makeKpTakeMark` takes `checkMethod` and writes it; `makePhotoMark` stays `"offline"` (model default)
+- [x] `ScanModel.process`: pass it to `makeKpTakeMark` and keep `takeCheckMethod` in the take state
+- [x] tests: `unlock` returns the tag's method for revealed and identity-only tags
+- [x] tests: `classifyTag` carries the method; `makeKpTakeMark` writes it; a `ScanModel` take of a
       `"cloud"` tag persists `checkMethod == "cloud"`
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 4: MarkUploadRepository.confirm
 

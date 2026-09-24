@@ -85,14 +85,16 @@ struct ScanModelTests {
     }
 
     /// Регистрирует открытый КП + identity-only тег, чей `bid = sha256(code)[:16]` матчит `code`.
-    private func registerKp(_ env: AppEnvironment, cpId: Int, number: Int, cost: Int, code: Data) async throws {
+    private func registerKp(
+        _ env: AppEnvironment, cpId: Int, number: Int, cost: Int, code: Data, checkMethod: String = "nfc"
+    ) async throws {
         try await env.checkpointStore.insertCheckpoints([
             Checkpoint(id: cpId, raceId: race, number: number, cost: cost, type: "cp",
                        description: "КП \(number)", locked: false)
         ])
         let bid = LegendCrypto.bid(code: code)
         try await env.tagStore.insertTags([
-            Tag(raceId: race, bid: bid, checkpointId: cpId, checkMethod: "nfc", iv: nil, ct: nil)
+            Tag(raceId: race, bid: bid, checkpointId: cpId, checkMethod: checkMethod, iv: nil, ct: nil)
         ])
     }
 
@@ -180,6 +182,26 @@ struct ScanModelTests {
         #expect(mark.present == [1])
         #expect(mark.complete == true)
         #expect(mark.checkpointNumber == 32)
+    }
+
+    // MARK: - Метод проверки тега снапшотится во взятие
+
+    @Test func cloudTagTakePersistsCheckMethod() async throws {
+        let env = try makeEnv()
+        let code = kpCode(21)
+        try await registerKp(env, cpId: 100, number: 32, cost: 4, code: code, checkMethod: "cloud")
+
+        let scanner = FakeChipScanner()
+        // Ростер из двух — взятие остаётся незавершённым (подтверждение — отдельный флоу).
+        let model = makeModel(env: env, roster: members([1, 2]), scanner: scanner)
+        model.start(scanner: scanner)
+
+        scanner.emit(reading(code: code, uid: "CP", elapsed: 0))
+        await poll { (try? await env.markStore.getById("mark-1")) != nil }
+        let mark = try #require(try await env.markStore.getById("mark-1"))
+        #expect(mark.checkMethod == "cloud")
+        #expect(mark.confirmedAt == nil)
+        #expect(model.takeCheckMethod == .cloud)
     }
 
     // MARK: - Участники до КП → буфер сливается в present

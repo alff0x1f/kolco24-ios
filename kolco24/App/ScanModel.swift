@@ -87,6 +87,8 @@ final class ScanModel: Identifiable {
 
     @ObservationIgnored private var markId: String?
     @ObservationIgnored private var takeCheckpointId: Int?
+    /// Метод проверки текущего взятия — снапшот `check_method` тега из `.kp`-события.
+    @ObservationIgnored private(set) var takeCheckMethod: CheckMethod = .offline
     @ObservationIgnored private var expectedCount = 0
     @ObservationIgnored private var buffer = Set<Int>()
     @ObservationIgnored private var takePresent = Set<Int>()
@@ -377,7 +379,7 @@ final class ScanModel: Identifiable {
         let expired = isWindowExpired(lastScanAt: takeLastScanAt, now: now)
 
         switch event {
-        case let .kp(checkpointId, number, cost, cpUid, cpCode):
+        case let .kp(checkpointId, number, cost, cpUid, cpCode, checkMethod):
             // Новый КП / истёкшее окно / смена КП → свежее взятие; повтор того же КП при живом окне —
             // только перештамп окна (§3).
             if expired || markId == nil || takeCheckpointId != checkpointId {
@@ -398,7 +400,8 @@ final class ScanModel: Identifiable {
                 let mark = makeKpTakeMark(
                     id: id, raceId: raceId, teamId: teamId, checkpointId: checkpointId,
                     number: number, cost: cost, cpUid: cpUid, cpCode: cpCode,
-                    buffered: bufferedMembers, expectedCount: rosterSize, sample: reading.sample
+                    buffered: bufferedMembers, expectedCount: rosterSize, checkMethod: checkMethod,
+                    sample: reading.sample
                 )
                 // Персист в неструктурированном Task, захватившем стор (переживает закрытие оверлея, §6).
                 // Ссылку держим в `takePersistTask`: последующие `addMember` в этом же взятии ждут её
@@ -414,6 +417,7 @@ final class ScanModel: Identifiable {
                 // Fire-and-forget — медленный GPS не блокирует окно; nil-фикс = no-op.
                 attachLocationForNewTake(markId: id, persist: persist)
                 takeCheckpointId = checkpointId
+                takeCheckMethod = CheckMethod(checkMethod)
                 expectedCount = rosterSize
                 // Снимки уже потреблены `bufferedMembers`; чистим, чтобы стейл не копился между сменами КП.
                 snapshots.removeAll()

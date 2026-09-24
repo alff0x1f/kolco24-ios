@@ -33,6 +33,7 @@ func makeKpTakeMark(
     cpCode: String,
     buffered: [MarkMemberSnapshot],
     expectedCount: Int,
+    checkMethod: String,
     sample: TimeSample
 ) -> Mark {
     // Один distinct-проход по слоту питает и present (истина зачёта), и
@@ -64,6 +65,7 @@ func makeKpTakeMark(
         updatedAt: sample.wallMs,
         trustedTakenAt: sample.trustedMs,
         elapsedRealtimeAt: sample.elapsedMs,
-        bootCount: sample.bootCount
+        bootCount: sample.bootCount,
+        checkMethod: checkMethod
     )
 }

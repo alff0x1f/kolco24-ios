@@ -92,8 +92,8 @@ struct ScanSession: Equatable {
 /// которую UI показывает, не трогая окно.
 enum ScanEvent: Equatable {
     /// Чип КП: идентифицирует [checkpointId] с распознанными [number]/[cost] и
-    /// анти-чит логом.
-    case kp(checkpointId: Int, number: Int, cost: Int, cpUid: String, cpCode: String)
+    /// анти-чит логом. [checkMethod] — сырой `check_method` просканированного тега.
+    case kp(checkpointId: Int, number: Int, cost: Int, cpUid: String, cpCode: String, checkMethod: String)
 
     /// Привязанный браслет участника ([numberInTeam] — слот участника в ростере).
     case member(numberInTeam: Int)
@@ -119,7 +119,7 @@ enum ScanEvent: Equatable {
 ///   возвращается без изменений.
 func reduce(session: ScanSession?, event: ScanEvent, now: Int64) -> ScanSession? {
     switch event {
-    case let .kp(checkpointId, number, cost, cpUid, cpCode):
+    case let .kp(checkpointId, number, cost, cpUid, cpCode, _):
         let base = session ?? ScanSession.empty(now: now)
         // При переключении на другой КП отбросить участников прежнего КП — они
         // присутствовали на другом пункте. Повтор того же КП сохраняет набор.
@@ -176,11 +176,14 @@ func classifyTag(
 ) -> ScanEvent {
     if let code {
         let checkpointId: Int
+        let checkMethod: String
         switch unlock {
-        case let .revealed(id, _):
+        case let .revealed(id, _, method):
             checkpointId = id
-        case let .identityOnly(id):
+            checkMethod = method
+        case let .identityOnly(id, method):
             checkpointId = id
+            checkMethod = method
         case let .failed(reason):
             return .badKp(reason: reason)
         case .unknown:
@@ -196,7 +199,8 @@ func classifyTag(
             number: cp.number,
             cost: cost,
             cpUid: uid,
-            cpCode: chipCodeHex(code)
+            cpCode: chipCodeHex(code),
+            checkMethod: checkMethod
         )
     }
     guard let numberInTeam = bindings[uid] else { return .unboundChip }

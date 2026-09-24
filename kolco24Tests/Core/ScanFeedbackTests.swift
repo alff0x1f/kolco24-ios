@@ -12,7 +12,7 @@ import Testing
 struct ScanFeedbackTests {
 
     @Test func kp_isSuccess() {
-        let event = ScanEvent.kp(checkpointId: 1, number: 7, cost: 50, cpUid: "UID", cpCode: "CODE")
+        let event = ScanEvent.kp(checkpointId: 1, number: 7, cost: 50, cpUid: "UID", cpCode: "CODE", checkMethod: "offline")
         #expect(feedbackFor(event: event) == .success)
     }
 
@@ -30,7 +30,7 @@ struct ScanFeedbackTests {
 
     @Test func feedbackFor_neverReturnsNeutral() {
         let events: [ScanEvent] = [
-            .kp(checkpointId: 1, number: 7, cost: 50, cpUid: "U", cpCode: "C"),
+            .kp(checkpointId: 1, number: 7, cost: 50, cpUid: "U", cpCode: "C", checkMethod: "offline"),
             .member(numberInTeam: 1),
             .unboundChip,
             .badKp(reason: "reason"),

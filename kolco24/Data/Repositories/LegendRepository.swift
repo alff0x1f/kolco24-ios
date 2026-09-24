@@ -152,7 +152,7 @@ struct LegendRepository {
             return .unknown
         }
         if tag.iv == nil && tag.ct == nil {
-            return .identityOnly(checkpointId: tag.checkpointId)
+            return .identityOnly(checkpointId: tag.checkpointId, checkMethod: tag.checkMethod)
         }
         if tag.iv == nil || tag.ct == nil {
             return .failed(reason: "malformed tag envelope")
@@ -173,9 +173,14 @@ struct LegendRepository {
             for cp in checkpoints {
                 try await checkpointStore.reveal(id: cp.id, cost: cp.cost, description: cp.description)
             }
-            return .revealed(checkpointId: checkpointId, checkpointIds: checkpoints.map { $0.id })
+            return .revealed(
+                checkpointId: checkpointId,
+                checkpointIds: checkpoints.map { $0.id },
+                checkMethod: tag.checkMethod
+            )
         case let .identityOnly(checkpointId):
-            return .identityOnly(checkpointId: checkpointId)
+            // Метод проверки — только из локального тега: крипто-итог его не несёт.
+            return .identityOnly(checkpointId: checkpointId, checkMethod: tag.checkMethod)
         case let .failed(reason):
             return .failed(reason: reason)
         }
