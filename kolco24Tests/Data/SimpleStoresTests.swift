@@ -125,6 +125,17 @@ struct SimpleStoresTests {
         #expect(rows.map(\.id) == [2, 3, 1])
     }
 
+    @Test func categoryRoundTripPreservesControlTime() async throws {
+        let db = try makeDB()
+        let store = TeamStore(db)
+        let withCt = Category(id: 1, raceId: 10, code: "M", shortName: "М", name: "Муж",
+                              sortOrder: 1, controlTime: 480)
+        try await store.insertCategories([withCt, category(2, raceId: 10, sortOrder: 2)])
+        let rows = try await firstValue(store.observeCategoriesForRace(10))
+        #expect(rows == [withCt, category(2, raceId: 10, sortOrder: 2)])
+        #expect(rows.map(\.controlTime) == [480, 0])
+    }
+
     @Test func teamReplaceAllForRaceReplacesBothTablesScoped() async throws {
         let db = try makeDB()
         let store = TeamStore(db)

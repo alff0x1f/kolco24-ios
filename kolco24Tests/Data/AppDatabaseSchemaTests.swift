@@ -4,10 +4,11 @@
 //
 //  Snapshot-тест схемы — замена Android `MigrationTest`. `"v1"` — снимок финальной
 //  схемы Room v5 (стартовая точка iOS-базы), `"v2"` — iOS-only `races.mapUrl` (см.
-//  `migrationV1ToV2AddsMapUrlAndPreservesRows`). Сверяет инвентарь
-//  таблиц/колонок/индексов/PK, транскрибированный дословно из
-//  `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/5.json` (+ колонка `mapUrl`
-//  от v2), с тем, что реально создают миграции. Любое расхождение (тип, nullability,
+//  `migrationV1ToV2AddsMapUrlAndPreservesRows`), `"v3"` — iOS-only
+//  `categories.controlTime` (см. `migrationV2ToV3AddsControlTimeAndPreservesRows`).
+//  Сверяет инвентарь таблиц/колонок/индексов/PK, транскрибированный дословно из
+//  `app/schemas/ru.kolco24.kolco24.data.db.AppDatabase/5.json` (+ колонки `mapUrl`
+//  от v2 и `controlTime` от v3), с тем, что реально создают миграции. Любое расхождение (тип, nullability,
 //  лишний SQL-`DEFAULT`, забытый индекс, порядок композитного PK) валит тест.
 //
 
@@ -65,6 +66,7 @@ struct AppDatabaseSchemaTests {
             Col("shortName", "TEXT", notNull: true),
             Col("name", "TEXT", notNull: true),
             Col("sortOrder", "INTEGER", notNull: true),
+            Col("controlTime", "INTEGER", notNull: false), // миграция v3 (iOS-only)
         ], indices: [:]),
 
         TableSpec(name: "teams", columns: [
@@ -208,10 +210,10 @@ struct AppDatabaseSchemaTests {
     // MARK: - Тесты
 
     @Test func migrationRunsOnEmptyDatabase() throws {
-        // Не должно бросить: миграции "v1"+"v2" отрабатывают на пустой базе.
+        // Не должно бросить: миграции "v1"+"v2"+"v3" отрабатывают на пустой базе.
         let db = try AppDatabase.makeInMemory()
         let applied = try db.writer.read { try AppDatabase.migrator.appliedMigrations($0) }
-        #expect(applied == ["v1", "v2"])
+        #expect(applied == ["v1", "v2", "v3"])
     }
 
     @Test func tableInventoryMatchesRoomSchema() throws {
@@ -255,7 +257,7 @@ struct AppDatabaseSchemaTests {
     @Test func migrationV1ToV2AddsMapUrlAndPreservesRows() throws {
         // Обновление существующей установки: мигрируем таблицу races только до v1 (колонки mapUrl
         // ещё нет), вставляем строки сырым SQL, затем догоняем до конца — строки живы, mapUrl == nil.
-        // `makeInMemory()` тут не годится — он мигрирует сразу до v2.
+        // `makeInMemory()` тут не годится — он мигрирует сразу до конца.
         let queue = try DatabaseQueue()
         try AppDatabase.migrator.migrate(queue, upTo: "v1")
 
@@ -267,11 +269,11 @@ struct AppDatabaseSchemaTests {
                 """)
         }
 
-        // v1 → v2: ALTER TABLE races ADD COLUMN mapUrl TEXT.
+        // v1 → конец: ALTER TABLE races ADD COLUMN mapUrl TEXT (+ последующие миграции).
         try AppDatabase.migrator.migrate(queue)
 
         let applied = try queue.read { try AppDatabase.migrator.appliedMigrations($0) }
-        #expect(applied == ["v1", "v2"])
+        #expect(applied == ["v1", "v2", "v3"])
 
         // Колонка появилась, старые строки пережили миграцию с mapUrl == nil.
         let rows = try queue.read { db in
@@ -291,6 +293,44 @@ struct AppDatabaseSchemaTests {
             try Race.fetchOne(db, sql: "SELECT * FROM races WHERE id = 3")
         }
         #expect(r3?.mapUrl == "https://cdn.test/3.mbtiles")
+    }
+
+    @Test func migrationV2ToV3AddsControlTimeAndPreservesRows() throws {
+        // Обновление установки на v2: колонки controlTime ещё нет, вставляем категорию сырым SQL,
+        // догоняем до конца — строка жива и читается с controlTime == 0 (NULL → 0 в Category+GRDB).
+        let queue = try DatabaseQueue()
+        try AppDatabase.migrator.migrate(queue, upTo: "v2")
+
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO categories (id, raceId, code, shortName, name, sortOrder)
+                VALUES (45, 8, 'm4', 'М4', 'Мужчины', 1)
+                """)
+        }
+
+        // v2 → v3: ALTER TABLE categories ADD COLUMN controlTime INTEGER.
+        try AppDatabase.migrator.migrate(queue)
+
+        let applied = try queue.read { try AppDatabase.migrator.appliedMigrations($0) }
+        #expect(applied == ["v1", "v2", "v3"])
+
+        let rows = try queue.read { db in
+            try kolco24.Category.fetchAll(db, sql: "SELECT * FROM categories ORDER BY id")
+        }
+        try #require(rows.map(\.id) == [45])
+        #expect(rows[0].code == "m4")
+        #expect(rows[0].sortOrder == 1)
+        #expect(rows[0].controlTime == 0)
+
+        // Новую строку можно вставить уже с controlTime (encode(to:) пишет колонку).
+        try queue.write { db in
+            try kolco24.Category(id: 46, raceId: 8, code: "w4", shortName: "Ж4", name: "Ж",
+                                 sortOrder: 2, controlTime: 480).insert(db)
+        }
+        let c46 = try queue.read { db in
+            try kolco24.Category.fetchOne(db, sql: "SELECT * FROM categories WHERE id = 46")
+        }
+        #expect(c46?.controlTime == 480)
     }
 
     @Test func indexInventoryMatchesRoomSchema() throws {

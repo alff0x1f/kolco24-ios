@@ -5,13 +5,13 @@
 //  Вкладка «Отметки» на реальных данных. Порт ПОВЕДЕНИЯ `ui/marks/MarksScreen.kt`: метрики + сетка
 //  тайлов взятий выбранной команды из БД. Пока не взято ни одного КП, вместо сетки показывается
 //  чек-лист готовности к старту (`ReadinessCard`, iOS-only; заменил урезанную лестницу `MarksEmpty`).
-//  Данные и derived — из `MarksModel` (наблюдение взятий/КП/агрегатов/привязок).
+//  Данные и derived — из `MarksModel` (наблюдение взятий/КП/агрегатов/привязок/категорий).
 //
 //  Тайл на complete-взятие (oldest-first), существующий дизайн (`NFCTileView`/`PhotoTileView`).
 //  `ScanSheet` теперь на реальных данных (этап 5, `ScanModel`); `PhotoTile`/лайтбокс — заглушка (этап 7).
-//  «ДО КВ» в метриках —
-//  плейсхолдер «—» (источника нет, как в Android). Нудж «привяжи чипы» ведёт на вкладку «Команда»
-//  (`onBindChips`).
+//  «До КВ» в метриках — iOS-only (в Android плейсхолдер «—»): состояние КВ из `Core/Marks/ControlTime`
+//  по категории команды и её отметкам старта/финиша, тик раз в минуту. Нудж «привяжи чипы» ведёт на
+//  вкладку «Команда» (`onBindChips`).
 //
 
 import os
@@ -461,7 +461,9 @@ struct MarksView: View {
                     takenKp: model?.takenKp ?? 0,
                     totalKp: model?.totalKp ?? 0,
                     takenScore: model?.takenScore ?? 0,
-                    totalCost: model?.totalCost ?? 0
+                    totalCost: model?.totalCost ?? 0,
+                    controlState: { model?.controlState(team: team, nowMs: $0) ?? .unknown },
+                    clock: appModel.clockStatus
                 )
                 .padding(.horizontal, DS.hPad)
                 .padding(.bottom, 14)
@@ -534,6 +536,9 @@ private struct MetricsCard: View {
     let totalKp: Int
     let takenScore: Int
     let totalCost: Int
+    /// Состояние КВ на момент `nowMs` (мс, trusted-шкала) — считает `MarksModel`/`Core`, вьюха только тикает.
+    let controlState: (Int64) -> ControlTimeState
+    let clock: ClockStatus
 
     // Скрываем «/0», пока сервер не прислал агрегаты легенды (порт гейта `totalKp > 0`).
     private var takenValue: String { totalKp > 0 ? "\(takenKp)/\(totalKp)" : "\(takenKp)" }
@@ -545,8 +550,13 @@ private struct MetricsCard: View {
             VDivider()
             MetricView(label: "Баллов", value: scoreValue)
             VDivider()
-            // «ДО КВ» — плейсхолдер: источника контрольного времени пока нет (как в Android).
-            MetricView(label: "До КВ", value: "—")
+            // Тик раз в минуту (формат Ч:ММ, минуты вниз). «Сейчас» — в trusted-шкале отметок
+            // (`trustedNowMs`, `Core/Time/TrustedNow`), подпись/значение — `controlTimeDisplay` (`Core/Marks/ControlTime`).
+            TimelineView(.everyMinute) { context in
+                let wallMs = Int64((context.date.timeIntervalSince1970 * 1000).rounded())
+                let display = controlTimeDisplay(controlState(trustedNowMs(wallMs: wallMs, clock: clock)))
+                MetricView(label: display.label, value: display.value, isWarning: display.isWarning)
+            }
         }
         .padding(.horizontal, 18)
         .background(Color.card)

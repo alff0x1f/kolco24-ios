@@ -18,7 +18,8 @@ extension Category: FetchableRecord, PersistableRecord {
             code: row["code"],
             shortName: row["shortName"],
             name: row["name"],
-            sortOrder: row["sortOrder"]
+            sortOrder: row["sortOrder"],
+            controlTime: row["controlTime"] ?? 0
         )
     }
 
@@ -29,5 +30,6 @@ extension Category: FetchableRecord, PersistableRecord {
         container["shortName"] = shortName
         container["name"] = name
         container["sortOrder"] = sortOrder
+        container["controlTime"] = controlTime
     }
 }

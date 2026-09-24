@@ -3,12 +3,14 @@
 //  kolco24
 //
 //  Слой данных на GRDB — аналог Android `data/db/AppDatabase.kt` (Room v5).
-//  Держит `any DatabaseWriter` + `DatabaseMigrator` с двумя миграциями. `"v1"` —
+//  Держит `any DatabaseWriter` + `DatabaseMigrator` с тремя миграциями. `"v1"` —
 //  снимок финальной схемы Room v5 (`schemas/…/5.json`); историю Room-миграций
 //  1→5 не повторяем, iOS-база стартует сразу с v5. `"v2"` — ПЕРВАЯ iOS-only
 //  дивергенция от Room v5: `ALTER TABLE races ADD COLUMN mapUrl TEXT` (оффлайн-
 //  карта гонки, вкладка «Карта»), так что база больше НЕ рождается ровно в v5 —
-//  существующие установки догоняют v2 на старте, `makeInMemory()` тоже до v2.
+//  существующие установки догоняют миграции на старте, `makeInMemory()` тоже до конца.
+//  `"v3"` — вторая iOS-only колонка: `ALTER TABLE categories ADD COLUMN controlTime
+//  INTEGER` (контрольное время категории, минуты; `NULL` у старых строк читается как `0`).
 //
 //  Порт-инвариант: имена таблиц/колонок 1:1 с Room v5 (camelCase-колонки), SQL из
 //  DAO переносится дословно. FK нет нигде — связи по id в запросах (см. план этапа 2).
@@ -91,7 +93,7 @@ struct AppDatabase {
     // MARK: - Миграции
 
     /// Миграции: `"v1"` — снимок схемы Room v5 (все 13 таблиц + индексы); `"v2"` —
-    /// iOS-only `races.mapUrl` (см. шапку файла).
+    /// iOS-only `races.mapUrl`; `"v3"` — iOS-only `categories.controlTime` (см. шапку файла).
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
@@ -303,9 +305,16 @@ struct AppDatabase {
         // v2 — первая iOS-only дивергенция от Room v5: колонка `mapUrl` в `races`
         // (URL оффлайн-подложки `.mbtiles` для вкладки «Карта»). Существующие установки
         // мигрируют на старте (`ADD COLUMN` — nullable, без SQL-DEFAULT). База больше
-        // не рождается сразу в v5; `makeInMemory()` тоже мигрирует до v2.
+        // не рождается сразу в v5; `makeInMemory()` тоже мигрирует до последней миграции.
         migrator.registerMigration("v2") { db in
             try db.execute(sql: "ALTER TABLE races ADD COLUMN mapUrl TEXT")
+        }
+
+        // v3 — `control_time` категории (минуты, `0` = не задано). Nullable, без SQL-DEFAULT
+        // (дефолты в Swift, не в DDL): старые строки получают `NULL`, `Category+GRDB`
+        // читает его как `0`.
+        migrator.registerMigration("v3") { db in
+            try db.execute(sql: "ALTER TABLE categories ADD COLUMN controlTime INTEGER")
         }
 
         return migrator

@@ -213,4 +213,83 @@ struct MarksModelTests {
         #expect(model.tiles.count == 1)
         #expect(model.takenKp == 1)
     }
+
+    // MARK: - КВ: категория команды → состояние «До КВ»
+
+    private func typedCP(id: Int, race: Int, number: Int, type: String) -> Checkpoint {
+        Checkpoint(id: id, raceId: race, number: number, cost: 0, type: type,
+                   description: nil, locked: false)
+    }
+
+    private func team(id: Int, race: Int, categoryId: Int?) -> Team {
+        Team(id: id, raceId: race, teamname: "T\(id)", categoryId: categoryId, ucount: 1,
+             paidPeople: 1, startTime: 0, finishTime: 0, members: [])
+    }
+
+    @Test func controlState_runningFromCategoryControlTimeAndStartMark() async throws {
+        let env = try makeEnv()
+        try await env.teamStore.insertCategories([
+            kolco24.Category(id: 3, raceId: 7, code: "24", shortName: "24ч", name: "24 часа",
+                             sortOrder: 1, controlTime: 480),
+        ])
+        try await env.checkpointStore.insertCheckpoints([typedCP(id: 1, race: 7, number: 0, type: "start")])
+        try await env.markStore.upsert(mark(id: "s", race: 7, team: 42, cp: 1, number: 0, cost: 0,
+                                            takenAt: 1_000_000))
+
+        let model = MarksModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { !model.categories.isEmpty && !model.checkpoints.isEmpty && !model.marks.isEmpty }
+
+        let t = team(id: 42, race: 7, categoryId: 3)
+        // 3 ч после старта: до КВ (8 ч) остаётся 5 ч.
+        let now: Int64 = 1_000_000 + 3 * 3_600_000
+        #expect(model.controlState(team: t, nowMs: now) == .running(remainingMs: 5 * 3_600_000))
+    }
+
+    @Test func controlState_unknownWithoutTeamOrCategory() async throws {
+        let env = try makeEnv()
+        try await env.teamStore.insertCategories([
+            kolco24.Category(id: 3, raceId: 7, code: "24", shortName: "24ч", name: "24 часа",
+                             sortOrder: 1, controlTime: 480),
+        ])
+
+        let model = MarksModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { !model.categories.isEmpty }
+
+        #expect(model.controlState(team: team(id: 42, race: 7, categoryId: nil), nowMs: 0) == .unknown)
+        #expect(model.controlState(team: nil, nowMs: 0) == .unknown)
+        // categoryId указывает на незагруженную категорию → КВ 0 → `.unknown`.
+        #expect(model.controlState(team: team(id: 42, race: 7, categoryId: 999), nowMs: 0) == .unknown)
+        // Категория с КВ, старта нет → КВ показывается.
+        #expect(model.controlState(team: team(id: 42, race: 7, categoryId: 3), nowMs: 0)
+                == .notStarted(limitMs: 480 * 60_000))
+    }
+
+    @Test func rebind_clearsCategoriesSynchronously() async throws {
+        let env = try makeEnv()
+        try await env.teamStore.insertCategories([
+            kolco24.Category(id: 3, raceId: 7, code: "24", shortName: "24ч", name: "24 часа",
+                             sortOrder: 1, controlTime: 480),
+            kolco24.Category(id: 5, raceId: 8, code: "12", shortName: "12ч", name: "12 часов",
+                             sortOrder: 1, controlTime: 720),
+        ])
+
+        let model = MarksModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { !model.categories.isEmpty }
+        #expect(model.categories.map(\.id) == [3])
+
+        // Другая гонка: категории прежней очищаются синхронно, до эмиссии новой.
+        model.rebind(teamId: 42, raceId: 8)
+        #expect(model.categories.isEmpty)
+        #expect(model.controlState(team: team(id: 42, race: 8, categoryId: 3), nowMs: 0) == .unknown)
+
+        // После эмиссии — только категории новой гонки и её КВ.
+        await waitUntil { !model.categories.isEmpty }
+        #expect(model.categories.map(\.id) == [5])
+        #expect(model.controlState(team: team(id: 42, race: 8, categoryId: 3), nowMs: 0) == .unknown)
+        #expect(model.controlState(team: team(id: 42, race: 8, categoryId: 5), nowMs: 0)
+                == .notStarted(limitMs: 720 * 60_000))
+    }
 }

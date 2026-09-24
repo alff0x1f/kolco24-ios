@@ -60,16 +60,16 @@ Four tabs: Отметки (`MarksView` — taken-КП grid + NFC/photo scan), Л
 - **`kolco24/Core/`** — pure-Foundation logic, grouped by concern (stages 1, 4–11, map): `Util` (HexBytes,
   PluralRu, RaceDates), `Nfc` (ChipRecord/K24 format, NfcUid), `Api` (HMAC signing), `Crypto` (LegendCrypto),
   `Scan` (ScanSession reducer, ChipScanning seams), `Team` (BindDecision, TeamPickerLogic), `Legend`,
-  `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay), `Sync`, `Track` (Segments, TrackPoints, GpxExport,
-  TrackEngine seam), `Upload`, `Time` (TrustedClock actor, ServerTimeSampler, SkewFormat), `Lease`,
+  `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay, ControlTime), `Sync`, `Track` (Segments, TrackPoints,
+  GpxExport, TrackEngine seam), `Upload`, `Time` (TrustedClock actor, ServerTimeSampler, SkewFormat), `Lease`,
   `Stores` (InstallId, ClockAnchorStore, ThemePreference, RaceLeaseStore, AdminTokenStore), `Admin`,
   `Map` (MBTiles math), `Readiness` (start-readiness checklist).
 - **`kolco24/Model/`** — domain value types mirroring Room v5 (GRDB-free; conformances live in `Data/Records/`)
   (stages 1–2).
 - **`kolco24/Data/`** (stages 2–3, 6–10, map) — `AppDatabase` (migration `v1` = Room v5 snapshot,
-  `v2` = `races.mapUrl`; no FKs — Room parity, don't add), `Records/*+GRDB.swift`, `Stores/` (12 DAO-analog
-  structs, SQL transcribed verbatim from Kotlin), `Repositories/` (4 sync repos + Mark/Track/JudgeScan upload
-  drains, AdminAuthRepository), `Sync/SyncCoordinator`, `MBTilesReader`.
+  `v2` = `races.mapUrl`, `v3` = `categories.controlTime`; no FKs — Room parity, don't add), `Records/*+GRDB.swift`,
+  `Stores/` (12 DAO-analog structs, SQL transcribed verbatim from Kotlin), `Repositories/` (4 sync repos +
+  Mark/Track/JudgeScan upload drains, AdminAuthRepository), `Sync/SyncCoordinator`, `MBTilesReader`.
 - **`kolco24/Net/`** (stage 3) — `ApiClient` (one pipeline replacing OkHttp interceptors: 6 signed `X-App-*`
   headers, optional Bearer outside the canonical string, 403-retry-once for GET only, POST **never** retries),
   `Dto/`, `URLSessionTransport` + `ApiClients` two-client factory (cloud/LAN).
