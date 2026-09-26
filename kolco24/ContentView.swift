@@ -14,7 +14,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
     /// Флоу выбора гонки/команды (`.fullScreenCover`). Точки входа: CTA empty-состояний вкладок и
-    /// строка «Сменить команду» в `TeamView`.
+    /// «Сменить команду» в «Настройках» (через `TeamView`).
     @State private var showPicker = false
 
     var body: some View {
