@@ -1118,8 +1118,8 @@ private struct LightboxContext: Identifiable {
 }
 
 // MARK: - NFC Unavailable Strip
-/// Предупреждение о НЕдоступном NFC-чтении (симулятор / iPad / MDM-запрет; на iPhone NFC настройками
-/// не выключается). Постоянная полоска «NFC активен» убрана осознанно — молчим, пока проблем нет.
+/// Предупреждение о НЕдоступном NFC-чтении (симулятор / iPad / MDM-запрет; выключенное пользователем
+/// NFC заранее не узнать — см. `NfcAvailability`). Постоянная полоска «NFC активен» убрана осознанно — молчим, пока проблем нет.
 private struct NfcUnavailableStripView: View {
     var body: some View {
         HStack(spacing: 8) {
