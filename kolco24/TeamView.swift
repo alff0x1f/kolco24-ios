@@ -9,7 +9,8 @@
 //
 //  «Привязать» открывает `BindChipSheet` (одноразовая NFC-сессия через `TeamModel.beginBind`).
 //  Отвязка: long-press на привязанном участнике → confirm-диалог → `TeamModel.unbind` (`deleteSlot`).
-//  «Сменить команду» открывает флоу выбора (`onChooseTeam`).
+//  «Сменить команду» живёт в «Настройках»: шит закрывается, флоу выбора (`onChooseTeam`) поднимается
+//  в `onDismiss` (как админ-флоу).
 //
 
 import SwiftUI
@@ -35,6 +36,8 @@ struct TeamView: View {
     /// Запрошен ли админ-флоу из шита настроек: тап по ряду закрывает шит, а `fullScreenCover`
     /// поднимается в `onDismiss` (шит и полноэкранный оверлей нельзя показывать одновременно).
     @State private var pendingAdmin = false
+    /// Запрошена ли смена команды из шита настроек (тот же паттерн, что `pendingAdmin`).
+    @State private var pendingChangeTeam = false
     /// Открыт ли `fullScreenCover` с `AdminFlowView`.
     @State private var showAdmin = false
 
@@ -60,9 +63,17 @@ struct TeamView: View {
                     pendingAdmin = false
                     showAdmin = true
                 }
+                if pendingChangeTeam {
+                    pendingChangeTeam = false
+                    onChooseTeam()
+                }
             }) {
                 if let settingsModel {
-                    SettingsView(model: settingsModel, onOpenAdmin: { pendingAdmin = true })
+                    SettingsView(
+                        model: settingsModel,
+                        onOpenAdmin: { pendingAdmin = true },
+                        onChangeTeam: { pendingChangeTeam = true }
+                    )
                 }
             }
             .fullScreenCover(isPresented: $showAdmin) {
@@ -174,16 +185,6 @@ struct TeamView: View {
                     .padding(.top, 20)
 
                 VStack(spacing: 0) {
-                    Button { onChooseTeam() } label: {
-                        MiscRowView(systemImage: "arrow.left.arrow.right", iconBg: Color.charcoal, label: "Сменить команду", sub: "Выбрать другое соревнование или команду")
-                            .padding(.horizontal, DS.hPad)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                    Rectangle()
-                        .fill(Color.hairline)
-                        .frame(height: 0.5)
-                        .padding(.leading, DS.hPad + 30 + 12)
                     Button { showUpload = true } label: {
                         MiscRowView(systemImage: "arrow.up.circle.fill", iconBg: Color.good, label: "Загрузка данных", sub: uploadModel?.pendingLabel ?? "Пока нечего загружать")
                             .padding(.horizontal, DS.hPad)
@@ -198,18 +199,11 @@ struct TeamView: View {
                         settingsModel = appModel.makeSettingsModel()
                         showSettings = true
                     } label: {
-                        MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: "Настройки", sub: "Тема, локальный сервер, запись трека")
+                        MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: "Настройки", sub: "Команда, тема, локальный сервер, трек")
                             .padding(.horizontal, DS.hPad)
                             .padding(.vertical, 8)
                     }
                     .buttonStyle(.plain)
-                    Rectangle()
-                        .fill(Color.hairline)
-                        .frame(height: 0.5)
-                        .padding(.leading, DS.hPad + 30 + 12)
-                    MiscRowView(systemImage: "questionmark.circle.fill", iconBg: Color.kolcoOrange, label: "Справка и правила", sub: "Регламент, FAQ, контакты оргкомитета")
-                        .padding(.horizontal, DS.hPad)
-                        .padding(.vertical, 8)
                 }
                 .background(Color.card)
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
@@ -233,17 +227,6 @@ private struct TeamHeroView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                Circle().fill(Color.brandRed)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: Color.brandRed.opacity(0.3), radius: 4)
-                Text("Команда")
-                    .font(.mono(10, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .textCase(.uppercase)
-                    .tracking(1.3)
-            }
-
             HStack(alignment: .lastTextBaseline, spacing: 10) {
                 if let number = team.startNumber, !number.trimmingCharacters(in: .whitespaces).isEmpty {
                     Text(number)
@@ -255,37 +238,18 @@ private struct TeamHeroView: View {
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(2)
             }
-            .padding(.top, 6)
 
             Text(peopleLine(category: category, ucount: total))
                 .font(.system(size: 13))
                 .foregroundStyle(.white.opacity(0.6))
                 .padding(.top, 4)
 
-            HStack(spacing: 8) {
-                HStack(spacing: 7) {
-                    Circle()
-                        .fill(allBound ? Color.good : Color.amber)
-                        .frame(width: 6, height: 6)
-                        .shadow(color: (allBound ? Color.good : Color.amber).opacity(0.3), radius: 4)
-                    Text("\(bound) / \(total) с чипом")
-                        .font(.mono(11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .tracking(0.3)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(.white.opacity(0.1))
-                .overlay(Capsule().stroke(.white.opacity(0.16), lineWidth: 0.5))
-                .clipShape(Capsule())
-
-                if !allBound && total > 0 {
-                    Text(chipNotBoundText(total - bound))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
+            if !allBound && total > 0 {
+                Text(chipNotBoundText(total - bound))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.top, 14)
             }
-            .padding(.top, 14)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
@@ -313,15 +277,10 @@ private struct MemberRowView: View {
             // Avatar
             ZStack {
                 if isBound {
-                    LinearGradient(
-                        colors: [Color(light: "E2E6EB", dark: "2A3240"),
-                                 Color(light: "C5CCD5", dark: "374352")],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                    .clipShape(Circle())
-                    Text(initials(member.name))
-                        .font(.mono(13, weight: .bold))
-                        .foregroundStyle(Color.ink)
+                    Circle().fill(Color.good)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
                 } else {
                     Circle()
                         .strokeBorder(
@@ -341,14 +300,9 @@ private struct MemberRowView: View {
                     .foregroundStyle(Color.ink)
 
                 if let binding {
-                    HStack(spacing: 5) {
-                        Circle().fill(Color.good)
-                            .frame(width: 5, height: 5)
-                            .shadow(color: Color.good.opacity(0.3), radius: 3)
-                        Text("№\(binding.participantNumber)")
-                            .font(.mono(12, weight: .semibold))
-                            .foregroundStyle(Color.sub)
-                    }
+                    Text("№\(binding.participantNumber)")
+                        .font(.mono(12, weight: .semibold))
+                        .foregroundStyle(Color.sub)
                 } else {
                     HStack(spacing: 5) {
                         Circle().fill(Color.kolcoOrange)

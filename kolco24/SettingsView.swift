@@ -5,8 +5,8 @@
 //  Экран «Настройки» (этап 9). Шит из вкладки «Команда» (паттерн «Загрузка данных» → `UploadView`),
 //  а не полноэкранный оверлей как на Android. Порт ПОВЕДЕНИЯ `ui/settings/SettingsScreen.kt`: тема,
 //  «Очистить трек» (guard «не во время записи»), LAN-тумблер со статусом, скрытая «Отладка» (10 тапов
-//  по «Версия»), «Версия». Секции «Сменить команду» (уже есть в `TeamView`) и «Администратор» (этап 10)
-//  сюда не переносятся.
+//  по «Версия»), «Версия». Плюс «Сменить команду» (как на Android: перенесена сюда с вкладки «Команда»)
+//  и «Администратор» (этап 10) — оба закрывают шит, флоу поднимает хост в `onDismiss`.
 //
 //  Вся доменная логика в `SettingsModel`; вьюха только рендерит + держит локальный `debugUnlocked`
 //  (per-composition, сбрасывается при закрытии шита) и счётчик тапов версии. Тост «Меню отладки
@@ -24,6 +24,9 @@ struct SettingsView: View {
     /// с `AdminFlowView` (шит и полноэкранный оверлей нельзя показывать одновременно — оверлей
     /// поднимается после закрытия шита через `onDismiss`).
     var onOpenAdmin: () -> Void = {}
+    /// Открыть флоу выбора гонки/команды: как `onOpenAdmin` — хост поднимает `fullScreenCover`
+    /// после закрытия шита.
+    var onChangeTeam: () -> Void = {}
 
     /// Секция «Отладка» видна сразу в debug-сборке, иначе — после 10 тапов по «Версия».
     /// Per-composition: сбрасывается при закрытии шита (state вью).
@@ -46,6 +49,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                teamSection
                 appearanceSection
                 trackSection
                 dataSection
@@ -104,6 +108,29 @@ struct SettingsView: View {
             Button("Отмена", role: .cancel) {}
         } message: { kind in
             Text(kind.message)
+        }
+    }
+
+    // MARK: - Команда
+
+    private var teamSection: some View {
+        Section {
+            Button {
+                dismiss()
+                onChangeTeam()
+            } label: {
+                SettingsRow(
+                    systemImage: "arrow.left.arrow.right",
+                    iconBg: Color.charcoal,
+                    label: "Сменить команду",
+                    sub: "Выбрать другое соревнование или команду",
+                    showChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(Color.card)
+        } header: {
+            Text("Команда")
         }
     }
 
