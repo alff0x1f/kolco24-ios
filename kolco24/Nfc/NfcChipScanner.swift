@@ -56,6 +56,10 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
     /// Сессии, для которых CoreNFC ещё не прислал `didInvalidateWithError`. Обычно элемент один;
     /// множество закрывает гонку stop с тихим пересозданием после системного 60-с таймаута.
     private var activeSessionIds: Set<ObjectIdentifier> = []
+    /// Сессии, дошедшие до `tagReaderSessionDidBecomeActive`. Пересоздаём только их: сессия, умершая
+    /// до активации (выключенное радио, занятая система), при рестарте снова показала бы системный
+    /// алерт — бесконечный цикл «Настройки / Отмена».
+    private var activatedSessionIds: Set<ObjectIdentifier> = []
     private var stopWaiters: [CheckedContinuation<Void, Never>] = []
     /// Поколение потока: растёт на каждом `start()`. `didInvalidateWithError` старой сессии снимает его под
     /// тем же lock, где удаляет сессию, и завершает поток/пересоздаёт сессию только если поколение не
@@ -260,12 +264,17 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
 
 extension NfcChipScanner: NFCTagReaderSessionDelegate {
 
-    func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {}
+    func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {
+        lock.lock()
+        activatedSessionIds.insert(ObjectIdentifier(session))
+        lock.unlock()
+    }
 
     func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
         lock.lock()
         session === self.session ? (self.session = nil) : ()
         activeSessionIds.remove(ObjectIdentifier(session))
+        let wasActive = activatedSessionIds.remove(ObjectIdentifier(session)) != nil
         let alreadyFinished = finished
         // Снимаем поколение под тем же lock, что и удаление сессии: после unlock `waitUntilStopped()` может
         // отпустить хоста, и его новый `start()` не должен быть завершён этой (старой) инвалидацией.
@@ -280,7 +289,7 @@ extension NfcChipScanner: NFCTagReaderSessionDelegate {
             return
         }
         // 60-с лимит iOS / ошибка чтения: если окно ещё живо и оверлей открыт — молча пересоздаём сессию.
-        if !alreadyFinished && shouldRestart() {
+        if wasActive && !alreadyFinished && shouldRestart() {
             beginSession(generation: gen)
             return
         }
