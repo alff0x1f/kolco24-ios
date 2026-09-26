@@ -204,13 +204,6 @@ struct TeamView: View {
                             .padding(.vertical, 8)
                     }
                     .buttonStyle(.plain)
-                    Rectangle()
-                        .fill(Color.hairline)
-                        .frame(height: 0.5)
-                        .padding(.leading, DS.hPad + 30 + 12)
-                    MiscRowView(systemImage: "questionmark.circle.fill", iconBg: Color.kolcoOrange, label: "Справка и правила", sub: "Регламент, FAQ, контакты оргкомитета")
-                        .padding(.horizontal, DS.hPad)
-                        .padding(.vertical, 8)
                 }
                 .background(Color.card)
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
