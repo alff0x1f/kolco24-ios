@@ -284,15 +284,10 @@ private struct MemberRowView: View {
             // Avatar
             ZStack {
                 if isBound {
-                    LinearGradient(
-                        colors: [Color(light: "E2E6EB", dark: "2A3240"),
-                                 Color(light: "C5CCD5", dark: "374352")],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                    .clipShape(Circle())
-                    Text(initials(member.name))
-                        .font(.mono(13, weight: .bold))
-                        .foregroundStyle(Color.ink)
+                    Circle().fill(Color.good)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
                 } else {
                     Circle()
                         .strokeBorder(
@@ -312,14 +307,9 @@ private struct MemberRowView: View {
                     .foregroundStyle(Color.ink)
 
                 if let binding {
-                    HStack(spacing: 5) {
-                        Circle().fill(Color.good)
-                            .frame(width: 5, height: 5)
-                            .shadow(color: Color.good.opacity(0.3), radius: 3)
-                        Text("№\(binding.participantNumber)")
-                            .font(.mono(12, weight: .semibold))
-                            .foregroundStyle(Color.sub)
-                    }
+                    Text("№\(binding.participantNumber)")
+                        .font(.mono(12, weight: .semibold))
+                        .foregroundStyle(Color.sub)
                 } else {
                     HStack(spacing: 5) {
                         Circle().fill(Color.kolcoOrange)
