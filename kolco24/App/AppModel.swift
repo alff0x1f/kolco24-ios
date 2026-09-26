@@ -407,6 +407,9 @@ final class AppModel {
             // (используется лишь как флаг `!= nil`).
             confirmMark: { markId, target in
                 await uploads.confirm(markId: markId, target: target, now: await clock.sample().wallMs)
+            },
+            onNewTake: { [weak self] type in
+                self?.applyTrackAutoAction(checkpointType: type, raceId: raceId, teamId: teamId)
             }
         )
         // Прод-сканер `NfcChipScanner` (из `Nfc/`) инстанцируется здесь — App-слой в одном модуле,
@@ -421,6 +424,20 @@ final class AppModel {
         )
         model.attachProductionScanner(scanner)
         return model
+    }
+
+    /// Автозапись трека по взятию КП (`trackAutoAction`). Стоп — только записи этой же команды.
+    func applyTrackAutoAction(checkpointType: String, raceId: Int, teamId: Int) {
+        switch trackAutoAction(checkpointType: checkpointType) {
+        case .start:
+            trackRecorder.start(raceId: raceId, teamId: teamId)
+        case .stop:
+            if trackRecorder.state == .recording(teamId: teamId) {
+                trackRecorder.stop()
+            }
+        case nil:
+            break
+        }
     }
 
     /// Фабрика хост-редьюсера судейского экрана «Отметка старта/финиша» (этап 10). `raceId` — гонка

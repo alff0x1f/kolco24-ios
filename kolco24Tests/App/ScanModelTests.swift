@@ -137,10 +137,11 @@ struct ScanModelTests {
 
     /// Регистрирует открытый КП + identity-only тег, чей `bid = sha256(code)[:16]` матчит `code`.
     private func registerKp(
-        _ env: AppEnvironment, cpId: Int, number: Int, cost: Int, code: Data, checkMethod: String = "nfc"
+        _ env: AppEnvironment, cpId: Int, number: Int, cost: Int, code: Data, checkMethod: String = "nfc",
+        type: String = "cp"
     ) async throws {
         try await env.checkpointStore.insertCheckpoints([
-            Checkpoint(id: cpId, raceId: race, number: number, cost: cost, type: "cp",
+            Checkpoint(id: cpId, raceId: race, number: number, cost: cost, type: type,
                        description: "КП \(number)", locked: false)
         ])
         let bid = LegendCrypto.bid(code: code)
@@ -182,7 +183,8 @@ struct ScanModelTests {
         successHoldMs: Int64 = 3_600_000,
         confirm: ConfirmRecorder? = nil,
         confirmTimeoutMs: Int64 = 3_600_000,
-        confirmRetryMs: Int64 = 0
+        confirmRetryMs: Int64 = 0,
+        onNewTake: @escaping (String) -> Void = { _ in }
     ) -> ScanModel {
         let confirmMark: @Sendable (String, UploadTarget) async -> UploadResultKind = { id, target in
             guard let confirm else { return .error }
@@ -195,7 +197,8 @@ struct ScanModelTests {
             feedback: feedback, elapsedNowMs: { await elapsed.get() },
             newMarkId: { ids.next() },
             tickMs: tickMs, fanfareDelayMs: fanfareDelayMs, successHoldMs: successHoldMs,
-            confirmMark: confirmMark, confirmTimeoutMs: confirmTimeoutMs, confirmRetryMs: confirmRetryMs
+            confirmMark: confirmMark, confirmTimeoutMs: confirmTimeoutMs, confirmRetryMs: confirmRetryMs,
+            onNewTake: onNewTake
         )
     }
 
@@ -244,6 +247,29 @@ struct ScanModelTests {
         #expect(mark.present == [1])
         #expect(mark.complete == true)
         #expect(mark.checkpointNumber == 32)
+    }
+
+    // MARK: - Новое взятие сообщает тип КП (автозапись трека)
+
+    @Test func newTakeReportsCheckpointTypeOncePerTake() async throws {
+        let env = try makeEnv()
+        let startCode = kpCode(31)
+        let finishCode = kpCode(32)
+        try await registerKp(env, cpId: 100, number: 1, cost: 0, code: startCode, type: "start")
+        try await registerKp(env, cpId: 101, number: 2, cost: 0, code: finishCode, type: "finish")
+
+        let scanner = FakeChipScanner()
+        var types: [String] = []
+        let model = makeModel(env: env, roster: members([1, 2]), scanner: scanner, onNewTake: { types.append($0) })
+        model.start(scanner: scanner)
+
+        scanner.emit(reading(code: startCode, uid: "CP1", elapsed: 0))
+        await poll { model.session?.checkpointId == 100 }
+        // Повтор того же КП в живом окне — перештамп, не новое взятие.
+        scanner.emit(reading(code: startCode, uid: "CP1", elapsed: 100))
+        scanner.emit(reading(code: finishCode, uid: "CP2", elapsed: 200))
+        await poll { model.session?.checkpointId == 101 }
+        #expect(types == ["start", "finish"])
     }
 
     // MARK: - Метод проверки тега снапшотится во взятие

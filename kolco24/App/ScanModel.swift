@@ -144,6 +144,8 @@ final class ScanModel: Identifiable {
     /// Отправка ОДНОГО взятия на цель (`MarkUploadRepository.confirm` в проде). Захватывается в отдельный
     /// неструктурированный `Task` на каждую попытку (не `self`, §6) — начатый POST не обрывается закрытием.
     @ObservationIgnored private let confirmMark: @Sendable (String, UploadTarget) async -> UploadResultKind
+    /// Новое взятие КП (не перештамп окна): тип КП из легенды. Прод — автостарт/стоп трека.
+    @ObservationIgnored private let onNewTake: (_ checkpointType: String) -> Void
 
     // MARK: - Тюнинг таймингов (тестируемое время)
 
@@ -216,7 +218,8 @@ final class ScanModel: Identifiable {
         // Дефолт для превью/тестов без подтверждения; прод (`AppModel.makeScanModel`) подключает репозиторий.
         confirmMark: @escaping @Sendable (String, UploadTarget) async -> UploadResultKind = { _, _ in .error },
         confirmTimeoutMs: Int64 = ScanModel.defaultConfirmTimeoutMs,
-        confirmRetryMs: Int64 = ScanModel.defaultConfirmRetryMs
+        confirmRetryMs: Int64 = ScanModel.defaultConfirmRetryMs,
+        onNewTake: @escaping (_ checkpointType: String) -> Void = { _ in }
     ) {
         self.raceId = raceId
         self.teamId = teamId
@@ -235,6 +238,7 @@ final class ScanModel: Identifiable {
         self.confirmMark = confirmMark
         self.confirmTimeoutMs = confirmTimeoutMs
         self.confirmRetryMs = confirmRetryMs
+        self.onNewTake = onNewTake
         startBindingsObservation()
     }
 
@@ -482,6 +486,9 @@ final class ScanModel: Identifiable {
                 snapshots.removeAll()
                 takePresent = buffered
                 buffer.removeAll()
+                if let type = checkpointsById[checkpointId]?.type {
+                    onNewTake(type)
+                }
             }
             takeLastScanAt = now
 
