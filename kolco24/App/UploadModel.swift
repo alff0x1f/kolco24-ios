@@ -21,9 +21,10 @@
 //  задач и первой эмиссией новых состояние синхронно сбрасывается, чтобы данные прежней команды не
 //  участвовали в derived.
 //
-//  Исходы транзиентны (`nil` пока дренаж не отчитался — как `TargetLine.outcome` в Kotlin): «Финиш» (LAN)
-//  показывается только когда `outcome != nil || uploaded > 0` (вне финиша LAN обычно недоступен — молчим,
-//  чтобы не висела вечная бессмысленная «0/N»).
+//  Экран сгруппирован по целям: карточки «Интернет» и «Финиш (LAN)», в каждой по ряду на скоуп.
+//  Исходы транзиентны (`nil` пока дренаж не отчитался — как `TargetLine.outcome` в Kotlin): карточка
+//  «Финиш (LAN)» показывается только когда хоть один скоуп отчитался по LAN (`outcome != nil || uploaded > 0`;
+//  вне финиша LAN обычно недоступен — молчим, чтобы не висели вечные бессмысленные «0/N»).
 //
 //  `import SwiftUI`/`GRDB` запрещены (grep-инвариант) — хватает `Observation`; `AsyncValueObservation`
 //  счётчиков и `AsyncStream` исходов потребляются без явного упоминания GRDB-типов.
@@ -261,83 +262,62 @@ final class UploadModel {
         return pending <= 0 ? "Всё отправлено" : "\(pending) не отправлено"
     }
 
-    // MARK: - Секция «Отметки» (metadata-only)
+    // MARK: - Карточки целей («Интернет» / «Финиш (LAN)»)
 
-    /// Есть ли взятия вообще — секция «Отметки» скрыта при нуле (правило секций «Фото»/«Трек»: иначе
-    /// трек-only скоуп рисовал бы вводящий в заблуждение ряд «0/0» отметок).
-    var hasMarks: Bool { metadataTotal > 0 }
-
-    /// Receipt-строка «Интернет» (cloud) секции «Отметки» — показывается всегда (главная цель).
-    var cloudLine: ReceiptLine {
-        makeLine(label: "Интернет", uploaded: metadataCounts?.cloud ?? 0, total: metadataTotal,
-                 outcome: outcomes[.cloud], offlineLabel: "нет интернета")
+    /// Скоупы с чем-то записанным (`total > 0`), в порядке рядов: «Отметки» (metadata-only), «Фото»
+    /// (пофреймово), «GPS-трек», «Судейские отметки». Нулевой скоуп скрыт — иначе, например, трек-only
+    /// скоуп рисовал бы вводящий в заблуждение ряд «0/0» отметок.
+    private var scopes: [ScopeProgress] {
+        let all = [
+            ScopeProgress(title: "Отметки", counts: metadataCounts,
+                          cloudOutcome: outcomes[.cloud], localOutcome: outcomes[.local]),
+            ScopeProgress(title: "Фото", counts: photoCounts,
+                          cloudOutcome: outcomes[.cloud], localOutcome: outcomes[.local]),
+            ScopeProgress(title: "GPS-трек", counts: trackCounts,
+                          cloudOutcome: trackOutcomes[.cloud], localOutcome: trackOutcomes[.local]),
+            ScopeProgress(title: "Судейские отметки", counts: judgeCounts,
+                          cloudOutcome: judgeOutcomes[.cloud], localOutcome: judgeOutcomes[.local]),
+        ]
+        return all.filter { $0.total > 0 }
     }
 
-    /// Receipt-строка «Финиш» (LAN) секции «Отметки» — только когда есть что сказать
-    /// (`outcome != nil || uploaded > 0`). Порт `showFinishLine`.
-    var finishLine: ReceiptLine? {
-        finishLineOrNil(uploaded: metadataCounts?.local ?? 0, total: metadataTotal, outcome: outcomes[.local])
+    var hasMarks: Bool { (metadataCounts?.total ?? 0) > 0 }
+    var hasPhotos: Bool { (photoCounts?.total ?? 0) > 0 }
+    var hasTrack: Bool { (trackCounts?.total ?? 0) > 0 }
+    var hasJudge: Bool { (judgeCounts?.total ?? 0) > 0 }
+
+    /// Карточка «Интернет» (cloud): по ряду на каждый записанный скоуп — показывается всегда.
+    var internetLines: [ReceiptLine] {
+        scopes.map {
+            makeLine(label: $0.title, uploaded: $0.cloud, total: $0.total,
+                     outcome: $0.cloudOutcome, offlineLabel: "нет интернета")
+        }
     }
 
-    // MARK: - Секция «Фото» (пофреймовая)
-
-    /// Есть ли кадры вообще — секция «Фото» скрыта при нуле (как Android: `photoCounts.total > 0`).
-    var hasPhotos: Bool { photoTotal > 0 }
-
-    /// Receipt-строка «Интернет» (cloud) секции «Фото» — показывается всегда (когда секция видима).
-    var photoCloudLine: ReceiptLine {
-        makeLine(label: "Интернет", uploaded: photoCounts?.cloud ?? 0, total: photoTotal,
-                 outcome: outcomes[.cloud], offlineLabel: "нет интернета")
-    }
-
-    /// Receipt-строка «Финиш» (LAN) секции «Фото» — только когда есть что сказать. Порт `showFinishLine`.
-    var photoFinishLine: ReceiptLine? {
-        finishLineOrNil(uploaded: photoCounts?.local ?? 0, total: photoTotal, outcome: outcomes[.local])
-    }
-
-    // MARK: - Секция «Трек» (точки GPS)
-
-    /// Есть ли точки трека вообще — секция «Трек» скрыта при нуле (правило секции «Фото»).
-    var hasTrack: Bool { trackTotal > 0 }
-
-    /// Receipt-строка «Интернет» (cloud) секции «Трек» — показывается всегда (когда секция видима).
-    var trackCloudLine: ReceiptLine {
-        makeLine(label: "Интернет", uploaded: trackCounts?.cloud ?? 0, total: trackTotal,
-                 outcome: trackOutcomes[.cloud], offlineLabel: "нет интернета")
-    }
-
-    /// Receipt-строка «Финиш» (LAN) секции «Трек» — только когда есть что сказать. Порт `showFinishLine`.
-    var trackFinishLine: ReceiptLine? {
-        finishLineOrNil(uploaded: trackCounts?.local ?? 0, total: trackTotal, outcome: trackOutcomes[.local])
-    }
-
-    // MARK: - Секция «Судейские отметки» (судейские пики гонки)
-
-    /// Есть ли судейские пики вообще — секция скрыта при нуле (правило секций «Фото»/«Трек»).
-    var hasJudge: Bool { judgeTotal > 0 }
-
-    /// Receipt-строка «Интернет» (cloud) секции «Судейские отметки» — показывается всегда (когда секция видима).
-    var judgeCloudLine: ReceiptLine {
-        makeLine(label: "Интернет", uploaded: judgeCounts?.cloud ?? 0, total: judgeTotal,
-                 outcome: judgeOutcomes[.cloud], offlineLabel: "нет интернета")
-    }
-
-    /// Receipt-строка «Финиш» (LAN) секции «Судейские отметки» — только когда есть что сказать. Порт `showFinishLine`.
-    var judgeFinishLine: ReceiptLine? {
-        finishLineOrNil(uploaded: judgeCounts?.local ?? 0, total: judgeTotal, outcome: judgeOutcomes[.local])
+    /// Карточка «Финиш (LAN)»: пусто, пока LAN не отчитался ни по одному скоупу
+    /// (`outcome != nil || uploaded > 0`) — вне финиша это обычное состояние, и экран читается одной
+    /// карточкой. Когда показана, перечисляет ВСЕ скоупы: «0/N» рядом с отчитавшимся соседом осмысленно
+    /// (сервер финиша доступен, а этот скоуп туда ещё не доехал). Порт `showFinishSection`.
+    var finishLines: [ReceiptLine] {
+        let scopes = scopes
+        guard scopes.contains(where: { $0.localOutcome != nil || $0.local > 0 }) else { return [] }
+        return scopes.map {
+            makeLine(label: $0.title, uploaded: $0.local, total: $0.total,
+                     outcome: $0.localOutcome, offlineLabel: "сервер недоступен")
+        }
     }
 
     // MARK: - Хелперы
 
-    private var metadataTotal: Int { metadataCounts?.total ?? 0 }
-    private var photoTotal: Int { photoCounts?.total ?? 0 }
-    private var trackTotal: Int { trackCounts?.total ?? 0 }
-    private var judgeTotal: Int { judgeCounts?.total ?? 0 }
+    private struct ScopeProgress {
+        let title: String
+        let counts: UploadCounts?
+        let cloudOutcome: TargetUploadOutcome?
+        let localOutcome: TargetUploadOutcome?
 
-    /// «Финиш»-строка с правилом видимости `outcome != nil || uploaded > 0`, общая для обеих секций.
-    private func finishLineOrNil(uploaded: Int, total: Int, outcome: TargetUploadOutcome?) -> ReceiptLine? {
-        guard outcome != nil || uploaded > 0 else { return nil }
-        return makeLine(label: "Финиш", uploaded: uploaded, total: total, outcome: outcome, offlineLabel: "сервер недоступен")
+        var total: Int { counts?.total ?? 0 }
+        var cloud: Int { counts?.cloud ?? 0 }
+        var local: Int { counts?.local ?? 0 }
     }
 
     /// Собрать receipt-строку цели: done/isError-флаги для глифа + вторая строка (когда не done и исход
