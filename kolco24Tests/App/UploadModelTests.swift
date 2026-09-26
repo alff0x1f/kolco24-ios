@@ -84,6 +84,14 @@ struct UploadModelTests {
         )
     }
 
+    private func internet(_ model: UploadModel, _ label: String) -> UploadModel.ReceiptLine? {
+        model.internetLines.first { $0.label == label }
+    }
+
+    private func finish(_ model: UploadModel, _ label: String) -> UploadModel.ReceiptLine? {
+        model.finishLines.first { $0.label == label }
+    }
+
     private func waitUntil(
         timeout: Duration = .seconds(3),
         _ condition: () async -> Bool
@@ -181,9 +189,9 @@ struct UploadModelTests {
 
         // Счётчики догнались → обе цели done, secondLine отсутствует.
         await waitUntil { model.counts?.cloud == 1 }
-        #expect(model.cloudLine.done)
-        #expect(model.cloudLine.secondLine == nil)
-        #expect(model.finishLine?.done == true)
+        #expect(internet(model, "Отметки")?.done == true)
+        #expect(internet(model, "Отметки")?.secondLine == nil)
+        #expect(finish(model, "Отметки")?.done == true)
     }
 
     // MARK: - Офлайн-исход доходит до модели со второй строкой
@@ -205,14 +213,14 @@ struct UploadModelTests {
         await waitUntil { model.outcomes[.cloud]?.kind == .offline }
         #expect(model.outcomes[.cloud]?.kind == .offline)
         // Флаги остались 0 (self-heal), строка не done → вторая строка с офлайн-лейблом.
-        #expect(model.cloudLine.done == false)
-        #expect(model.cloudLine.isError)
-        #expect(model.cloudLine.secondLine == "только что · нет интернета")
+        #expect(internet(model, "Отметки")?.done == false)
+        #expect(internet(model, "Отметки")?.isError == true)
+        #expect(internet(model, "Отметки")?.secondLine == "только что · нет интернета")
         // «Финиш» стал видимым (есть исход) с собственным офлайн-лейблом.
-        #expect(model.finishLine?.secondLine == "только что · сервер недоступен")
+        #expect(finish(model, "Отметки")?.secondLine == "только что · сервер недоступен")
     }
 
-    // MARK: - Видимость «Финиш»-строки
+    // MARK: - Видимость карточки «Финиш (LAN)»
 
     @Test func finishLine_hiddenUntilOutcomeOrUpload() async throws {
         let transport = FakeTransport()
@@ -223,9 +231,30 @@ struct UploadModelTests {
         model.rebind(teamId: 5, raceId: 7)
         await waitUntil { model.counts?.total == 1 }
 
-        // Ни исхода, ни доставленных local — «Финиш» скрыт; «Интернет» всегда виден.
-        #expect(model.finishLine == nil)
-        #expect(model.cloudLine.label == "Интернет")
+        // Ни исхода, ни доставленных local — «Финиш (LAN)» скрыт; «Интернет» всегда виден.
+        #expect(model.finishLines.isEmpty)
+        #expect(model.internetLines.map(\.label) == ["Отметки"])
+    }
+
+    /// Один скоуп отчитался по LAN → карточка «Финиш (LAN)» перечисляет ВСЕ записанные скоупы, включая «0/N».
+    @Test func finishLines_listEveryScopeOnceAnyReports() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.markStore.upsert(mark(id: "a")) // отметка до LAN не доехала
+        try await env.trackStore.insertAll([
+            trackPoint(id: "t1", uploadedLocal: true),
+            trackPoint(id: "t2")
+        ])
+
+        let model = UploadModel(env: env)
+        model.rebind(teamId: 5, raceId: 7)
+        await waitUntil { model.counts?.total == 1 && model.trackCounts?.total == 2 }
+
+        #expect(model.internetLines.map(\.label) == ["Отметки", "GPS-трек"])
+        #expect(model.finishLines.map(\.label) == ["Отметки", "GPS-трек"])
+        #expect(finish(model, "Отметки")?.uploaded == 0)
+        #expect(finish(model, "Отметки")?.total == 1)
+        #expect(finish(model, "GPS-трек")?.uploaded == 1)
     }
 
     // MARK: - Секции «Отметки» (metadata) и «Фото» (кадры)
@@ -248,9 +277,9 @@ struct UploadModelTests {
         await waitUntil { model.metadataCounts?.total == 1 }
         #expect(model.metadataCounts?.cloud == 1)
         #expect(model.metadataCounts?.local == 1)
-        #expect(model.cloudLine.uploaded == 1)
-        #expect(model.cloudLine.total == 1)
-        #expect(model.cloudLine.done)
+        #expect(internet(model, "Отметки")?.uploaded == 1)
+        #expect(internet(model, "Отметки")?.total == 1)
+        #expect(internet(model, "Отметки")?.done == true)
 
         // «Фото» — по кадрам: 2 всего, local 2 (флаг), cloud 0 (флаг не выставлен).
         await waitUntil { model.photoCounts?.total == 2 }
@@ -258,12 +287,12 @@ struct UploadModelTests {
         #expect(model.photoCounts?.total == 2)
         #expect(model.photoCounts?.local == 2)
         #expect(model.photoCounts?.cloud == 0)
-        #expect(model.photoCloudLine.uploaded == 0)
-        #expect(model.photoCloudLine.total == 2)
-        #expect(model.photoCloudLine.done == false)
+        #expect(internet(model, "Фото")?.uploaded == 0)
+        #expect(internet(model, "Фото")?.total == 2)
+        #expect(internet(model, "Фото")?.done == false)
         // «Финиш» (LAN) секции «Фото» показан (uploaded > 0) и done.
-        #expect(model.photoFinishLine?.uploaded == 2)
-        #expect(model.photoFinishLine?.done == true)
+        #expect(finish(model, "Фото")?.uploaded == 2)
+        #expect(finish(model, "Фото")?.done == true)
     }
 
     /// Mid-drain марка (кадры приняты сервером, но флаг ещё не флипнут) — в `total`, но не в числителе.
@@ -280,9 +309,9 @@ struct UploadModelTests {
         await waitUntil { model.photoCounts?.total == 5 }
         #expect(model.photoCounts?.total == 5)   // 2 + 3 всех кадров
         #expect(model.photoCounts?.cloud == 2)   // только флипнутые кадры p1
-        #expect(model.photoCloudLine.uploaded == 2)
-        #expect(model.photoCloudLine.total == 5)
-        #expect(model.photoCloudLine.done == false)
+        #expect(internet(model, "Фото")?.uploaded == 2)
+        #expect(internet(model, "Фото")?.total == 5)
+        #expect(internet(model, "Фото")?.done == false)
     }
 
     /// `pendingLabel` (photo-aware) учитывает незалитые кадры: metadata доехала, кадры — нет → всё ещё pending.
@@ -343,10 +372,10 @@ struct UploadModelTests {
         #expect(model.trackCounts?.local == 1)
         #expect(model.trackCounts?.cloud == 1)
         // «Интернет» секции «Трек» виден всегда (когда секция видима), не done (1/3).
-        #expect(model.trackCloudLine.label == "Интернет")
-        #expect(model.trackCloudLine.uploaded == 1)
-        #expect(model.trackCloudLine.total == 3)
-        #expect(model.trackCloudLine.done == false)
+        #expect(model.internetLines.map(\.label) == ["GPS-трек"])
+        #expect(internet(model, "GPS-трек")?.uploaded == 1)
+        #expect(internet(model, "GPS-трек")?.total == 3)
+        #expect(internet(model, "GPS-трек")?.done == false)
     }
 
     /// Ноль точек → секция «Трек» скрыта (правило секции «Фото»).
@@ -362,7 +391,7 @@ struct UploadModelTests {
         #expect(model.trackCounts?.total == 0)
         #expect(model.hasTrack == false)
         // «Финиш» трека скрыт до исхода/доставки; «Интернет» трека — калм-стейт 0/0.
-        #expect(model.trackFinishLine == nil)
+        #expect(model.finishLines.isEmpty)
     }
 
     /// Только точки трека (взятий нет) → секция «Отметки» скрыта, секция «Трек» видна, экран не пуст.
@@ -401,11 +430,11 @@ struct UploadModelTests {
         await waitUntil { model.trackOutcomes[.cloud]?.kind == .offline }
         #expect(model.trackOutcomes[.cloud]?.kind == .offline)
         // Флаги остались 0 (self-heal), строка не done → вторая строка с офлайн-лейблом.
-        #expect(model.trackCloudLine.done == false)
-        #expect(model.trackCloudLine.isError)
-        #expect(model.trackCloudLine.secondLine == "только что · нет интернета")
+        #expect(internet(model, "GPS-трек")?.done == false)
+        #expect(internet(model, "GPS-трек")?.isError == true)
+        #expect(internet(model, "GPS-трек")?.secondLine == "только что · нет интернета")
         // «Финиш» трека стал видимым (есть исход) с собственным офлайн-лейблом.
-        #expect(model.trackFinishLine?.secondLine == "только что · сервер недоступен")
+        #expect(finish(model, "GPS-трек")?.secondLine == "только что · сервер недоступен")
     }
 
     /// `pendingLabel` суммирует незалитые отметки + кадры + точки трека.
@@ -446,12 +475,12 @@ struct UploadModelTests {
         #expect(model.judgeCounts?.local == 1)
         #expect(model.judgeCounts?.cloud == 1)
         // «Интернет» секции виден всегда (когда секция видима), не done (1/3).
-        #expect(model.judgeCloudLine.label == "Интернет")
-        #expect(model.judgeCloudLine.uploaded == 1)
-        #expect(model.judgeCloudLine.total == 3)
-        #expect(model.judgeCloudLine.done == false)
+        #expect(model.internetLines.map(\.label) == ["Судейские отметки"])
+        #expect(internet(model, "Судейские отметки")?.uploaded == 1)
+        #expect(internet(model, "Судейские отметки")?.total == 3)
+        #expect(internet(model, "Судейские отметки")?.done == false)
         // «Финиш» показан, т.к. uploaded > 0.
-        #expect(model.judgeFinishLine?.uploaded == 1)
+        #expect(finish(model, "Судейские отметки")?.uploaded == 1)
     }
 
     /// Ноль пиков → секция «Судейские отметки» скрыта (правило секции «Трек»).
@@ -466,7 +495,7 @@ struct UploadModelTests {
         await waitUntil { model.judgeCounts != nil }
         #expect(model.judgeCounts?.total == 0)
         #expect(model.hasJudge == false)
-        #expect(model.judgeFinishLine == nil)
+        #expect(model.finishLines.isEmpty)
     }
 
     /// `pendingLabel` учитывает незалитые судейские пики (в сумме с отметками/точками).

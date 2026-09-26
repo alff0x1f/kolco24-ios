@@ -3,12 +3,13 @@
 //  kolco24
 //
 //  Экран «Загрузка данных» (этап 6). Порт ПОВЕДЕНИЯ `ui/upload/UploadScreen.kt`: единое место проверить
-//  статус выгрузки взятий, открывается из «Команда → Прочее». Одна секция «Отметки» с receipt-строками
-//  «Интернет» (cloud, всегда) и «Финиш» (LAN, только по правилу видимости `UploadModel.finishLine`).
+//  статус выгрузки, открывается из «Команда → Прочее». Сгруппирован по целям: секция «Интернет» (cloud,
+//  всегда) и «Финиш (LAN)» (только по правилу видимости `UploadModel.finishLines`), в каждой по
+//  receipt-строке на скоуп (Отметки / Фото / GPS-трек / Судейские отметки).
 //  Pull-to-refresh == принудительная отправка (отдельной кнопки нет, как на Android); жест держится до
 //  конца дренажа. Пустой скоуп — empty-state «Пока нечего загружать» (без жеста — слать нечего).
 //
-//  Данные и derived полностью в `UploadModel` (`hasContent`/`cloudLine`/`finishLine`/`refresh()`);
+//  Данные и derived полностью в `UploadModel` (`hasContent`/`internetLines`/`finishLines`/`refresh()`);
 //  вьюха только рендерит — доменной логики здесь нет.
 //
 
@@ -40,68 +41,28 @@ struct UploadView: View {
 
     private var content: some View {
         List {
-            // Секция «Отметки» — только когда есть взятия (скрыта при нуле, как «Фото»/«Трек»: трек-only
-            // скоуп иначе показал бы вводящий в заблуждение ряд «0/0» отметок).
-            if model.hasMarks {
-                Section {
-                    ReceiptRow(line: model.cloudLine)
-                        .listRowBackground(Color.card)
-                    if let finish = model.finishLine {
-                        ReceiptRow(line: finish)
-                            .listRowBackground(Color.card)
-                    }
-                } header: {
-                    Text("Отметки")
-                }
-            }
-
-            // Секция «Фото» — только когда есть кадры (скрыта при нуле, как Android).
-            if model.hasPhotos {
-                Section {
-                    ReceiptRow(line: model.photoCloudLine)
-                        .listRowBackground(Color.card)
-                    if let finish = model.photoFinishLine {
-                        ReceiptRow(line: finish)
-                            .listRowBackground(Color.card)
-                    }
-                } header: {
-                    Text("Фото")
-                }
-            }
-
-            // Секция «Трек» — только когда есть точки GPS (скрыта при нуле, правило секции «Фото»).
-            if model.hasTrack {
-                Section {
-                    ReceiptRow(line: model.trackCloudLine)
-                        .listRowBackground(Color.card)
-                    if let finish = model.trackFinishLine {
-                        ReceiptRow(line: finish)
-                            .listRowBackground(Color.card)
-                    }
-                } header: {
-                    Text("Трек")
-                }
-            }
-
-            // Секция «Судейские отметки» — только когда есть судейские пики (скрыта при нуле, правило
-            // секции «Трек»). Скоуп — гонка (судейская станция сканит все команды).
-            if model.hasJudge {
-                Section {
-                    ReceiptRow(line: model.judgeCloudLine)
-                        .listRowBackground(Color.card)
-                    if let finish = model.judgeFinishLine {
-                        ReceiptRow(line: finish)
-                            .listRowBackground(Color.card)
-                    }
-                } header: {
-                    Text("Судейские отметки")
-                }
+            // Карточка «Интернет» — всегда; «Финиш (LAN)» — только когда LAN отчитался хоть по одному
+            // скоупу (иначе обычное «всё на сайте, на финише пусто» читается одной карточкой).
+            targetSection("Интернет", lines: model.internetLines)
+            if !model.finishLines.isEmpty {
+                targetSection("Финиш (LAN)", lines: model.finishLines)
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color.paper)
         .refreshable { await model.refresh() }
+    }
+
+    private func targetSection(_ title: String, lines: [UploadModel.ReceiptLine]) -> some View {
+        Section {
+            ForEach(lines, id: \.label) { line in
+                ReceiptRow(line: line)
+                    .listRowBackground(Color.card)
+            }
+        } header: {
+            Text(title)
+        }
     }
 
     private var emptyState: some View {
