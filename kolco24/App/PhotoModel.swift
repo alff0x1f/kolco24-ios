@@ -93,6 +93,8 @@ final class PhotoModel: Identifiable {
     @ObservationIgnored private let deleteFrame: @Sendable (String) -> Void
     /// Генератор id standalone-марки (UUID в проде; детерминированный в тестах).
     @ObservationIgnored private let newMarkId: () -> String
+    /// Новая standalone фото-марка: тип КП из легенды. Прод — автостарт/стоп трека.
+    @ObservationIgnored private let onNewTake: (_ checkpointType: String) -> Void
 
     @ObservationIgnored private var legendTask: Task<Void, Never>?
 
@@ -106,7 +108,8 @@ final class PhotoModel: Identifiable {
         sampleNow: @escaping @Sendable () async -> TimeSample,
         writeFrame: @escaping @Sendable (String, Data) -> String?,
         deleteFrame: @escaping @Sendable (String) -> Void,
-        newMarkId: @escaping () -> String = { UUID().uuidString }
+        newMarkId: @escaping () -> String = { UUID().uuidString },
+        onNewTake: @escaping (_ checkpointType: String) -> Void = { _ in }
     ) {
         self.raceId = raceId
         self.teamId = teamId
@@ -118,6 +121,7 @@ final class PhotoModel: Identifiable {
         self.writeFrame = writeFrame
         self.deleteFrame = deleteFrame
         self.newMarkId = newMarkId
+        self.onNewTake = onNewTake
         startLegendObservation()
     }
 
@@ -272,6 +276,11 @@ final class PhotoModel: Identifiable {
         let legend = self.legend
         let store = markStore
         let provider = locationProvider
+
+        if !attach, raceId != nil, teamId != nil, markId != nil, sample != nil,
+           let cp = legend.first(where: { $0.id == checkpointId }) {
+            onNewTake(cp.type)
+        }
 
         Task {
             if attach {

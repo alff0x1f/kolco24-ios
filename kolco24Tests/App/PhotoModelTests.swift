@@ -89,9 +89,11 @@ struct PhotoModelTests {
         { TimeSample(wallMs: wall, elapsedMs: wall, trustedMs: nil, bootCount: nil) }
     }
 
-    private func insertCp(_ env: AppEnvironment, id: Int, number: Int, cost: Int) async throws {
+    private func insertCp(
+        _ env: AppEnvironment, id: Int, number: Int, cost: Int, type: String = "cp"
+    ) async throws {
         try await env.checkpointStore.insertCheckpoints([
-            Checkpoint(id: id, raceId: race, number: number, cost: cost, type: "cp",
+            Checkpoint(id: id, raceId: race, number: number, cost: cost, type: type,
                        description: "КП \(number)", locked: false)
         ])
     }
@@ -112,7 +114,8 @@ struct PhotoModelTests {
         sampleNow: @escaping @Sendable () async -> TimeSample,
         writer: FrameWriter = FrameWriter(),
         deleter: FrameDeleter = FrameDeleter(),
-        ids: IdGen = IdGen()
+        ids: IdGen = IdGen(),
+        onNewTake: @escaping (String) -> Void = { _ in }
     ) -> PhotoModel {
         PhotoModel(
             raceId: raceId, teamId: teamId, rosterSize: rosterSize,
@@ -120,7 +123,8 @@ struct PhotoModelTests {
             locationProvider: location, sampleNow: sampleNow,
             writeFrame: { m, d in writer.write(m, d) },
             deleteFrame: { p in deleter.delete(p) },
-            newMarkId: { ids.next() }
+            newMarkId: { ids.next() },
+            onNewTake: onNewTake
         )
     }
 
@@ -318,6 +322,37 @@ struct PhotoModelTests {
         // Дать fire-and-forget Task коммита отработать; марки не должно появиться.
         try? await Task.sleep(for: .milliseconds(200))
         #expect(try await env.markStore.allIds().isEmpty)
+    }
+
+    // MARK: - Standalone фото-марка сообщает тип КП (автозапись трека); сирота — нет
+
+    @Test func standaloneCommitReportsCheckpointType() async throws {
+        let env = try makeEnv()
+        try await insertCp(env, id: 100, number: 99, cost: 0, type: "finish")
+        var types: [String] = []
+        let model = makeModel(env: env, sampleNow: fixedSample(), onNewTake: { types.append($0) })
+        await model.start()
+        await poll { !model.legend.isEmpty }
+
+        model.submit(number: 99)
+        await model.addFrame(jpegData: Data([0xFF]))
+        model.commit()
+        #expect(types == ["finish"])
+    }
+
+    @Test func orphanCommitDoesNotReportTake() async throws {
+        let env = try makeEnv()
+        try await insertCp(env, id: 100, number: 32, cost: 4)
+        var types: [String] = []
+        let model = makeModel(env: env, teamId: nil, rosterSize: 0, sampleNow: fixedSample(),
+                              onNewTake: { types.append($0) })
+        await model.start()
+        await poll { !model.legend.isEmpty }
+
+        model.submit(number: 32)
+        await model.addFrame(jpegData: Data([0xFF]))
+        model.commit()
+        #expect(types.isEmpty)
     }
 
     // MARK: - discard удаляет только кадры этой сессии

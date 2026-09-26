@@ -427,7 +427,9 @@ final class AppModel {
     }
 
     /// Автозапись трека по взятию КП (`trackAutoAction`). Стоп — только записи этой же команды.
+    /// Взятие уже не выбранной команды (поздний колбэк после смены) игнорируется.
     func applyTrackAutoAction(checkpointType: String, raceId: Int, teamId: Int) {
+        guard selectedRaceId == raceId, selectedTeamId == teamId else { return }
         switch trackAutoAction(checkpointType: checkpointType) {
         case .start:
             trackRecorder.start(raceId: raceId, teamId: teamId)
@@ -578,7 +580,10 @@ final class AppModel {
             locationProvider: env.locationProvider,
             sampleNow: { await clock.sample() },
             writeFrame: env.writeFrame,
-            deleteFrame: env.deleteFrame
+            deleteFrame: env.deleteFrame,
+            onNewTake: { [weak self] type in
+                self?.applyTrackAutoAction(checkpointType: type, raceId: raceId, teamId: teamId)
+            }
         )
     }
 

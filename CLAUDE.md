@@ -183,8 +183,9 @@ server 200.
 - The prod server always answers `data_source: "cloud"` → the LAN pin never engages outside a race-LAN
   deployment (`MOBILE_DATA_SOURCE=local`).
 - Force-quit kills track recording (Android `START_NOT_STICKY` parity).
-- Track auto start/stop (`Core/Track/TrackAutoControl`): a new КП take starts recording, `finish` stops it,
-  `test` (pre-race check) does nothing. A manual stop mid-race is undone by the next take — by design.
+- Track auto start/stop (`Core/Track/TrackAutoControl`): a new КП take (NFC or standalone photo) of the
+  selected team starts recording, `finish` stops it, `test` (pre-race check) does nothing. A manual stop
+  mid-race is undone by the next take — by design.
 - iOS needs no notifications for background tracking (`UIBackgroundModes: location` + `CLBackgroundActivitySession`)
   — the Android foreground-service notification has no iOS analog.
 - `LiveServerSmokeTests` is env-gated (`LIVE_API_SMOKE`) and skipped normally; `xcodebuild` doesn't forward
