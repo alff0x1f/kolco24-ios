@@ -550,6 +550,8 @@ private struct MetricsCard: View {
     let controlState: (Int64) -> ControlTimeState
     let clock: ClockStatus
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     // Скрываем «/0», пока сервер не прислал агрегаты легенды (порт гейта `totalKp > 0`).
     private var takenValue: String { totalKp > 0 ? "\(takenKp)/\(totalKp)" : "\(takenKp)" }
     private var scoreValue: String { totalCost > 0 ? "\(takenScore)/\(totalCost)" : "\(takenScore)" }
@@ -560,18 +562,40 @@ private struct MetricsCard: View {
             VDivider()
             MetricView(label: "Баллов", value: scoreValue)
             VDivider()
-            // Тик раз в минуту (формат Ч:ММ, минуты вниз). «Сейчас» — в trusted-шкале отметок
-            // (`trustedNowMs`, `Core/Time/TrustedNow`), подпись/значение — `controlTimeDisplay` (`Core/Marks/ControlTime`).
-            TimelineView(.everyMinute) { context in
-                let wallMs = Int64((context.date.timeIntervalSince1970 * 1000).rounded())
-                let display = controlTimeDisplay(controlState(trustedNowMs(wallMs: wallMs, clock: clock)))
-                MetricView(label: display.label, value: display.value, isWarning: display.isWarning)
+            // «Сейчас» — в trusted-шкале отметок (`trustedNowMs`, `Core/Time/TrustedNow`), подпись/значение —
+            // `controlTimeDisplay` (`Core/Marks/ControlTime`). Пока КВ идёт, тик раз в секунду двигает хвост `:SS`;
+            // статичным состояниям тик не нужен —
+            // в «идёт» их переводит только новая отметка, а она и так перерисует карточку.
+            TimelineView(.periodic(from: .now, by: tickInterval)) { context in
+                let state = controlState(nowMs(context.date))
+                let display = controlTimeDisplay(state)
+                MetricView(
+                    label: display.label,
+                    value: display.value,
+                    isWarning: display.isWarning,
+                    seconds: controlTimeSeconds(state)
+                )
+                .contentTransition(reduceMotion ? .identity : .numericText(countsDown: isCountdown(state)))
+                .animation(reduceMotion ? nil : .snappy, value: display.value)
             }
         }
         .padding(.horizontal, 18)
         .background(Color.card)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: Color.cardShadow, radius: 1, y: 0.5)
+    }
+
+    private func nowMs(_ date: Date) -> Int64 {
+        trustedNowMs(wallMs: Int64((date.timeIntervalSince1970 * 1000).rounded()), clock: clock)
+    }
+
+    private var tickInterval: TimeInterval {
+        controlTimeSeconds(controlState(nowMs(.now))) == nil ? 60 : 1
+    }
+
+    private func isCountdown(_ state: ControlTimeState) -> Bool {
+        if case .running = state { return true }
+        return false
     }
 }
 

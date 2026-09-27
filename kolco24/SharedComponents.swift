@@ -36,6 +36,8 @@ struct MetricView: View {
     let value: String
     var unit: String? = nil
     var isWarning: Bool = false
+    /// Тикающий хвост `:SS` после значения; `nil` — значение статично.
+    var seconds: Int? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -54,7 +56,16 @@ struct MetricView: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.sub)
                 }
+                if let seconds {
+                    Text(String(format: ":%02d", seconds))
+                        .font(.mono(13, weight: .semibold))
+                        .foregroundStyle(isWarning ? Color.brandRed.opacity(0.7) : Color.sub)
+                        .padding(.leading, -3)
+                        .accessibilityHidden(true)
+                }
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 7)
