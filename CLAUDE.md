@@ -61,9 +61,10 @@ Four tabs: Отметки (`MarksView` — taken-КП grid + NFC/photo scan), Л
   PluralRu, RaceDates), `Nfc` (ChipRecord/K24 format, NfcUid), `Api` (HMAC signing), `Crypto` (LegendCrypto),
   `Scan` (ScanSession reducer, ChipScanning seams), `Team` (BindDecision, TeamPickerLogic), `Legend`,
   `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay, ControlTime, CheckMethod), `Sync`,
-  `Track` (Segments, TrackPoints, GpxExport, TrackEngine seam), `Upload`, `Time` (TrustedClock actor,
-  ServerTimeSampler, SkewFormat), `Lease`, `Stores` (InstallId, ClockAnchorStore, ThemePreference,
-  RaceLeaseStore, AdminTokenStore), `Admin`, `Map` (MBTiles math), `Readiness` (start-readiness checklist).
+  `Track` (Segments, TrackPoints, TrackLines spike filter, GpxExport, TrackEngine seam), `Upload`,
+  `Time` (TrustedClock actor, ServerTimeSampler, SkewFormat), `Lease`, `Stores` (InstallId, ClockAnchorStore,
+  ThemePreference, TrackFilterPreference, RaceLeaseStore, AdminTokenStore), `Admin`, `Map` (MBTiles math),
+  `Readiness` (start-readiness checklist).
 - **`kolco24/Model/`** — domain value types mirroring Room v5 (GRDB-free; conformances live in `Data/Records/`)
   (stages 1–2).
 - **`kolco24/Data/`** (stages 2–3, 6–10, map) — `AppDatabase` (migration `v1` = Room v5 snapshot,
@@ -149,6 +150,10 @@ server 200.
   from the open scan sheet — the background drain never sets it, `addMember` never resets it. Tag
   `check_method` ∈ offline/cloud/local, unknown → offline. `confirm` is a one-mark POST that deliberately
   bypasses the drain's `inFlight` lock; a POST already in flight when the sheet closes may still confirm.
+- **Track spike filter** (`docs/plans/completed/20260927-track-spike-filter.md`): map, GPX, time span and
+  «на карте N» all read `trackLines` (lines, not a flat list; nothing is drawn between lines). Upload and the raw
+  «Точек» count stay unfiltered. «Все точки» = `TrackFilterPreference` (`@Observable`, shared by the map chip and
+  Settings). Don't bring back the 50 m `filterPoints` cutoff.
 - **MBTiles TMS y-flip** (`tile_row = 2^z − 1 − y`) lives only in `Core/Map/MBTiles.tmsRow`.
 - **`Category` collision**: in test files importing `Testing`+`Foundation`, qualify the domain type as
   `kolco24.Category`.

@@ -2,9 +2,8 @@
 //  TrackPointsTests.swift
 //  kolco24Tests
 //
-//  Зеркало фильтр/сорт-кейсов `TrackPointMappingTest.kt`: read-time хелперы трека
-//  `filterPoints`/`sortedTrackPoints` — порог точности (граница включительно),
-//  кастомный порог, пустой вход, reboot-safe порядок (время фикса раньше монотонного).
+//  Зеркало сорт-кейсов `TrackPointMappingTest.kt`: read-time хелпер трека
+//  `sortedTrackPoints` — reboot-safe порядок (время фикса раньше монотонного).
 //
 
 import Testing
@@ -36,27 +35,6 @@ struct TrackPointsTests {
             trustedMs: trustedMs,
             segmentId: segmentId
         )
-    }
-
-    @Test func filterPoints_keepsFixesMeetingThreshold_dropsCoarser() {
-        let fine = point(accuracy: 10)
-        let atLimit = point(accuracy: 50)
-        let coarse = point(accuracy: 51)
-        let result = filterPoints([fine, atLimit, coarse])
-        #expect(result.map(\.accuracy) == [10, 50])
-    }
-
-    @Test func filterPoints_customThreshold() {
-        let fine = point(accuracy: 10)
-        let medium = point(accuracy: 30)
-        let coarse = point(accuracy: 50)
-        let result = filterPoints([fine, medium, coarse], maxAccuracyMeters: 20)
-        #expect(result.count == 1)
-        #expect(result.first?.accuracy == 10)
-    }
-
-    @Test func filterPoints_emptyList() {
-        #expect(filterPoints([]).isEmpty)
     }
 
     @Test func sortedTrackPoints_ordersByTrustedOrWallBeforeElapsedAcrossReboot() {

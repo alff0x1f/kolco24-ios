@@ -3,8 +3,8 @@
 //  kolco24
 //
 //  Чистые read-time хелперы GPS-трека. Зеркало читающей части
-//  `data/track/TrackModels.kt` (L24–72): фильтр по точности на **чтении** (в БД
-//  пишется всё сырьё), read/export/upload-порядок и reboot-safe сортировка.
+//  `data/track/TrackModels.kt`: read/export/upload-порядок и reboot-safe сортировка.
+//  Фильтр выбросов на чтении (в БД пишется всё сырьё) — `TrackLines.swift`.
 //
 //  Kotlin абстрагирует эти функции над `TrackPointLike`, потому что и Room-сущность,
 //  и другие формы должны сортироваться; в Swift-ядре тип один (`TrackPoint`), поэтому
@@ -16,16 +16,6 @@
 //
 
 import Foundation
-
-/// Порог точности (метры) по умолчанию для ``filterPoints(_:maxAccuracyMeters:)`` — грубые
-/// сетевые фиксы отбрасываются на чтении.
-let DEFAULT_MAX_ACCURACY_METERS: Float = 50
-
-/// Отбросить грубые фиксы (``TrackPoint/accuracy`` хуже [maxAccuracyMeters]) для отображения/экспорта.
-/// **Только чтение** — каждый фикс всё равно хранится в БД сырым.
-func filterPoints(_ points: [TrackPoint], maxAccuracyMeters: Float = DEFAULT_MAX_ACCURACY_METERS) -> [TrackPoint] {
-    points.filter { $0.accuracy <= maxAccuracyMeters }
-}
 
 /// Порядок отображения/экспорта/загрузки: сначала абсолютное время фикса, монотонное — лишь тай-брейкер.
 func trackPointTimeMs(_ point: TrackPoint) -> Int64 {

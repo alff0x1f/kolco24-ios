@@ -393,14 +393,14 @@ private struct MiscRowView: View {
 // MARK: - Track Card (этап 8)
 
 /// Карточка «GPS-трек» на вкладке «Команда». Порт строк/состояний `ui/track/TrackCard.kt` 1:1:
-/// - `recording` → пульсирующая точка + «Идёт запись» + `pointsLabel` (сырой live-счётчик рекордера) +
-///   «Остановить» (brandRed);
+/// - `recording` → пульсирующая точка + «Идёт запись» + `pointsLabel` (сырой live-счётчик рекордера,
+///   плюс «· на карте N», когда фильтр выбросов скрыл точки) + «Остановить» (brandRed);
 /// - idle + 0 точек → онбординг-текст + CTA «Начать запись»;
-/// - idle + >0 → метрики Точки/Сегменты/Время + «Начать запись» + вторичная «Поделиться GPX».
+/// - idle + >0 → метрики Точки (+ «на карте N»)/Сегменты/Время + «Начать запись» + вторичная «Поделиться GPX».
 ///
 /// Держит и `recorder`, и `model` (оба `@Observable`) — SwiftUI трекает `recorder.state`/`recorder.pointCount`
 /// напрямую, поэтому карточка перерисовывается на старт/стоп без ручного моста. GPX-файл пере-генерится
-/// офф-мейн при смене `trackUsable` в temp-каталог и раздаётся системным `ShareLink`.
+/// офф-мейн при смене линий трека в temp-каталог и раздаётся системным `ShareLink`.
 private struct TrackCardView: View {
     let recorder: TrackRecorder
     let model: TeamModel
@@ -449,7 +449,7 @@ private struct TrackCardView: View {
         }
         // Пере-генерация GPX-файла офф-мейн при смене набора точек (recording не показывает шаринг,
         // но пустой набор гасит `gpxURL`, а финальные точки после стопа перегенерят файл).
-        .task(id: model.trackUsable) { await regenerateGpx() }
+        .task(id: model.filteredTrack.lines) { await regenerateGpx() }
     }
 
     // MARK: Recording
@@ -462,7 +462,7 @@ private struct TrackCardView: View {
                 Text("Идёт запись")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color.ink)
-                Text(pointsLabel(recorder.pointCount))
+                Text(pointsLabel(recorder.pointCount) + shownNote(prefix: " · "))
                     .font(.mono(11))
                     .foregroundStyle(Color.sub)
             }
@@ -491,6 +491,7 @@ private struct TrackCardView: View {
         if model.trackPointCount > 0 {
             TrackMetricsRow(
                 pointCount: model.trackPointCount,
+                shownNote: shownNote(prefix: ""),
                 segmentCount: model.trackSegmentCount,
                 timeRange: model.trackTimeRange
             )
@@ -548,19 +549,24 @@ private struct TrackCardView: View {
         }
     }
 
+    /// «на карте N», когда фильтр выбросов скрыл часть точек; иначе пусто.
+    private func shownNote(prefix: String) -> String {
+        model.filteredTrack.hiddenCount > 0 ? "\(prefix)на карте \(model.trackShownPointCount)" : ""
+    }
+
     // MARK: GPX
 
     private func regenerateGpx() async {
-        let points = model.trackUsable
-        guard !points.isEmpty else { gpxURL = nil; return }
+        let lines = model.filteredTrack.lines
+        guard !lines.isEmpty else { gpxURL = nil; return }
         let name = trackName
         let fileName = gpxFileName(teamLabel: teamLabel, dateIso: todayIso())
         // Сериализацию GPX (CPU) гоним офф-мейн, а ЗАПИСЬ на детерминированный путь — только после проверки
-        // отмены. `.task(id:)` отменяет старое поколение при смене `trackUsable`, и отменённое поколение
+        // отмены. `.task(id:)` отменяет старое поколение при смене линий, и отменённое поколение
         // выходит ДО записи: без этого отставшая старая генерация перезаписала бы файл устаревшим треком,
         // и `ShareLink` отдавал бы неактуальное содержимое. Запись сериализована на MainActor (структурный
         // контекст `.task`) — два поколения не перекрывают запись.
-        let gpx = await Task.detached(priority: .utility) { buildGpx(points: points, trackName: name) }.value
+        let gpx = await Task.detached(priority: .utility) { buildGpx(lines: lines, trackName: name) }.value
         if Task.isCancelled { return }
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tracks", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -591,18 +597,20 @@ private struct PulsingDot: View {
 /// (`pointsWord`/`segmentsWord`) и капитализируются, значения — `Font.mono`.
 private struct TrackMetricsRow: View {
     let pointCount: Int
+    /// «на карте N» под счётчиком точек (пусто — фильтр ничего не скрыл).
+    let shownNote: String
     let segmentCount: Int
     let timeRange: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
-            metric(value: "\(pointCount)", label: pointsWord(pointCount).capitalizedFirst)
+            metric(value: "\(pointCount)", label: pointsWord(pointCount).capitalizedFirst, note: shownNote)
             metric(value: "\(segmentCount)", label: segmentsWord(segmentCount).capitalizedFirst)
             metric(value: timeRange ?? "—", label: "Время")
         }
     }
 
-    private func metric(value: String, label: String) -> some View {
+    private func metric(value: String, label: String, note: String = "") -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(value)
                 .font(.mono(16, weight: .bold))
@@ -612,6 +620,11 @@ private struct TrackMetricsRow: View {
                 .foregroundStyle(Color.sub)
                 .textCase(.uppercase)
                 .tracking(0.4)
+            if !note.isEmpty {
+                Text(note)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.sub)
+            }
         }
     }
 }

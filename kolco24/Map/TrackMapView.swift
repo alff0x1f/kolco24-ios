@@ -8,7 +8,11 @@
 //  дом `import MapKit` (grep-инвариант; прецедент `Photo/CameraPreviewView`).
 //
 //  ТИПЫ КООРДИНАТ: `CLLocationCoordinate2D` появляется ТОЛЬКО здесь — конверсия из
-//  пар `Double` lat/lon (`trackPath`/`MapMarkPin`), которые готовит `MapModel`.
+//  пар `Double` lat/lon (`trackLines`/`MapMarkPin`), которые готовит `MapModel`.
+//
+//  Трек — линии фильтра выбросов: линии из ≥ 2 точек идут одним `MKMultiPolyline` (между линиями
+//  ничего не рисуется), одиночные фиксы — точки-аннотации (иначе первый фикс живого хвоста после
+//  разрыва не был бы виден до следующего).
 //  Иначе `App/MapModel` потребовал бы `import CoreLocation`, ломая grep-инвариант.
 //  `import SwiftUI` нужен для дизайн-токенов (`UIColor(Color.brandRed/.kolcoOrange)`,
 //  адаптивность сохраняется) — под `Map/` это не запрещено.
@@ -29,8 +33,8 @@ struct MapOverlayDescriptor {
 
 /// Карта команды: трек-полилиния + пины КП поверх MBTiles-подложки или Apple-fallback.
 struct TrackMapView: UIViewRepresentable {
-    /// Точки трека парами `Double` (уже отфильтрованы/отсортированы в `MapModel`).
-    let trackPath: [(lat: Double, lon: Double)]
+    /// Линии трека парами `Double` (уже отфильтрованы/отсортированы в `MapModel`).
+    let trackLines: [[(lat: Double, lon: Double)]]
     /// Пины взятых КП (только с GPS-фиксом).
     let pins: [MapMarkPin]
     /// Оффлайн-подложка (`nil` → Apple-тайлы онлайн).
@@ -73,17 +77,25 @@ struct TrackMapView: UIViewRepresentable {
     /// Полная замена полилинии и пинов (без инкрементального аппенда). При первой порции данных без
     /// оффлайн-подложки — однократная подгонка камеры под трек/пины.
     private func applyData(_ mapView: MKMapView, coordinator: Coordinator) {
-        // Полилиния: снять старую, положить новую.
+        // Полилинии: снять старые, положить новые (одна на все линии из ≥ 2 точек).
         if let old = coordinator.polyline {
             mapView.removeOverlay(old)
             coordinator.polyline = nil
         }
-        let coords = trackPath.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) }
-        if coords.count >= 2 {
-            let line = MKPolyline(coordinates: coords, count: coords.count)
-            mapView.addOverlay(line, level: .aboveLabels)
-            coordinator.polyline = line
+        let lines = trackLines.map { line in
+            line.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) }
         }
+        let polylines = lines.filter { $0.count >= 2 }.map { MKPolyline(coordinates: $0, count: $0.count) }
+        if !polylines.isEmpty {
+            let multi = MKMultiPolyline(polylines)
+            mapView.addOverlay(multi, level: .aboveLabels)
+            coordinator.polyline = multi
+        }
+
+        // Одиночные фиксы — точки.
+        mapView.removeAnnotations(mapView.annotations.compactMap { $0 as? TrackDotAnnotation })
+        mapView.addAnnotations(lines.compactMap { $0.count == 1 ? TrackDotAnnotation(coordinate: $0[0]) : nil })
+        let coords = lines.flatMap { $0 }
 
         // Пины КП: снять прежние аннотации КП, положить свежие.
         let staleAnnotations = mapView.annotations.compactMap { $0 as? CheckpointAnnotation }
@@ -180,15 +192,15 @@ struct TrackMapView: UIViewRepresentable {
     // MARK: - Coordinator (MKMapViewDelegate)
 
     final class Coordinator: NSObject, MKMapViewDelegate {
-        var polyline: MKPolyline?
+        var polyline: MKMultiPolyline?
         var didSetInitialCamera = false
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let tileOverlay = overlay as? MKTileOverlay {
                 return MKTileOverlayRenderer(tileOverlay: tileOverlay)
             }
-            if let line = overlay as? MKPolyline {
-                let renderer = MKPolylineRenderer(polyline: line)
+            if let line = overlay as? MKMultiPolyline {
+                let renderer = MKMultiPolylineRenderer(multiPolyline: line)
                 renderer.strokeColor = UIColor(Color.kolcoOrange)
                 renderer.lineWidth = 3
                 renderer.lineJoin = .round
@@ -199,6 +211,12 @@ struct TrackMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if annotation is TrackDotAnnotation {
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: TrackDotView.reuseId)
+                    ?? TrackDotView(annotation: annotation, reuseIdentifier: TrackDotView.reuseId)
+                view.annotation = annotation
+                return view
+            }
             // Синюю точку пользователя рисует MapKit сам.
             guard let cp = annotation as? CheckpointAnnotation else { return nil }
             let view = mapView.dequeueReusableAnnotationView(
@@ -209,6 +227,38 @@ struct TrackMapView: UIViewRepresentable {
             return view
         }
     }
+}
+
+// MARK: - Точка одиночного фикса трека
+
+/// Одиночный фикс трека (линия из одной точки после фильтра).
+final class TrackDotAnnotation: NSObject, MKAnnotation {
+    let coordinate: CLLocationCoordinate2D
+
+    init(coordinate: CLLocationCoordinate2D) {
+        self.coordinate = coordinate
+    }
+}
+
+/// Кружок цвета трека, чуть шире полуширины линии — чтобы одиночный фикс был заметен.
+final class TrackDotView: MKAnnotationView {
+    static let reuseId = "track-dot"
+    private static let diameter: CGFloat = 7
+
+    override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
+        super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        let d = Self.diameter
+        frame = CGRect(x: 0, y: 0, width: d, height: d)
+        backgroundColor = UIColor(Color.kolcoOrange)
+        layer.cornerRadius = d / 2
+        canShowCallout = false
+        isEnabled = false
+        displayPriority = .required
+        zPriority = .min
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
 }
 
 // MARK: - Аннотация КП

@@ -4,17 +4,15 @@
 //
 //  Чистая, framework-free GPX-сериализация. Зеркало `data/track/GpxExport.kt` 1:1
 //  (JVM-юнит-тестируемо, без Android/UIKit — как `TrackPoints.swift`). Вызывающая
-//  сторона передаёт уже отфильтрованные (`filterPoints`) и reboot-safe
-//  отсортированные (`sortedTrackPoints`) точки; сериализатор остаётся тупым и
-//  тотальным.
+//  сторона передаёт линии `trackLines` над reboot-safe отсортированными точками;
+//  сериализатор остаётся тупым и тотальным.
 //
 //  Трек эмитится как GPX 1.1: один `<trk>` с `<name>`, затем **один `<trkseg>` на
-//  каждый последовательный ран `TrackPoint.segmentId`**. Корректно упорядоченный
-//  вход держит каждую сессию записи непрерывной, поэтому разрыв stop→start
-//  рендерится отдельными сегментами, а не «телепорт-линией» (как сервер группирует
-//  по `segment_id`). `<time>` точки — `trustedMs ?? wallMs` в ISO-8601 UTC; `<ele>`
-//  опускается при `altitude == nil`. Координаты в `%.6f` с точкой независимо от
-//  локали устройства.
+//  линию**. Группировка целиком на вызывающем: `trackLines` никогда не пересекает
+//  сессию записи (`segmentId`) или недостижимый скачок, поэтому разрыв stop→start
+//  или разрыв фильтра рендерится отдельными сегментами, а не «телепорт-линией».
+//  `<time>` точки — `trustedMs ?? wallMs` в ISO-8601 UTC; `<ele>` опускается при
+//  `altitude == nil`. Координаты в `%.6f` с точкой независимо от локали устройства.
 //
 
 import Foundation
@@ -32,34 +30,28 @@ private let gpxIsoFormatter: DateFormatter = {
     return f
 }()
 
-/// Построить GPX-документ для [points] (предполагаются пред-фильтрованными и упорядоченными)
+/// Построить GPX-документ для [lines] (предполагаются отфильтрованными и упорядоченными)
 /// под единым именованным треком.
-func buildGpx(points: [TrackPoint], trackName: String) -> String {
+func buildGpx(lines: [[TrackPoint]], trackName: String) -> String {
     var sb = ""
     sb += GPX_HEADER
     sb += "\n"
     sb += "  <trk>\n"
     sb += "    <name>" + xmlEscape(trackName) + "</name>\n"
 
-    // Группировка последовательных ранов в <trkseg> по segmentId; глобальный порядок — за вызывающим.
-    var currentSegment: String? = nil
-    var segmentOpen = false
-    for p in points {
-        if !segmentOpen || p.segmentId != currentSegment {
-            if segmentOpen { sb += "    </trkseg>\n" }
-            sb += "    <trkseg>\n"
-            segmentOpen = true
-            currentSegment = p.segmentId
+    for line in lines {
+        sb += "    <trkseg>\n"
+        for p in line {
+            sb += "      <trkpt lat=\"" + num(p.lat) + "\" lon=\"" + num(p.lon) + "\">\n"
+            if let altitude = p.altitude {
+                sb += "        <ele>" + num(altitude) + "</ele>\n"
+            }
+            let date = Date(timeIntervalSince1970: Double(trackPointTimeMs(p)) / 1000)
+            sb += "        <time>" + gpxIsoFormatter.string(from: date) + "</time>\n"
+            sb += "      </trkpt>\n"
         }
-        sb += "      <trkpt lat=\"" + num(p.lat) + "\" lon=\"" + num(p.lon) + "\">\n"
-        if let altitude = p.altitude {
-            sb += "        <ele>" + num(altitude) + "</ele>\n"
-        }
-        let date = Date(timeIntervalSince1970: Double(trackPointTimeMs(p)) / 1000)
-        sb += "        <time>" + gpxIsoFormatter.string(from: date) + "</time>\n"
-        sb += "      </trkpt>\n"
+        sb += "    </trkseg>\n"
     }
-    if segmentOpen { sb += "    </trkseg>\n" }
 
     sb += "  </trk>\n"
     sb += "</gpx>\n"

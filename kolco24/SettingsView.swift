@@ -155,7 +155,21 @@ struct SettingsView: View {
     // MARK: - Запись трека
 
     private var trackSection: some View {
-        Section {
+        @Bindable var model = model
+        return Section {
+            HStack(spacing: 12) {
+                SettingsRow(
+                    systemImage: "point.topleft.down.to.point.bottomright.curvepath",
+                    iconBg: Color.kolcoOrange,
+                    label: "Показывать все точки трека",
+                    sub: "Без фильтрации выбросов GPS"
+                )
+                Toggle("Показывать все точки трека", isOn: $model.showAllTrackPoints)
+                    .labelsHidden()
+                    .tint(Color.kolcoOrange)
+            }
+            .listRowBackground(Color.card)
+
             Button {
                 showClearTrackConfirm = true
             } label: {
@@ -189,7 +203,7 @@ struct SettingsView: View {
                 if model.localModeBusy {
                     ProgressView()
                 } else {
-                    Toggle("", isOn: Binding(
+                    Toggle("Локальный сервер (Wi-Fi гонки)", isOn: Binding(
                         get: { model.localModeOn },
                         set: { model.toggleLocalMode($0) }
                     ))

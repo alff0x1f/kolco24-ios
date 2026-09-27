@@ -458,14 +458,15 @@ struct TeamModelTests {
         #expect(model.trackTimeRange == hhmm(t))
     }
 
-    /// Грубый фикс (accuracy > 50) НЕ входит в `trackUsable`/время, но считается в СЫРЫХ count/segments.
-    @Test func track_coarseFixFilteredFromUsableButCountedRaw() async throws {
+    /// Фикс хуже 500 м НЕ входит в `trackUsable`/время, но считается в СЫРЫХ count/segments;
+    /// «Все точки» возвращает его без перезапуска наблюдения.
+    @Test func track_hardCapFixFilteredFromUsableButCountedRaw() async throws {
         let env = try makeEnv()
         let base: Int64 = 1_700_000_000_000
         let t2 = base + 3_600_000, t3 = base + 7_200_000
         try await env.trackStore.insertAll([
             // Грубый фикс с САМЫМ ранним временем в отдельном сегменте.
-            trackPoint(id: "coarse", seg: "s2", accuracy: 60, trustedMs: base),
+            trackPoint(id: "coarse", seg: "s2", accuracy: 600, trustedMs: base),
             trackPoint(id: "a", seg: "s1", trustedMs: t2),
             trackPoint(id: "b", seg: "s1", trustedMs: t3),
         ])
@@ -479,7 +480,13 @@ struct TeamModelTests {
         // usable исключил его → 2 точки, все из s1, диапазон стартует с t2 (не base).
         #expect(model.trackUsable.count == 2)
         #expect(model.trackUsable.allSatisfy { $0.segmentId == "s1" })
+        #expect(model.trackShownPointCount == 2)
         #expect(model.trackTimeRange == "\(hhmm(t2))–\(hhmm(t3))")
+
+        env.trackFilterPreference.setShowAllPoints(true)
+        #expect(model.trackUsable.count == 3)
+        #expect(model.trackShownPointCount == 3)
+        #expect(model.trackTimeRange == "\(hhmm(base))–\(hhmm(t3))")
     }
 
     /// Reboot-safe порядок: при равном времени тай-брейк по `bootCount` (не по монотонному elapsed).
