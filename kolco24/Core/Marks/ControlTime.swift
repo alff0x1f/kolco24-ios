@@ -92,3 +92,17 @@ func controlTimeDisplay(_ state: ControlTimeState) -> (label: String, value: Str
         return ("Время", formatHoursMinutes(elapsedMs), overMs != nil)
     }
 }
+
+/// Секунды внутри текущей минуты значения ячейки — хвост `:SS` к `Ч:ММ`, показывающий, что время идёт.
+/// `nil` — значение не тикает (нет старта, финиш, КВ неизвестно). Округление вниз, как у минут:
+/// остаток `3:27:59` → «3:27» + «:59».
+func controlTimeSeconds(_ state: ControlTimeState) -> Int? {
+    switch state {
+    case .running(let remainingMs):
+        return Int(remainingMs % msPerMinute / 1000)
+    case .overtime(let overMs):
+        return Int(overMs % msPerMinute / 1000)
+    case .unknown, .notStarted, .finished:
+        return nil
+    }
+}

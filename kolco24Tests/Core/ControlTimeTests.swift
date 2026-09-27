@@ -202,4 +202,19 @@ struct ControlTimeTests {
         #expect(d(.finished(elapsedMs: 8 * Self.hour + 12 * Self.min, overMs: 12 * Self.min))
             == ["Время", "8:12", "red"])
     }
+
+    // MARK: - controlTimeSeconds
+
+    @Test func seconds_onlyWhileTicking() {
+        #expect(controlTimeSeconds(.unknown) == nil)
+        #expect(controlTimeSeconds(.notStarted(limitMs: 8 * Self.hour)) == nil)
+        #expect(controlTimeSeconds(.finished(elapsedMs: 7 * Self.hour, overMs: nil)) == nil)
+    }
+
+    @Test func seconds_flooredLikeMinutes() {
+        #expect(controlTimeSeconds(.running(remainingMs: 3 * Self.hour + 27 * Self.min + 59_999)) == 59)
+        #expect(controlTimeSeconds(.running(remainingMs: 3 * Self.hour)) == 0)
+        #expect(controlTimeSeconds(.overtime(overMs: 0)) == 0)
+        #expect(controlTimeSeconds(.overtime(overMs: 12 * Self.min + 45_500)) == 45)
+    }
 }
