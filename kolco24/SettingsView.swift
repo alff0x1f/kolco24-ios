@@ -164,7 +164,7 @@ struct SettingsView: View {
                     label: "Показывать все точки трека",
                     sub: "Без фильтрации выбросов GPS"
                 )
-                Toggle("", isOn: $model.showAllTrackPoints)
+                Toggle("Показывать все точки трека", isOn: $model.showAllTrackPoints)
                     .labelsHidden()
                     .tint(Color.kolcoOrange)
             }
@@ -203,7 +203,7 @@ struct SettingsView: View {
                 if model.localModeBusy {
                     ProgressView()
                 } else {
-                    Toggle("", isOn: Binding(
+                    Toggle("Локальный сервер (Wi-Fi гонки)", isOn: Binding(
                         get: { model.localModeOn },
                         set: { model.toggleLocalMode($0) }
                     ))
