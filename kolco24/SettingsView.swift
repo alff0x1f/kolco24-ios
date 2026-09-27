@@ -155,7 +155,21 @@ struct SettingsView: View {
     // MARK: - Запись трека
 
     private var trackSection: some View {
-        Section {
+        @Bindable var model = model
+        return Section {
+            HStack(spacing: 12) {
+                SettingsRow(
+                    systemImage: "point.topleft.down.to.point.bottomright.curvepath",
+                    iconBg: Color.kolcoOrange,
+                    label: "Показывать все точки трека",
+                    sub: "Без фильтрации выбросов GPS"
+                )
+                Toggle("", isOn: $model.showAllTrackPoints)
+                    .labelsHidden()
+                    .tint(Color.kolcoOrange)
+            }
+            .listRowBackground(Color.card)
+
             Button {
                 showClearTrackConfirm = true
             } label: {

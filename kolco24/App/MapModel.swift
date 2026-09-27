@@ -72,6 +72,7 @@ final class MapModel {
     /// Разрешённый URL подложки текущей гонки (из `Race.mapUrl`) — цель `downloadMap`. `nil`, пока
     /// доступность не пересчитана / у гонки нет карты.
     @ObservationIgnored private var mapUrl: String?
+    @ObservationIgnored private let trackMemo = FilteredTrackMemo()
 
     @ObservationIgnored private var trackTask: Task<Void, Never>?
     @ObservationIgnored private var marksTask: Task<Void, Never>?
@@ -249,11 +250,30 @@ final class MapModel {
 
     // MARK: - Derived (для TrackMapView)
 
-    /// Путь трека для полилинии: отфильтрованные по точности и reboot-safe отсортированные точки как пары
-    /// `Double` lat/lon (порт `trackUsable` из `TeamModel`; конверсия в `CLLocationCoordinate2D` — в
-    /// `TrackMapView`, иначе модель потребовала бы `import CoreLocation`).
-    var trackPath: [(lat: Double, lon: Double)] {
-        sortedTrackPoints(filterPoints(trackPoints)).map { (lat: $0.lat, lon: $0.lon) }
+    /// Линии трека для полилиний: фильтр выбросов (или все точки при «Все точки») над reboot-safe
+    /// сортировкой, парами `Double` lat/lon (конверсия в `CLLocationCoordinate2D` — в `TrackMapView`,
+    /// иначе модель потребовала бы `import CoreLocation`). Между линиями ничего не рисуется.
+    var trackLines: [[(lat: Double, lon: Double)]] {
+        filteredTrack.lines.map { line in line.map { (lat: $0.lat, lon: $0.lon) } }
+    }
+
+    /// Сколько сырых точек скрыл фильтр (0 при «Все точки») — счётчик на чипе «Все точки».
+    var hiddenPointCount: Int {
+        filteredTrack.hiddenCount
+    }
+
+    /// Показывать ли все точки без фильтра (общая настройка с экраном «Настройки»).
+    var showAllPoints: Bool {
+        env.trackFilterPreference.showAllPoints
+    }
+
+    /// Переключить «Все точки» (чип на карте). Камера не перестраивается — меняются только линии.
+    func toggleShowAllPoints() {
+        env.trackFilterPreference.setShowAllPoints(!showAllPoints)
+    }
+
+    private var filteredTrack: FilteredTrack {
+        trackMemo.get(raw: trackPoints, showAllPoints: showAllPoints)
     }
 
     /// КП текущей гонки по id — для номера/живой цены пина.

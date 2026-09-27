@@ -63,6 +63,12 @@ final class SettingsModel {
 
     // MARK: - Трек
 
+    /// Тумблер «Показывать все точки трека» — общая настройка с чипом на карте (`TrackFilterPreference`).
+    var showAllTrackPoints: Bool {
+        get { env.trackFilterPreference.showAllPoints }
+        set { env.trackFilterPreference.setShowAllPoints(newValue) }
+    }
+
     /// Живой счётчик точек трека выбранной команды (сырой, без фильтра точности — сабтайтл «N точек»).
     private(set) var trackPointCount: Int = 0
 

@@ -68,6 +68,7 @@ final class TeamModel {
     /// GPS-провайдера». Прод — `env.isReducedAccuracy` (чтение `accuracyAuthorization` с удерживаемого
     /// `CLLocationManager`), тесты подают своё. Старт записи не блокируется — лишь тихий хинт в TrackCard.
     @ObservationIgnored private let isReducedAccuracy: () -> Bool
+    @ObservationIgnored private let trackMemo = FilteredTrackMemo()
     @ObservationIgnored private var bindingsTask: Task<Void, Never>?
     @ObservationIgnored private var categoriesTask: Task<Void, Never>?
     @ObservationIgnored private var trackTask: Task<Void, Never>?
@@ -184,10 +185,21 @@ final class TeamModel {
 
     // MARK: - Derived (GPS-трек, этап 8)
 
-    /// Точки для отображения/экспорта: отфильтрованные по точности и reboot-safe отсортированные
-    /// (`filterPoints` + `sortedTrackPoints`). База «Времени» и GPX-шаринга (порт `trackUsable`).
+    /// Трек для отображения/экспорта: линии фильтра выбросов (или все точки при «Все точки») над
+    /// reboot-safe сортировкой. База «Времени», GPX-шаринга и «на карте N» (порт `trackFiltered`).
+    var filteredTrack: FilteredTrack {
+        trackMemo.get(raw: trackPoints, showAllPoints: env.trackFilterPreference.showAllPoints)
+    }
+
+    /// Плоские показанные точки (порт `trackUsable`).
     var trackUsable: [TrackPoint] {
-        sortedTrackPoints(filterPoints(trackPoints))
+        filteredTrack.points
+    }
+
+    /// Сколько точек видно на карте/в GPX (порт `trackShownPointCount`). Равно сырому счётчику, когда
+    /// фильтр ничего не скрыл или включено «Все точки».
+    var trackShownPointCount: Int {
+        trackPointCount - filteredTrack.hiddenCount
     }
 
     /// Число записанных точек (СЫРОЕ, не фильтрованное — порт `safeTrack.size`): сессия из одних грубых

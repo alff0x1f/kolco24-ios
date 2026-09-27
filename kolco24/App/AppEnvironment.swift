@@ -79,6 +79,9 @@ final class AppEnvironment {
     /// Персистнутая настройка темы (`ThemeMode`). `AppModel.themeMode` проксирует её; корневая вьюха
     /// маппит в `.preferredColorScheme`.
     let themePreference: ThemePreference
+    /// Тумблер «Все точки» (фильтр выбросов трека). `@Observable` — его читают модели карты/команды/
+    /// настроек, пишут строка настроек и чип на карте.
+    let trackFilterPreference: TrackFilterPreference
     /// Оркестратор LAN-режима: probe/enter/exit/refreshAll поверх 4 репозиториев + LAN-клиента.
     /// Конструируется ПОСЛЕ блока репозиториев (захватывает их `refresh*` + `local.fetchSync`), тогда как
     /// `leaseHolder` — ДО него (его читает `isRacePinned`).
@@ -178,6 +181,7 @@ final class AppEnvironment {
         localOrigin: String,
         leaseStore: RaceLeaseStore,
         themePreference: ThemePreference,
+        trackFilterPreference: TrackFilterPreference,
         adminTokenStore: AdminTokenStore,
         adminSessionHolder: AdminSessionHolder,
         trustedClock: TrustedClock,
@@ -222,6 +226,7 @@ final class AppEnvironment {
         self.locationAuthorization = locationAuthorization
         self.isLowPowerMode = isLowPowerMode
         self.themePreference = themePreference
+        self.trackFilterPreference = trackFilterPreference
         self.adminSessionHolder = adminSessionHolder
         let writer = database.writer
 
@@ -421,6 +426,7 @@ final class AppEnvironment {
             // Этап 9: lease/тема персистятся в UserDefaults (тот же адаптер-идиома, что `ClockAnchorStore`).
             leaseStore: RaceLeaseStore.fromUserDefaults(),
             themePreference: ThemePreference.fromUserDefaults(),
+            trackFilterPreference: TrackFilterPreference.fromUserDefaults(),
             adminTokenStore: adminTokenStore,
             adminSessionHolder: adminSessionHolder,
             // Раньше `pair.clock` терялся; теперь общий якорь времени живёт в графе.
@@ -490,6 +496,10 @@ final class AppEnvironment {
             load: { prefs.get(ThemePreference.keyThemeMode) },
             save: { prefs.set(ThemePreference.keyThemeMode, $0) }
         )
+        let trackFilterPreference = TrackFilterPreference(
+            load: { prefs.get(TrackFilterPreference.keyShowAllPoints) == "true" },
+            save: { prefs.set(TrackFilterPreference.keyShowAllPoints, $0 ? "true" : "false") }
+        )
         // Этап 10: admin-стор — инъецируемый (тесты передают свой, чтобы посидировать/проверять его),
         // иначе изолированный in-memory (Keychain в тестах НЕ трогается). Держатель строится ДО клиентов,
         // оба берут его bearer.
@@ -512,6 +522,7 @@ final class AppEnvironment {
             localOrigin: localOrigin,
             leaseStore: leaseStore,
             themePreference: themePreference,
+            trackFilterPreference: trackFilterPreference,
             adminTokenStore: tokenStore,
             adminSessionHolder: adminSessionHolder,
             trustedClock: trustedClock,
@@ -591,7 +602,7 @@ struct SilentFeedback: ScanFeedbackPlaying {
 }
 
 /// In-memory key-value backing для `inMemory`-графа (этап 9): подкладывается под `RaceLeaseStore`/
-/// `ThemePreference` вместо `UserDefaults.standard`, чтобы тесты не писали глобальное состояние.
+/// `ThemePreference`/`TrackFilterPreference` вместо `UserDefaults.standard`, чтобы тесты не писали глобальное состояние.
 private final class InMemoryPrefs: @unchecked Sendable {
     private let lock = NSLock()
     private var store: [String: String] = [:]

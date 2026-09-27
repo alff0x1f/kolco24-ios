@@ -206,17 +206,17 @@ struct MapModelTests {
 
     // MARK: - Производные: фильтр/сортировка трека, пины
 
-    @Test func derivedTrackPathAndPins() async throws {
+    @Test func derivedTrackLinesAndPins() async throws {
         let fakes = MapFakes()
         let env = try makeEnv(fakes)
         try await env.checkpointStore.insertCheckpoints([
             openCP(id: 1, race: 7, number: 5, cost: 9),   // живая цена 9 (снимок взятия — 2)
         ])
-        // Точки: разный порядок времени + одна грубая (accuracy 99 > 50) — отбрасывается фильтром.
+        // Точки: разный порядок времени + одна грубая (accuracy 600 > 500) — отбрасывается фильтром.
         try await env.trackStore.insertAll([
             trackPoint(id: "b", race: 7, team: 42, lat: 2, lon: 2, wallMs: 2_000),
             trackPoint(id: "a", race: 7, team: 42, lat: 1, lon: 1, wallMs: 1_000),
-            trackPoint(id: "bad", race: 7, team: 42, lat: 9, lon: 9, accuracy: 99, wallMs: 500),
+            trackPoint(id: "bad", race: 7, team: 42, lat: 9, lon: 9, accuracy: 600, wallMs: 500),
         ])
         // Взятия: с фиксом (пин, живая цена), с фиксом но КП не в легенде (фолбэк цены/номера),
         // без фикса (пина нет).
@@ -232,9 +232,15 @@ struct MapModelTests {
         await waitUntil { model.checkpoints.count == 1 && model.marks.count == 3 && model.trackPoints.count == 3 }
 
         // Трек: грубая точка отброшена, порядок по времени (a → b).
-        let path = model.trackPath
-        #expect(path.count == 2)
-        #expect(path.map(\.lat) == [1, 2])
+        #expect(model.trackLines.flatMap { $0 }.map(\.lat) == [1, 2])
+        #expect(model.hiddenPointCount == 1)
+        #expect(!model.showAllPoints)
+
+        // «Все точки»: грубая точка возвращается, скрытых нет; настройка общая с графом.
+        model.toggleShowAllPoints()
+        #expect(env.trackFilterPreference.showAllPoints)
+        #expect(model.trackLines.flatMap { $0 }.map(\.lat) == [9, 1, 2])
+        #expect(model.hiddenPointCount == 0)
 
         // Пины: два (m1, m2), m3 без фикса не даёт пина.
         let pins = model.pins
@@ -267,7 +273,7 @@ struct MapModelTests {
         #expect(model.trackPoints.isEmpty)
         #expect(model.marks.isEmpty)
         #expect(model.checkpoints.isEmpty)
-        #expect(model.trackPath.isEmpty)
+        #expect(model.trackLines.isEmpty)
         #expect(model.pins.isEmpty)
         #expect(model.availability == .noMapForRace)
     }

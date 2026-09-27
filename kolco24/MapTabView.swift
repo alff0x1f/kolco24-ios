@@ -11,6 +11,8 @@
 //   - `notDownloaded`/`failed` — нижняя CTA-карточка «Скачать карту гонки» (стиль CTA `MarksView`);
 //   - `downloading(p)` — карточка с прогрессом, процентом и крестиком-отменой;
 //   - `ready`          — чистая карта (оверлеев нет).
+//  Сверху слева — чип «Все точки» (фильтр выбросов трека, общая настройка с «Настройками»): виден, когда
+//  фильтр что-то скрыл («Все точки · +N») или режим уже включён (чтобы его можно было выключить).
 //  Ошибка скачивания уходит тостом (`MapModel.onToast` → `AppModel.toastMessage`), CTA возвращается в
 //  `notDownloaded` при следующем `refreshAvailability`.
 //
@@ -87,7 +89,7 @@ struct MapTabView: View {
 
     private func mapContent(model: MapModel) -> some View {
         TrackMapView(
-            trackPath: model.trackPath,
+            trackLines: model.trackLines,
             pins: model.pins,
             overlay: overlay
         )
@@ -95,16 +97,63 @@ struct MapTabView: View {
         // однократно, не подхватился бы при докачивании карты во время открытой вкладки.
         .id(readyPath ?? "")
         .overlay { availabilityOverlay(model.availability, model: model) }
+        .overlay(alignment: .top) { topOverlay(model: model) }
+    }
+
+    private func topOverlay(model: MapModel) -> some View {
+        VStack(spacing: 6) {
+            if case .noMapForRace = model.availability {
+                unavailableLine
+            }
+            if model.showAllPoints || model.hiddenPointCount > 0 {
+                showAllPointsChip(
+                    selected: model.showAllPoints,
+                    hiddenCount: model.hiddenPointCount,
+                    onTap: model.toggleShowAllPoints
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(.horizontal, DS.hPad)
+        .padding(.top, 8)
+    }
+
+    /// Чип «Все точки»: выключен — полупрозрачный материал + число скрытых точек; включён — оранжевый
+    /// с галочкой. Камера при переключении не двигается.
+    private func showAllPointsChip(selected: Bool, hiddenCount: Int, onTap: @escaping () -> Void) -> some View {
+        Button(action: onTap) {
+            HStack(spacing: 5) {
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                Text("Все точки")
+                    .font(.system(size: 13, weight: .semibold))
+                if hiddenCount > 0 {
+                    Text("· +\(hiddenCount)")
+                        .font(.mono(12, weight: .semibold))
+                }
+            }
+            .foregroundStyle(selected ? Color.white : Color.ink)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background {
+                if selected {
+                    Capsule().fill(Color.kolcoOrange)
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder
     private func availabilityOverlay(_ availability: MapAvailability, model: MapModel) -> some View {
         switch availability {
-        case .noMapForRace:
-            VStack(spacing: 0) {
-                unavailableLine
-                Spacer(minLength: 0)
-            }
+        case .noMapForRace, .ready:
+            EmptyView()
         case .notDownloaded, .failed:
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
@@ -115,8 +164,6 @@ struct MapTabView: View {
                 Spacer(minLength: 0)
                 downloadingCard(progress: progress) { model.cancelDownload() }
             }
-        case .ready:
-            EmptyView()
         }
     }
 
@@ -132,7 +179,6 @@ struct MapTabView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(.ultraThinMaterial, in: Capsule())
-        .padding(.top, 8)
     }
 
     /// CTA скачивания подложки (стиль CTA `MarksView`): оранжевая кнопка + пояснение, нижняя карточка.
