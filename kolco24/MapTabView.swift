@@ -90,6 +90,8 @@ struct MapTabView: View {
     private func mapContent(model: MapModel) -> some View {
         TrackMapView(
             trackLines: model.trackLines,
+            speedRuns: model.speedRuns,
+            stopPins: model.stopPins,
             pins: model.pins,
             overlay: overlay
         )
@@ -113,9 +115,37 @@ struct MapTabView: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            if let runs = model.speedRuns, !runs.isEmpty {
+                speedLegend
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(.horizontal, DS.hPad)
         .padding(.top, 8)
+    }
+
+    /// Легенда раскраски по скорости: образец цвета + диапазон, км/ч.
+    private var speedLegend: some View {
+        HStack(spacing: 8) {
+            ForEach(SpeedBand.allCases, id: \.self) { band in
+                HStack(spacing: 3) {
+                    Capsule()
+                        .fill(SpeedStroke.band(band).color)
+                        .frame(width: 12, height: 4)
+                    Text(speedBandLegendLabel(band))
+                        .font(.mono(11, weight: .semibold))
+                }
+            }
+            Text("км/ч")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.sub)
+        }
+        .foregroundStyle(Color.ink)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Цвет трека по скорости")
     }
 
     /// Чип «Все точки»: выключен — полупрозрачный материал + число скрытых точек; включён — оранжевый

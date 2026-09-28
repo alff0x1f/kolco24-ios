@@ -1,5 +1,20 @@
 # Track speed colors + stop markers (map tab)
 
+## What changed
+- `Core/Track/TrackSpeed.swift` — `speedBand`, `stepSpeedsMps` (net displacement over a ~90 s window, never across
+  a > 3 min step), `stepStrokes` (long step with ends within `clamp(acc₁+acc₂, 50, 150)` m → `.stop`, else `.gap`), `speedRuns`, `trackStops`
+  (`.stop` runs ≥ 3 min), `formatStopDuration`, `speedBandLegendLabel`, `SpeedTrack` + `SpeedTrackMemo`.
+- `Core/Stores/TrackColorPreference` — `@Observable`, key `track_color_by_speed`, default true (also in `inMemory`).
+- `MapModel` — `colorBySpeed`, `speedRuns` (nil → plain track), `stopPins` (`MapStopPin`); off under «Все точки».
+- Settings — «Цвет трека по скорости» row in «Запись трека», disabled under «Все точки».
+- Map — casing under band runs, one `MKMultiPolyline` per stroke, dashed grey gap; `StopAnnotation` capsules
+  (diffed by `MapStopPin`, so an open callout survives other stops changing; below КП pins); legend capsule
+  under the «Все точки» chip.
+- Codex review follow-up: a long step is a stop by **distance**, not by average speed (a 1 h GPS outage
+  while moving with ends 800 m apart averaged 0.8 km/h → false «1 ч 00 мин» stop). Window growth is O(n·k)
+  where k = points per 90 s; linear only because the recorder keeps ≤ 1 fix per 15 s (`shouldKeepFix`).
+- `DesignTokens` — non-adaptive `speedStop…speedFast`, `speedGap`; `SpeedStroke.color`.
+
 ## Overview
 - Color the team track on the map by movement speed, and mark long stops with a «12 мин» label.
 - Goal: after (or during) a rogaine, see where the team lost time — stops, slow bushwhacking, КП search.
@@ -200,14 +215,14 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 - Create: `kolco24/Core/Track/TrackSpeed.swift`
 - Create: `kolco24Tests/Core/TrackSpeedTests.swift`
 
-- [ ] write tests for `speedBand(kmh:)`: each band, exact boundaries (0.99/1.0, 3.0, 5.0, 7.0), 0, very large
-- [ ] write tests for `stepSpeedsMps`: steady 4 km/h line → ~1.11 m/s on every step; stationary line with
+- [x] write tests for `speedBand(kmh:)`: each band, exact boundaries (0.99/1.0, 3.0, 5.0, 7.0), 0, very large
+- [x] write tests for `stepSpeedsMps`: steady 4 km/h line → ~1.11 m/s on every step; stationary line with
       deterministic alternating ±10 m one-axis jitter → all < 1 km/h; long step (> 180 s) → its own speed;
       window does not cross a long step (each side computed only from its side); one-sided window at line
       start and end (keeps growing on the open side); line shorter than 90 s uses the whole line; 2-point line;
       zero dt uses the 1 s floor
-- [ ] implement constants, `SpeedBand`, `speedBand(kmh:)`, `stepSpeedsMps`
-- [ ] run tests - must pass before task 2
+- [x] implement constants, `SpeedBand`, `speedBand(kmh:)`, `stepSpeedsMps`
+- [x] run tests - must pass before task 2
 
 ### Task 2: Step strokes and speed runs
 
@@ -215,13 +230,13 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 - Modify: `kolco24/Core/Track/TrackSpeed.swift`
 - Modify: `kolco24Tests/Core/TrackSpeedTests.swift`
 
-- [ ] write tests for `stepStrokes`: normal steps map to bands; long step with ~0 displacement → `.band(.stop)`;
+- [x] write tests for `stepStrokes`: normal steps map to bands; long step with ~0 displacement → `.band(.stop)`;
       long step with 700 m displacement → `.gap`
-- [ ] write tests for `speedRuns`: single band → one run with all points; band change → two runs sharing the
+- [x] write tests for `speedRuns`: single band → one run with all points; band change → two runs sharing the
       boundary point; `.gap` run between speed runs; one-point lines → no runs; multiple lines never merge into
       one run; empty input
-- [ ] implement `SpeedStroke`, `SpeedRun`, `stepStrokes(_:)`, `speedRuns(_:)`
-- [ ] run tests - must pass before task 3
+- [x] implement `SpeedStroke`, `SpeedRun`, `stepStrokes(_:)`, `speedRuns(_:)`
+- [x] run tests - must pass before task 3
 
 ### Task 3: Stops and duration format
 
@@ -229,15 +244,15 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 - Modify: `kolco24/Core/Track/TrackSpeed.swift`
 - Modify: `kolco24Tests/Core/TrackSpeedTests.swift`
 
-- [ ] write tests for `trackStops` (primary case first — iOS gives no fixes at rest): walking, then two points
+- [x] write tests for `trackStops` (primary case first — iOS gives no fixes at rest): walking, then two points
       10 min and 5 m apart, then walking → one stop with correct start/end and centroid; 4 min of 0.5 km/h
       drift at 15 s sampling → stop; steady 1 km/h walking for 10 min → no stop; 179 s → no stop, 180 s → stop;
       long step with 700 m displacement → no stop; two separate stops; stops never cross lines
-- [ ] write tests for `formatStopDuration`: 3 min, 59 min, 60 min → «1 ч 00 мин», 65 min → «1 ч 05 мин», seconds floored
-- [ ] implement `TrackStop`, `trackStops(_:)`, `formatStopDuration(ms:)`
-- [ ] implement `SpeedTrack(lines:)` and `SpeedTrackMemo`; test memo returns the cached value for the same array
+- [x] write tests for `formatStopDuration`: 3 min, 59 min, 60 min → «1 ч 00 мин», 65 min → «1 ч 05 мин», seconds floored
+- [x] implement `TrackStop`, `trackStops(_:)`, `formatStopDuration(ms:)`
+- [x] implement `SpeedTrack(lines:)` and `SpeedTrackMemo`; test memo returns the cached value for the same array
       and recomputes for a new one
-- [ ] run tests - must pass before task 4
+- [x] run tests - must pass before task 4
 
 ### Task 4: Color-by-speed preference
 
@@ -246,12 +261,12 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 - Create: `kolco24Tests/Core/TrackColorPreferenceTests.swift`
 - Modify: `kolco24/App/AppEnvironment.swift`
 
-- [ ] write tests (fake store, as `TrackFilterPreferenceTests`): loads stored `false`/`true`; `setColorBySpeed`
+- [x] write tests (fake store, as `TrackFilterPreferenceTests`): loads stored `false`/`true`; `setColorBySpeed`
       updates value and calls `save`; `fromUserDefaults` on a scratch `UserDefaults(suiteName:)` defaults to
       `true` when the key is absent (clean up with `removePersistentDomain(forName:)`)
-- [ ] implement `TrackColorPreference` (idiom of `TrackFilterPreference`)
-- [ ] wire into `AppEnvironment` (prod `fromUserDefaults()`; `inMemory` with default `true`, see Technical Details)
-- [ ] run tests - must pass before task 5
+- [x] implement `TrackColorPreference` (idiom of `TrackFilterPreference`)
+- [x] wire into `AppEnvironment` (prod `fromUserDefaults()`; `inMemory` with default `true`, see Technical Details)
+- [x] run tests - must pass before task 5
 
 ### Task 5: MapModel speed track
 
@@ -259,12 +274,12 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 - Modify: `kolco24/App/MapModel.swift`
 - Modify: `kolco24Tests/App/MapModelTests.swift`
 
-- [ ] write tests: fresh `inMemory` env → speed mode on; speed on + filter on → `speedRuns` non-nil, `stopPins`
+- [x] write tests: fresh `inMemory` env → speed mode on; speed on + filter on → `speedRuns` non-nil, `stopPins`
       for a stop;
       `colorBySpeed == false` → `speedRuns == nil`, no stop pins; «Все точки» on → `speedRuns == nil`, no stop
       pins; empty track → empty runs; `trackLines` unchanged in all modes
-- [ ] add `MapStopPin`, `speedRuns`, `stopPins`, `SpeedTrackMemo` usage
-- [ ] run tests - must pass before task 6
+- [x] add `MapStopPin`, `speedRuns`, `stopPins`, `SpeedTrackMemo` usage
+- [x] run tests - must pass before task 6
 
 ### Task 6: Settings toggle
 
@@ -273,11 +288,11 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 - Modify: `kolco24/SettingsView.swift`
 - Modify: `kolco24Tests/App/SettingsModelTests.swift`
 
-- [ ] write tests: `colorTrackBySpeed` get/set goes through `TrackColorPreference`; `colorBySpeedAvailable` is
+- [x] write tests: `colorTrackBySpeed` get/set goes through `TrackColorPreference`; `colorBySpeedAvailable` is
       false while «Все точки» is on
-- [ ] add `colorTrackBySpeed` and `colorBySpeedAvailable` to `SettingsModel`
-- [ ] add the «Цвет трека по скорости» row to «Запись трека» (disabled + alternative sub when unavailable)
-- [ ] run tests - must pass before task 7
+- [x] add `colorTrackBySpeed` and `colorBySpeedAvailable` to `SettingsModel`
+- [x] add the «Цвет трека по скорости» row to «Запись трека» (disabled + alternative sub when unavailable)
+- [x] run tests - must pass before task 7
 
 ### Task 7: Speed polylines on the map
 
@@ -286,12 +301,12 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 - Modify: `kolco24/Map/TrackMapView.swift`
 - Modify: `kolco24/MapTabView.swift`
 
-- [ ] add speed color tokens and `SpeedBand.color` / gap color in `DesignTokens.swift`
-- [ ] `TrackMapView`: `speedRuns` input; casing under band runs only + per-stroke `MKMultiPolyline`s; dashed gap
+- [x] add speed color tokens and `SpeedBand.color` / gap color in `DesignTokens.swift`
+- [x] `TrackMapView`: `speedRuns` input; casing under band runs only + per-stroke `MKMultiPolyline`s; dashed gap
       without casing; style lookup in `Coordinator.rendererFor`; plain mode unchanged
-- [ ] `MapTabView`: pass `speedRuns`
-- [ ] no unit tests for `Map/` and views (project convention) — behavior covered by tasks 1–6; build must succeed
-- [ ] run full test suite + build - must pass before task 8
+- [x] `MapTabView`: pass `speedRuns`
+- [x] no unit tests for `Map/` and views (project convention) — behavior covered by tasks 1–6; build must succeed
+- [x] run full test suite + build - must pass before task 8
 
 ### Task 8: Stop annotations and legend
 
@@ -299,24 +314,24 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 - Modify: `kolco24/Map/TrackMapView.swift`
 - Modify: `kolco24/MapTabView.swift`
 
-- [ ] `StopAnnotation` + view: label, callout, priorities below КП pins; replaced only when `stopPins` changes
-- [ ] `MapTabView`: pass `stopPins`; legend in `topOverlay` under the «Все точки» chip, only in speed mode
-- [ ] no unit tests (device-only); build must succeed
-- [ ] run full test suite + build - must pass before task 9
+- [x] `StopAnnotation` + view: label, callout, priorities below КП pins; replaced only when `stopPins` changes
+- [x] `MapTabView`: pass `stopPins`; legend in `topOverlay` under the «Все точки» chip, only in speed mode
+- [x] no unit tests (device-only); build must succeed
+- [x] run full test suite + build - must pass before task 9
 
 ### Task 9: Verify acceptance criteria
-- [ ] verify all requirements from Overview are implemented
-- [ ] verify edge cases: empty track, one-point lines, «Все точки» on, speed off, live tail growing during
+- [x] verify all requirements from Overview are implemented
+- [x] verify edge cases: empty track, one-point lines, «Все точки» on, speed off, live tail growing during
       recording; accepted limitation: a stop in progress is not shown until the team moves on
-- [ ] grep invariants: no `import GRDB`/UIKit/SwiftUI/MapKit in `Core/`, `App/`
-- [ ] run full test suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] run build: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
+- [x] grep invariants: no `import GRDB`/UIKit/SwiftUI/MapKit in `Core/`, `App/`
+- [x] run full test suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
+- [x] run build: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
 
 ### Task 10: [Final] Update documentation
-- [ ] CLAUDE.md: short trap entry (speed/stops read filtered `trackLines`; plain mode under «Все точки»;
+- [x] CLAUDE.md: short trap entry (speed/stops read filtered `trackLines`; plain mode under «Все точки»;
       speed tokens are non-adaptive next to `amber`)
-- [ ] write the "what changed / iOS-specific choices" summary at the top of this plan (as in the spike-filter plan)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] write the "what changed / iOS-specific choices" summary at the top of this plan (as in the spike-filter plan)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*

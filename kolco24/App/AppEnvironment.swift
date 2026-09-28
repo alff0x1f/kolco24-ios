@@ -82,6 +82,8 @@ final class AppEnvironment {
     /// Тумблер «Все точки» (фильтр выбросов трека). `@Observable` — его читают модели карты/команды/
     /// настроек, пишут строка настроек и чип на карте.
     let trackFilterPreference: TrackFilterPreference
+    /// Тумблер «Цвет трека по скорости». `@Observable` — читают модели карты и настроек.
+    let trackColorPreference: TrackColorPreference
     /// Оркестратор LAN-режима: probe/enter/exit/refreshAll поверх 4 репозиториев + LAN-клиента.
     /// Конструируется ПОСЛЕ блока репозиториев (захватывает их `refresh*` + `local.fetchSync`), тогда как
     /// `leaseHolder` — ДО него (его читает `isRacePinned`).
@@ -182,6 +184,7 @@ final class AppEnvironment {
         leaseStore: RaceLeaseStore,
         themePreference: ThemePreference,
         trackFilterPreference: TrackFilterPreference,
+        trackColorPreference: TrackColorPreference,
         adminTokenStore: AdminTokenStore,
         adminSessionHolder: AdminSessionHolder,
         trustedClock: TrustedClock,
@@ -227,6 +230,7 @@ final class AppEnvironment {
         self.isLowPowerMode = isLowPowerMode
         self.themePreference = themePreference
         self.trackFilterPreference = trackFilterPreference
+        self.trackColorPreference = trackColorPreference
         self.adminSessionHolder = adminSessionHolder
         let writer = database.writer
 
@@ -427,6 +431,7 @@ final class AppEnvironment {
             leaseStore: RaceLeaseStore.fromUserDefaults(),
             themePreference: ThemePreference.fromUserDefaults(),
             trackFilterPreference: TrackFilterPreference.fromUserDefaults(),
+            trackColorPreference: TrackColorPreference.fromUserDefaults(),
             adminTokenStore: adminTokenStore,
             adminSessionHolder: adminSessionHolder,
             // Раньше `pair.clock` терялся; теперь общий якорь времени живёт в графе.
@@ -500,6 +505,11 @@ final class AppEnvironment {
             load: { prefs.get(TrackFilterPreference.keyShowAllPoints) == "true" },
             save: { prefs.set(TrackFilterPreference.keyShowAllPoints, $0 ? "true" : "false") }
         )
+        // Default `true`, как у прод-адаптера: тесты/превью видят тот же режим, что прод.
+        let trackColorPreference = TrackColorPreference(
+            load: { prefs.get(TrackColorPreference.keyColorBySpeed).map { $0 == "true" } ?? true },
+            save: { prefs.set(TrackColorPreference.keyColorBySpeed, $0 ? "true" : "false") }
+        )
         // Этап 10: admin-стор — инъецируемый (тесты передают свой, чтобы посидировать/проверять его),
         // иначе изолированный in-memory (Keychain в тестах НЕ трогается). Держатель строится ДО клиентов,
         // оба берут его bearer.
@@ -523,6 +533,7 @@ final class AppEnvironment {
             leaseStore: leaseStore,
             themePreference: themePreference,
             trackFilterPreference: trackFilterPreference,
+            trackColorPreference: trackColorPreference,
             adminTokenStore: tokenStore,
             adminSessionHolder: adminSessionHolder,
             trustedClock: trustedClock,
