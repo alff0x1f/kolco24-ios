@@ -30,12 +30,12 @@ struct ContentView: View {
                 .tabItem { Label("Отметки", systemImage: "flag.fill") }
                 .tag(0)
                 NavigationStack { LegendView(onChooseTeam: { showPicker = true }) }
-                    .tabItem { Label("Легенда", systemImage: "map.fill") }
+                    .tabItem { Label("Легенда", systemImage: "list.bullet.rectangle.fill") }
                     .tag(1)
                 NavigationStack {
                     MapTabView(onChooseTeam: { showPicker = true })
                 }
-                .tabItem { Label("Карта", systemImage: "mappin.and.ellipse") }
+                .tabItem { Label("Карта", systemImage: "map.fill") }
                 .tag(2)
                 NavigationStack {
                     TeamView(onChooseTeam: { showPicker = true })
