@@ -3,7 +3,7 @@
 ## What changed
 - `Core/Track/TrackSpeed.swift` — `speedBand`, `stepSpeedsMps` (net displacement over a ~90 s window, never across
   a > 3 min step), `stepStrokes` (long step with ends within `clamp(acc₁+acc₂, 50, 150)` m → `.stop`, else `.gap`), `speedRuns`, `trackStops`
-  (`.stop` runs ≥ 3 min), `formatStopDuration`, `speedBandLegendLabel`, `SpeedTrack` + `SpeedTrackMemo`.
+  (`.stop` runs ≥ 5 min), `formatStopDuration`, `speedBandLegendLabel`, `SpeedTrack` + `SpeedTrackMemo`.
 - `Core/Stores/TrackColorPreference` — `@Observable`, key `track_color_by_speed`, default true (also in `inMemory`).
 - `MapModel` — `colorBySpeed`, `speedRuns` (nil → plain track), `stopPins` (`MapStopPin`); off under «Все точки».
 - Settings — «Цвет трека по скорости» row in «Запись трека», disabled under «Все точки».
@@ -72,7 +72,7 @@
 ## Solution Overview
 - Pure core `Core/Track/TrackSpeed.swift` turns the filtered `trackLines` into:
   - **speed runs** — consecutive steps with the same speed band, merged into one polyline each;
-  - **stops** — places where the track stayed within a small radius for ≥ 3 min.
+  - **stops** — places where the track stayed within a small radius for ≥ 5 min.
 - `MapModel` exposes runs + stops (memoized) only when the mode is active.
 - `TrackMapView` draws a dark casing under the whole track, then one `MKMultiPolyline` per band on top.
   Gap steps draw grey and dashed. Stops are small capsule annotations «12 мин» with a callout.
@@ -94,7 +94,7 @@
   < 1 km/h → a stop at rest (the normal iOS case: no fixes while stationary) → `.band(.stop)`; otherwise
   `.gap` (GPS hole while moving — the average would look like slow walking).
 - **Stops come from the strokes, not from a separate radius detector.** A stop = a maximal run of consecutive
-  `.band(.stop)` steps inside one line lasting ≥ 3 min. Markers and colors always agree, one threshold, O(n).
+  `.band(.stop)` steps inside one line lasting ≥ 5 min. Markers and colors always agree, one threshold, O(n).
   (A running-centroid radius detector was rejected: at 1–2 km/h the centroid lags the walker, so slow
   bushwhacking gets a chain of false «3 мин» markers.)
 - **Accepted limitation:** a stop in progress is invisible until the next fix after moving on (no fixes while
@@ -110,7 +110,7 @@
 | `SPEED_WINDOW_MS` | 90_000 | target window span for a step's speed |
 | `SPEED_GAP_MS` | 180_000 | a step longer than this is a gap |
 | `SPEED_BAND_LIMITS_KMH` | [1, 3, 5, 7] | band lower bounds (lower-inclusive) |
-| `STOP_MIN_DURATION_MS` | 180_000 | minimum stop duration |
+| `STOP_MIN_DURATION_MS` | 300_000 | minimum stop duration (raised from 3 min after the first review) |
 
 ### Types
 ```swift
@@ -200,7 +200,7 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 
 ### Settings
 - New row in «Запись трека» above «Показывать все точки трека»: «Цвет трека по скорости» /
-  sub «Стоянки от 3 мин — отметкой на карте». When «Все точки» is on, the row sub reads
+  sub «Стоянки от 5 мин — отметкой на карте». When «Все точки» is on, the row sub reads
   «Недоступно при показе всех точек» and the toggle is disabled.
 
 ## What Goes Where
@@ -246,7 +246,7 @@ struct SpeedTrack: Equatable { let runs: [SpeedRun]; let stops: [TrackStop] }
 
 - [x] write tests for `trackStops` (primary case first — iOS gives no fixes at rest): walking, then two points
       10 min and 5 m apart, then walking → one stop with correct start/end and centroid; 4 min of 0.5 km/h
-      drift at 15 s sampling → stop; steady 1 km/h walking for 10 min → no stop; 179 s → no stop, 180 s → stop;
+      drift at 15 s sampling → stop; steady 1 km/h walking for 10 min → no stop; 299 s → no stop, 300 s → stop;
       long step with 700 m displacement → no stop; two separate stops; stops never cross lines
 - [x] write tests for `formatStopDuration`: 3 min, 59 min, 60 min → «1 ч 00 мин», 65 min → «1 ч 05 мин», seconds floored
 - [x] implement `TrackStop`, `trackStops(_:)`, `formatStopDuration(ms:)`

@@ -155,7 +155,7 @@ server 200.
   «Точек» count stay unfiltered. «Все точки» = `TrackFilterPreference` (`@Observable`, shared by the map chip and
   Settings). Don't bring back the 50 m `filterPoints` cutoff.
 - **Track speed colors** (`docs/plans/completed/20260927-track-speed-colors.md`, `Core/Track/TrackSpeed`): speed =
-  net displacement over a ~90 s window (not summed path — noise). Stops come from `.stop`-band runs ≥ 3 min, not a
+  net displacement over a ~90 s window (not summed path — noise). Stops come from `.stop`-band runs ≥ 5 min, not a
   radius detector; iOS gives no fixes at rest, so a stop is usually one long (> 3 min) ~0 m step. Only over filtered
   lines — «Все точки» always draws the plain orange track.
 - **MBTiles TMS y-flip** (`tile_row = 2^z − 1 − y`) lives only in `Core/Map/MBTiles.tmsRow`.

@@ -143,7 +143,7 @@ private func speedRuns(line: [TrackPoint], strokes: [SpeedStroke]) -> [SpeedRun]
 }
 
 /// Стоянка короче этого на карте не отмечается.
-let STOP_MIN_DURATION_MS: Int64 = 180_000
+let STOP_MIN_DURATION_MS: Int64 = 300_000
 
 /// Стоянка: центроид точек и время первой/последней точки.
 struct TrackStop: Equatable {

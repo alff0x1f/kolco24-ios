@@ -241,19 +241,20 @@ struct TrackSpeedTests {
     }
 
     @Test func slowDriftIsStop() {
-        let stops = trackStops([steady(count: 17, mps: 0.5 / 3.6)])
+        let stops = trackStops([steady(count: 25, mps: 0.5 / 3.6)])
         #expect(stops.count == 1)
         #expect(stops.first?.startMs == 0)
-        #expect(stops.first?.endMs == 240_000)
+        #expect(stops.first?.endMs == 360_000)
     }
 
     @Test func steadySlowWalkIsNotStop() {
         #expect(trackStops([steady(count: 41, mps: 1 / 3.6)]).isEmpty)
     }
 
-    @Test func stopNeedsThreeMinutes() {
-        #expect(trackStops([[pt(0, 0), pt(179, 2)]]).isEmpty)
-        #expect(trackStops([[pt(0, 0), pt(180, 2)]]).count == 1)
+    @Test func stopNeedsFiveMinutes() {
+        #expect(trackStops([[pt(0, 0), pt(299, 2)]]).isEmpty)
+        #expect(trackStops([[pt(0, 0), pt(300, 2)]]).count == 1)
+        #expect(trackStops([(0..<17).map { i in pt(Int64(i) * 15, 0) }]).isEmpty)   // 4 мин
     }
 
     @Test func longStepWithDisplacementIsNotStop() {
@@ -261,34 +262,35 @@ struct TrackSpeedTests {
     }
 
     @Test func walkRestWalkWithIrregularNoiseIsOneStop() {
-        // 5 мин ходьбы, 6 мин стоим с непериодическим 2D-шумом ±6 м, 5 мин ходьбы.
+        // 5 мин ходьбы, 8 мин стоим с непериодическим 2D-шумом ±6 м, 5 мин ходьбы.
         let walk1 = steady(count: 21, mps: walkMps)
         let restM = 20 * walkStepM
-        let rest = (1...24).map { i in
+        let rest = (1...32).map { i in
             let j = jitter(i, 6)
             return pt(300 + Int64(i) * 15, restM + j.north, eastM: j.east)
         }
-        let walk2 = steady(count: 21, startSec: 300 + 25 * 15, startM: restM, mps: walkMps)
+        let walk2 = steady(count: 21, startSec: 300 + 33 * 15, startM: restM, mps: walkMps)
         let stops = trackStops([walk1 + rest + walk2])
 
         #expect(stops.count == 1)
         let stop = try! #require(stops.first)
         let minutes = Double(stop.endMs - stop.startMs) / 60_000
-        #expect(minutes >= 4 && minutes <= 6.5)
-        #expect(stop.startMs >= 240_000 && stop.endMs <= 780_000)
+        #expect(minutes >= 6 && minutes <= 8.5)
+        #expect(stop.startMs >= 240_000 && stop.endMs <= 855_000)
     }
 
     @Test func twoRestsGiveTwoStops() {
-        let rest1 = (0..<25).map { i in pt(Int64(i) * 15, 0) }
-        let walk = Array(steady(count: 13, startSec: 360, startM: 0, mps: walkMps).dropFirst())
+        let rest1 = (0..<33).map { i in pt(Int64(i) * 15, 0) }
+        let walk = Array(steady(count: 13, startSec: 480, startM: 0, mps: walkMps).dropFirst())
         let walkEndM = 12 * walkStepM
-        let rest2 = (0..<25).map { i in pt(555 + Int64(i) * 15, walkEndM) }
+        let rest2 = (0..<33).map { i in pt(675 + Int64(i) * 15, walkEndM) }
         #expect(trackStops([rest1 + walk + rest2]).count == 2)
     }
 
     @Test func stopsNeverCrossLines() {
-        let a = (0..<9).map { i in pt(Int64(i) * 15, 0) }
-        let b = (0..<9).map { i in pt(120 + Int64(i) * 15, 0, seg: "seg2") }
+        // По 4 минуты в каждой линии: вместе было бы 8, но линии не склеиваются.
+        let a = (0..<17).map { i in pt(Int64(i) * 15, 0) }
+        let b = (0..<17).map { i in pt(240 + Int64(i) * 15, 0, seg: "seg2") }
         #expect(trackStops([a, b]).isEmpty)
     }
 

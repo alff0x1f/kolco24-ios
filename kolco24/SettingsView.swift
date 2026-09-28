@@ -163,7 +163,7 @@ struct SettingsView: View {
                     iconBg: Color.kolcoOrange,
                     label: "Цвет трека по скорости",
                     sub: model.colorBySpeedAvailable
-                        ? "Стоянки от 3 мин — отметкой на карте"
+                        ? "Стоянки от 5 мин — отметкой на карте"
                         : "Недоступно при показе всех точек"
                 )
                 Toggle("Цвет трека по скорости", isOn: $model.colorTrackBySpeed)
