@@ -69,6 +69,17 @@ final class SettingsModel {
         set { env.trackFilterPreference.setShowAllPoints(newValue) }
     }
 
+    /// Тумблер «Цвет трека по скорости» (`TrackColorPreference`).
+    var colorTrackBySpeed: Bool {
+        get { env.trackColorPreference.colorBySpeed }
+        set { env.trackColorPreference.setColorBySpeed(newValue) }
+    }
+
+    /// Раскраска работает только над отфильтрованным треком — при «Все точки» тумблер неактивен.
+    var colorBySpeedAvailable: Bool {
+        !env.trackFilterPreference.showAllPoints
+    }
+
     /// Живой счётчик точек трека выбранной команды (сырой, без фильтра точности — сабтайтл «N точек»).
     private(set) var trackPointCount: Int = 0
 

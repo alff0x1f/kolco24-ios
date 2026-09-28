@@ -13,6 +13,9 @@
 //  Трек — линии фильтра выбросов: линии из ≥ 2 точек идут одним `MKMultiPolyline` (между линиями
 //  ничего не рисуется), одиночные фиксы — точки-аннотации (иначе первый фикс живого хвоста после
 //  разрыва не был бы виден до следующего).
+//  Раскраска по скорости (`speedRuns != nil`): тёмная подложка под ранами диапазонов (не под `.gap` —
+//  иначе пунктир читался бы сплошной линией), поверх — по одному `MKMultiPolyline` на штрих; стоянки —
+//  подписи «12 мин», обновляются дифом по `MapStopPin` (иначе каждый фикс закрывал бы выноску).
 //  Иначе `App/MapModel` потребовал бы `import CoreLocation`, ломая grep-инвариант.
 //  `import SwiftUI` нужен для дизайн-токенов (`UIColor(Color.brandRed/.kolcoOrange)`,
 //  адаптивность сохраняется) — под `Map/` это не запрещено.
@@ -35,6 +38,10 @@ struct MapOverlayDescriptor {
 struct TrackMapView: UIViewRepresentable {
     /// Линии трека парами `Double` (уже отфильтрованы/отсортированы в `MapModel`).
     let trackLines: [[(lat: Double, lon: Double)]]
+    /// Раны раскраски по скорости; `nil` — одноцветный трек по `trackLines`.
+    let speedRuns: [(stroke: SpeedStroke, coords: [(lat: Double, lon: Double)])]?
+    /// Стоянки (только в режиме раскраски).
+    let stopPins: [MapStopPin]
     /// Пины взятых КП (только с GPS-фиксом).
     let pins: [MapMarkPin]
     /// Оффлайн-подложка (`nil` → Apple-тайлы онлайн).
@@ -50,6 +57,7 @@ struct TrackMapView: UIViewRepresentable {
             CheckpointAnnotationView.self,
             forAnnotationViewWithReuseIdentifier: CheckpointAnnotationView.reuseId
         )
+        mapView.register(StopAnnotationView.self, forAnnotationViewWithReuseIdentifier: StopAnnotationView.reuseId)
 
         // Оффлайн-подложка добавляется ОДИН раз (при наличии) — Apple-тайлы тогда не грузятся.
         if let overlay {
@@ -77,19 +85,26 @@ struct TrackMapView: UIViewRepresentable {
     /// Полная замена полилинии и пинов (без инкрементального аппенда). При первой порции данных без
     /// оффлайн-подложки — однократная подгонка камеры под трек/пины.
     private func applyData(_ mapView: MKMapView, coordinator: Coordinator) {
-        // Полилинии: снять старые, положить новые (одна на все линии из ≥ 2 точек).
-        if let old = coordinator.polyline {
-            mapView.removeOverlay(old)
-            coordinator.polyline = nil
+        // Полилинии: снять старые, положить новые.
+        mapView.removeOverlays(coordinator.trackOverlays)
+        coordinator.trackOverlays = []
+        coordinator.strokeStyles = [:]
+        let lines = trackLines.map(Self.coordinates)
+        if let speedRuns {
+            let bandRuns = speedRuns.filter { $0.stroke != .gap }.map { Self.coordinates($0.coords) }
+            addTrackOverlay(mapView, coordinator: coordinator, lines: bandRuns, style: .casing)
+            let strokes: [SpeedStroke] = [.gap] + SpeedBand.allCases.map { .band($0) }
+            for stroke in strokes {
+                let runs = speedRuns.filter { $0.stroke == stroke }.map { Self.coordinates($0.coords) }
+                addTrackOverlay(mapView, coordinator: coordinator, lines: runs, style: .stroke(stroke))
+            }
+        } else {
+            addTrackOverlay(mapView, coordinator: coordinator, lines: lines, style: .plain)
         }
-        let lines = trackLines.map { line in
-            line.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) }
-        }
-        let polylines = lines.filter { $0.count >= 2 }.map { MKPolyline(coordinates: $0, count: $0.count) }
-        if !polylines.isEmpty {
-            let multi = MKMultiPolyline(polylines)
-            mapView.addOverlay(multi, level: .aboveLabels)
-            coordinator.polyline = multi
+
+        if coordinator.stopPins != stopPins {
+            updateStopAnnotations(mapView)
+            coordinator.stopPins = stopPins
         }
 
         // Одиночные фиксы — точки.
@@ -115,6 +130,44 @@ struct TrackMapView: UIViewRepresentable {
             fitCamera(mapView, coords: coords, annotations: fresh)
             coordinator.didSetInitialCamera = true
         }
+    }
+
+    /// Диф стоянок: неизменные аннотации остаются (их выноска не закрывается), уходят и приходят только
+    /// изменившиеся. Выбранная стоянка, сменившая длительность (тот же `startMs`), выбирается заново.
+    private func updateStopAnnotations(_ mapView: MKMapView) {
+        let existing = mapView.annotations.compactMap { $0 as? StopAnnotation }
+        let wanted = Set(stopPins)
+        let removed = existing.filter { !wanted.contains($0.pin) }
+        let selectedStartMs = mapView.selectedAnnotations
+            .compactMap { $0 as? StopAnnotation }
+            .first { removed.contains($0) }?.pin.startMs
+        mapView.removeAnnotations(removed)
+
+        let present = Set(existing.map(\.pin))
+        let added = stopPins.filter { !present.contains($0) }.map(StopAnnotation.init)
+        mapView.addAnnotations(added)
+        if let selectedStartMs, let reselect = added.first(where: { $0.pin.startMs == selectedStartMs }) {
+            mapView.selectAnnotation(reselect, animated: false)
+        }
+    }
+
+    private static func coordinates(_ line: [(lat: Double, lon: Double)]) -> [CLLocationCoordinate2D] {
+        line.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) }
+    }
+
+    /// Один `MKMultiPolyline` на все [lines] из ≥ 2 точек со стилем [style] (пусто — ничего).
+    private func addTrackOverlay(
+        _ mapView: MKMapView,
+        coordinator: Coordinator,
+        lines: [[CLLocationCoordinate2D]],
+        style: TrackStrokeStyle
+    ) {
+        let polylines = lines.filter { $0.count >= 2 }.map { MKPolyline(coordinates: $0, count: $0.count) }
+        guard !polylines.isEmpty else { return }
+        let multi = MKMultiPolyline(polylines)
+        coordinator.strokeStyles[ObjectIdentifier(multi)] = style
+        coordinator.trackOverlays.append(multi)
+        mapView.addOverlay(multi, level: .aboveLabels)
     }
 
     // MARK: - Камера
@@ -192,7 +245,9 @@ struct TrackMapView: UIViewRepresentable {
     // MARK: - Coordinator (MKMapViewDelegate)
 
     final class Coordinator: NSObject, MKMapViewDelegate {
-        var polyline: MKMultiPolyline?
+        var trackOverlays: [MKOverlay] = []
+        var strokeStyles: [ObjectIdentifier: TrackStrokeStyle] = [:]
+        var stopPins: [MapStopPin] = []
         var didSetInitialCamera = false
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -201,10 +256,12 @@ struct TrackMapView: UIViewRepresentable {
             }
             if let line = overlay as? MKMultiPolyline {
                 let renderer = MKMultiPolylineRenderer(multiPolyline: line)
-                renderer.strokeColor = UIColor(Color.kolcoOrange)
-                renderer.lineWidth = 3
+                let style = strokeStyles[ObjectIdentifier(line)] ?? .plain
+                renderer.strokeColor = style.color
+                renderer.lineWidth = style.width
+                renderer.lineDashPattern = style.dash
                 renderer.lineJoin = .round
-                renderer.lineCap = .round
+                renderer.lineCap = style.dash == nil ? .round : .butt
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
@@ -217,6 +274,12 @@ struct TrackMapView: UIViewRepresentable {
                 view.annotation = annotation
                 return view
             }
+            if annotation is StopAnnotation {
+                return mapView.dequeueReusableAnnotationView(
+                    withIdentifier: StopAnnotationView.reuseId,
+                    for: annotation
+                )
+            }
             // Синюю точку пользователя рисует MapKit сам.
             guard let cp = annotation as? CheckpointAnnotation else { return nil }
             let view = mapView.dequeueReusableAnnotationView(
@@ -226,6 +289,101 @@ struct TrackMapView: UIViewRepresentable {
             view?.configure(number: cp.number)
             return view
         }
+    }
+}
+
+// MARK: - Стиль линии трека
+
+/// Стиль `MKMultiPolyline` трека: одноцветный, тёмная подложка под раскраской или штрих скорости.
+enum TrackStrokeStyle {
+    case plain
+    case casing
+    case stroke(SpeedStroke)
+
+    var color: UIColor {
+        switch self {
+        case .plain: UIColor(Color.kolcoOrange)
+        case .casing: UIColor(white: 0, alpha: 0.55)
+        case .stroke(let stroke): UIColor(stroke.color)
+        }
+    }
+
+    var width: CGFloat {
+        if case .casing = self { return 5 }
+        return 3
+    }
+
+    var dash: [NSNumber]? {
+        if case .stroke(.gap) = self { return [4, 6] }
+        return nil
+    }
+}
+
+// MARK: - Стоянка
+
+/// Стоянка: подпись длительности, выноска «Стоянка 12 мин» / «14:05–14:17».
+final class StopAnnotation: NSObject, MKAnnotation {
+    let pin: MapStopPin
+    let coordinate: CLLocationCoordinate2D
+
+    init(pin: MapStopPin) {
+        self.pin = pin
+        coordinate = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.lon)
+    }
+
+    var label: String { pin.label }
+
+    var title: String? { "Стоянка \(pin.label)" }
+
+    var subtitle: String? {
+        "\(Self.hhmm(pin.startMs))–\(Self.hhmm(pin.endMs))"
+    }
+
+    private static func hhmm(_ ms: Int64) -> String {
+        formatter.string(from: Date(timeIntervalSince1970: Double(ms) / 1000))
+    }
+
+    private static let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+}
+
+/// Тёмная капсула с белой подписью `Font.mono`. Ниже пинов КП по приоритетам — стоянка часто на КП.
+final class StopAnnotationView: MKAnnotationView {
+    static let reuseId = "track-stop"
+
+    private let label = UILabel()
+
+    override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
+        super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        canShowCallout = true
+        displayPriority = .defaultHigh
+        zPriority = MKAnnotationViewZPriority(rawValue: MKAnnotationViewZPriority.defaultUnselected.rawValue - 1)
+        backgroundColor = UIColor(white: 0.1, alpha: 0.85)
+        layer.borderColor = UIColor.white.cgColor
+        layer.borderWidth = 1
+        label.textColor = .white
+        label.font = UIFont(name: "JetBrains Mono", size: 11)
+            ?? .monospacedSystemFont(ofSize: 11, weight: .semibold)
+        addSubview(label)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
+
+    override var annotation: MKAnnotation? {
+        didSet { configure() }
+    }
+
+    private func configure() {
+        label.text = (annotation as? StopAnnotation)?.label
+        label.sizeToFit()
+        let size = CGSize(width: label.bounds.width + 10, height: label.bounds.height + 4)
+        frame = CGRect(origin: frame.origin, size: size)
+        label.frame = CGRect(x: 5, y: 2, width: label.bounds.width, height: label.bounds.height)
+        layer.cornerRadius = size.height / 2
     }
 }
 

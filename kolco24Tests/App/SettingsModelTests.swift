@@ -390,4 +390,24 @@ struct SettingsModelTests {
         #expect(appModel.themeMode == .dark)
         #expect(env.themePreference.mode == .dark)
     }
+
+    /// «Цвет трека по скорости» — прокси к `TrackColorPreference`; недоступен при «Все точки».
+    @Test func colorTrackBySpeed_proxiesToPrefAndDependsOnShowAll() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        let model = SettingsModel(env: env, appModel: AppModel(env: env), raceId: 7, teamId: 5)
+
+        #expect(model.colorTrackBySpeed)
+        #expect(model.colorBySpeedAvailable)
+
+        model.colorTrackBySpeed = false
+        #expect(env.trackColorPreference.colorBySpeed == false)
+        env.trackColorPreference.setColorBySpeed(true)
+        #expect(model.colorTrackBySpeed)
+
+        model.showAllTrackPoints = true
+        #expect(!model.colorBySpeedAvailable)
+        model.showAllTrackPoints = false
+        #expect(model.colorBySpeedAvailable)
+    }
 }

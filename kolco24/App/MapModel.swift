@@ -40,6 +40,16 @@ struct MapMarkPin: Equatable {
     let timeMs: Int64
 }
 
+/// Стоянка на карте (раскраска по скорости): центроид, подпись длительности «12 мин» и границы по
+/// времени (epoch-ms) для выноски.
+struct MapStopPin: Hashable {
+    let lat: Double
+    let lon: Double
+    let label: String
+    let startMs: Int64
+    let endMs: Int64
+}
+
 /// Машина состояний доступности оффлайн-подложки гонки. `noMapForRace` — у гонки `mapUrl == nil`;
 /// `notDownloaded`/`ready` — файл `.mbtiles` есть/нет на диске; `downloading` — активное скачивание с
 /// прогрессом `0…1`; `failed` — ошибка скачивания (сопровождается тостом; CTA возвращается в
@@ -73,6 +83,7 @@ final class MapModel {
     /// доступность не пересчитана / у гонки нет карты.
     @ObservationIgnored private var mapUrl: String?
     @ObservationIgnored private let trackMemo = FilteredTrackMemo()
+    @ObservationIgnored private let speedMemo = SpeedTrackMemo()
 
     @ObservationIgnored private var trackTask: Task<Void, Never>?
     @ObservationIgnored private var marksTask: Task<Void, Never>?
@@ -274,6 +285,38 @@ final class MapModel {
 
     private var filteredTrack: FilteredTrack {
         trackMemo.get(raw: trackPoints, showAllPoints: showAllPoints)
+    }
+
+    /// Настройка «Цвет трека по скорости» (экран «Настройки»).
+    var colorBySpeed: Bool {
+        env.trackColorPreference.colorBySpeed
+    }
+
+    /// Раскраска по скорости — только над отфильтрованными линиями: при «Все точки» выбросы дали бы
+    /// ложную скорость, трек рисуется одним цветом.
+    private var speedTrack: SpeedTrack? {
+        guard colorBySpeed, !showAllPoints else { return nil }
+        return speedMemo.get(lines: filteredTrack.lines)
+    }
+
+    /// Раны штрихов для цветных полилиний; `nil` — одноцветный трек (`trackLines`).
+    var speedRuns: [(stroke: SpeedStroke, coords: [(lat: Double, lon: Double)])]? {
+        speedTrack?.runs.map { run in
+            (stroke: run.stroke, coords: run.points.map { (lat: $0.lat, lon: $0.lon) })
+        }
+    }
+
+    /// Стоянки от ``STOP_MIN_DURATION_MS`` — только в режиме раскраски.
+    var stopPins: [MapStopPin] {
+        speedTrack?.stops.map { stop in
+            MapStopPin(
+                lat: stop.lat,
+                lon: stop.lon,
+                label: formatStopDuration(ms: stop.endMs - stop.startMs),
+                startMs: stop.startMs,
+                endMs: stop.endMs
+            )
+        } ?? []
     }
 
     /// КП текущей гонки по id — для номера/живой цены пина.

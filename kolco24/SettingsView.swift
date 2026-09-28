@@ -159,6 +159,22 @@ struct SettingsView: View {
         return Section {
             HStack(spacing: 12) {
                 SettingsRow(
+                    systemImage: "speedometer",
+                    iconBg: Color.kolcoOrange,
+                    label: "Цвет трека по скорости",
+                    sub: model.colorBySpeedAvailable
+                        ? "Стоянки от 5 мин — отметкой на карте"
+                        : "Недоступно при показе всех точек"
+                )
+                Toggle("Цвет трека по скорости", isOn: $model.colorTrackBySpeed)
+                    .labelsHidden()
+                    .tint(Color.kolcoOrange)
+                    .disabled(!model.colorBySpeedAvailable)
+            }
+            .listRowBackground(Color.card)
+
+            HStack(spacing: 12) {
+                SettingsRow(
                     systemImage: "point.topleft.down.to.point.bottomright.curvepath",
                     iconBg: Color.kolcoOrange,
                     label: "Показывать все точки трека",

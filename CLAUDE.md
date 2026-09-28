@@ -154,6 +154,10 @@ server 200.
   «на карте N» all read `trackLines` (lines, not a flat list; nothing is drawn between lines). Upload and the raw
   «Точек» count stay unfiltered. «Все точки» = `TrackFilterPreference` (`@Observable`, shared by the map chip and
   Settings). Don't bring back the 50 m `filterPoints` cutoff.
+- **Track speed colors** (`docs/plans/completed/20260927-track-speed-colors.md`, `Core/Track/TrackSpeed`): speed =
+  net displacement over a ~90 s window (not summed path — noise). Stops come from `.stop`-band runs ≥ 5 min, not a
+  radius detector; iOS gives no fixes at rest, so a stop is usually one long (> 3 min) ~0 m step. Only over filtered
+  lines — «Все точки» always draws the plain orange track.
 - **MBTiles TMS y-flip** (`tile_row = 2^z − 1 − y`) lives only in `Core/Map/MBTiles.tmsRow`.
 - **`Category` collision**: in test files importing `Testing`+`Foundation`, qualify the domain type as
   `kolco24.Category`.
@@ -167,8 +171,8 @@ server 200.
 ## Design system (`DesignTokens.swift`)
 
 - Adaptive light/dark palette via `Color(light:dark:)` / `Color(lightUI:darkUI:)`: `ink`, `sub`, `paper`,
-  `brandRed`, `kolcoOrange`, `good`, `charcoal`, `charcoalHi`, `card`, `hairline`, `cardShadow`; `amber` is the
-  only non-adaptive token. Theme switching is `preferredColorScheme` from `SettingsModel` — no custom
+  `brandRed`, `kolcoOrange`, `good`, `charcoal`, `charcoalHi`, `card`, `hairline`, `cardShadow`; `amber` and the
+  `speed*` track colors are non-adaptive (map background sets contrast). Theme switching is `preferredColorScheme` from `SettingsModel` — no custom
   persistence beyond `ThemePreference`.
 - **Fixed-dark surfaces** stay dark in both themes: `DarkHeroBackground` (via the dark-valued `charcoal`
   tokens), `NFCTileView` (literal hex — a "chip card"), photo capture/lightbox. Don't "fix" their literals to

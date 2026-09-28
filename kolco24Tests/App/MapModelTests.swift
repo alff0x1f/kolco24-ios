@@ -254,6 +254,87 @@ struct MapModelTests {
         #expect(p2.cost == 4)          // фолбэк на снимок цены
     }
 
+    // MARK: - Раскраска по скорости
+
+    /// Ходьба 4 км/ч (7 точек), 10 минут без фиксов на месте, ходьба дальше (6 точек).
+    private func walkRestWalk(race: Int, team: Int) -> [TrackPoint] {
+        let stepDeg = (4.0 / 3.6 * 15) / (6_371_000.0 * .pi / 180)
+        let walk1 = (0..<7).map { i in
+            trackPoint(id: "w\(i)", race: race, team: team, lat: 55 + Double(i) * stepDeg, lon: 37,
+                       wallMs: Int64(i) * 15_000)
+        }
+        let restEnd: Int64 = 90_000 + 600_000
+        let walk2 = (0..<7).map { i in
+            trackPoint(id: "v\(i)", race: race, team: team, lat: 55 + Double(6 + i) * stepDeg, lon: 37,
+                       wallMs: restEnd + Int64(i) * 15_000)
+        }
+        return walk1 + walk2
+    }
+
+    @Test func speedModeIsOnByDefault() throws {
+        let env = try makeEnv(MapFakes())
+        let model = MapModel(env: env)
+        #expect(model.colorBySpeed)
+        #expect(model.speedRuns?.isEmpty == true)
+        #expect(model.stopPins.isEmpty)
+    }
+
+    @Test func speedRunsAndStopPins() async throws {
+        let env = try makeEnv(MapFakes())
+        try await env.trackStore.insertAll(walkRestWalk(race: 7, team: 42))
+        let model = MapModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.trackPoints.count == 14 }
+
+        let runs = try #require(model.speedRuns)
+        #expect(runs.map { $0.stroke } == [.band(.walk), .band(.stop), .band(.walk)])
+        #expect(runs.flatMap { $0.coords }.count == 14 + 2)   // соседние раны делят граничную точку
+
+        #expect(model.stopPins.count == 1)
+        let stop = try #require(model.stopPins.first)
+        #expect(stop.label == "10 мин")
+        #expect(stop.startMs == 90_000)
+        #expect(stop.endMs == 690_000)
+
+        // Линии для подложки/камеры — те же в обоих режимах.
+        #expect(model.trackLines.flatMap { $0 }.count == 14)
+    }
+
+    @Test func rebindClearsSpeedRunsAndStopPins() async throws {
+        let env = try makeEnv(MapFakes())
+        try await env.trackStore.insertAll(walkRestWalk(race: 7, team: 42))
+        let model = MapModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.trackPoints.count == 14 }
+        #expect(model.stopPins.count == 1)
+
+        model.rebind(teamId: 99, raceId: 8)
+        #expect(model.speedRuns?.isEmpty == true)
+        #expect(model.stopPins.isEmpty)
+    }
+
+    @Test func speedOffOrShowAllPointsGivesPlainTrack() async throws {
+        let env = try makeEnv(MapFakes())
+        try await env.trackStore.insertAll(walkRestWalk(race: 7, team: 42))
+        let model = MapModel(env: env)
+        model.rebind(teamId: 42, raceId: 7)
+        await waitUntil { model.trackPoints.count == 14 }
+
+        env.trackColorPreference.setColorBySpeed(false)
+        #expect(model.speedRuns == nil)
+        #expect(model.stopPins.isEmpty)
+        #expect(model.trackLines.flatMap { $0 }.count == 14)
+
+        env.trackColorPreference.setColorBySpeed(true)
+        model.toggleShowAllPoints()
+        #expect(model.speedRuns == nil)
+        #expect(model.stopPins.isEmpty)
+
+        model.toggleShowAllPoints()
+        #expect(model.speedRuns != nil)
+        #expect(model.stopPins.count == 1)
+    }
+
     // MARK: - stale-guard при смене команды
 
     @Test func rebindClearsPreviousTeamDataSynchronously() async throws {

@@ -14,6 +14,13 @@ extension Color {
     static let charcoal    = Color(light: "1D242D", dark: "27313D")
     static let charcoalHi  = Color(light: "2A323C", dark: "171D25")
     static let amber       = Color(hex: "F2B36B") // unchanged in dark
+    // Track speed colors: fixed in both themes — contrast is set by the map background, not the app theme.
+    static let speedStop   = Color(hex: "3B0F70")
+    static let speedSlow   = Color(hex: "8C2981")
+    static let speedWalk   = Color(hex: "DE4968")
+    static let speedBrisk  = Color(hex: "FE9F6D")
+    static let speedFast   = Color(hex: "F0F921")
+    static let speedGap    = Color(hex: "8E8E93")
 
     // Progress bar gradient end-stop (lighter green, distinct from `good` token).
     static let goodEnd      = Color(light: "2FA055", dark: "2EBD52")
@@ -74,4 +81,17 @@ enum DS {
     static let cardRadius: CGFloat = 13
     static let heroRadius: CGFloat = 18
     static let ctaRadius: CGFloat  = 16
+}
+
+extension SpeedStroke {
+    var color: Color {
+        switch self {
+        case .band(.stop): .speedStop
+        case .band(.slow): .speedSlow
+        case .band(.walk): .speedWalk
+        case .band(.brisk): .speedBrisk
+        case .band(.fast): .speedFast
+        case .gap: .speedGap
+        }
+    }
 }
