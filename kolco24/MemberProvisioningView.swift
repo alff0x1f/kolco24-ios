@@ -2,7 +2,7 @@
 //  MemberProvisioningView.swift
 //  kolco24
 //
-//  «Записать браслет участника» (iOS-first; план `docs/plans/20260923-member-chip-provisioning.md`).
+//  «Записать браслет» (iOS-first; план `docs/plans/20260923-member-chip-provisioning.md`).
 //  Рендерит `MemberProvisioningModel`: шапка пула `member_tags` (размер / загрузка), зона сканирования
 //  со статусом `MemberProvisionState` двухтапового флоу (стили — как у `ProvisioningView`), в
 //  `needsNumber` — поле номера (`.numberPad`, префилл `nextNumber`, разбор `parseMemberNumber`,

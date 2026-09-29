@@ -10,9 +10,9 @@
 //  `adminErrorMessage` / `combinedLoginOutcome`); хоть одна `loggedIn` → строки статуса серверов +
 //  ряды действий. «Войти» в строке сервера открывает форму только для него («Назад» — в меню).
 //
-//  Секция «Чипы» — пары «записать → проверить»: «Привязать чип к КП» (`ProvisioningView`) /
-//  «Проверить чип КП» (`CheckChipView`), «Записать браслет участника» (`MemberProvisioningView`,
-//  K24-код типа `0x2`) / «Проверить чип участника» (`CheckMemberChipView`).
+//  Секции «Чипы КП» и «Браслеты участников» — пары «записать → проверить»: «Привязать чип к КП»
+//  (`ProvisioningView`) / «Проверить чип КП» (`CheckChipView`); «Записать браслет»
+//  (`MemberProvisioningView`, K24-код типа `0x2`) / «Проверить браслет» (`CheckMemberChipView`).
 //  «Отметка старта»/«Отметка финиша» пушат `JudgeScanView` (этап 10, задача 9).
 //
 //  Без выбранной команды (`selectedRaceId == nil`) — вместо рядов действий подсказка (гонка неизвестна,
@@ -286,18 +286,23 @@ private struct AdminHomeView: View {
                                        label: "Проверить чип КП", sub: "Оффлайн-проверка привязки", enabled: true)
                     }
                     .listRowBackground(Color.card)
+                } header: {
+                    Text("Чипы КП")
+                }
+
+                Section {
                     NavigationLink(value: AdminRoute.memberProvisioning) {
                         AdminActionRow(systemImage: "person.badge.key.fill", iconBg: Color.charcoal,
-                                       label: "Записать браслет участника", sub: "Запись кода на браслет", enabled: true)
+                                       label: "Записать браслет", sub: "Запись кода на браслет", enabled: true)
                     }
                     .listRowBackground(Color.card)
                     NavigationLink(value: AdminRoute.checkMemberChip) {
                         AdminActionRow(systemImage: "person.crop.circle.badge.questionmark", iconBg: Color.charcoal,
-                                       label: "Проверить чип участника", sub: "Оффлайн-проверка браслета", enabled: true)
+                                       label: "Проверить браслет", sub: "Оффлайн-проверка браслета", enabled: true)
                     }
                     .listRowBackground(Color.card)
                 } header: {
-                    Text("Чипы")
+                    Text("Браслеты участников")
                 }
 
                 Section {
