@@ -161,6 +161,9 @@ server 200.
 - **Admin sessions** (`docs/plans/completed/20260929-lan-admin-session.md`): two independent sessions, cloud and
   LAN; each client carries only its own bearer, and only on `adminAuth: true` requests. The LAN bearer/login need
   an active lease. Provisioning picks the server per tap (`adminRoute`); 401 clears only that server's session.
+- **`map_url`**: `https://…` or a root-relative `/media/maps/…`; `RaceRepository` stores it resolved
+  (`Core/Map/resolveMapUrl`) against the origin that served the list (LAN → cleartext `http`). Non-https absolute,
+  `//host`, `\`/whitespace → `nil` (no map). `MapModel` trusts the stored value — no scheme guard there.
 - **MBTiles TMS y-flip** (`tile_row = 2^z − 1 − y`) lives only in `Core/Map/MBTiles.tmsRow`.
 - **`Category` collision**: in test files importing `Testing`+`Foundation`, qualify the domain type as
   `kolco24.Category`.

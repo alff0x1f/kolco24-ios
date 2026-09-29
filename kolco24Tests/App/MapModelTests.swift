@@ -22,11 +22,13 @@ private final class MapFakes: @unchecked Sendable {
     private let lock = NSLock()
     private var files: Set<Int> = []
     private(set) var toasts: [String] = []
+    private(set) var downloadedURLs: [URL] = []
 
     func exists(_ raceId: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return files.contains(raceId) }
     func setFile(_ raceId: Int) { lock.lock(); defer { lock.unlock() }; files.insert(raceId) }
     func removeFile(_ raceId: Int) { lock.lock(); defer { lock.unlock() }; files.remove(raceId) }
     func recordToast(_ m: String) { lock.lock(); defer { lock.unlock() }; toasts.append(m) }
+    func recordDownload(_ url: URL) { lock.lock(); defer { lock.unlock() }; downloadedURLs.append(url) }
     func path(_ raceId: Int) -> String { "/tmp/maps/\(raceId).mbtiles" }
 }
 
@@ -429,21 +431,21 @@ struct MapModelTests {
         #expect(fakes.toasts.isEmpty)
     }
 
-    // MARK: - HTTPS-only: не-https map_url отклоняется
+    // MARK: - LAN: разрешённый от LAN-базы http-URL скачивается
 
-    @Test func downloadRejectsNonHttpsUrl() async throws {
+    @Test func downloadAcceptsLanHttpUrl() async throws {
         let fakes = MapFakes()
-        // download-замыкание не должно вызваться вовсе.
-        let env = try makeEnv(fakes) { _, _, _ in Issue.record("download must not run for http url") }
-        try await env.raceStore.insertAll([race(7, mapUrl: "http://cdn.test/7.mbtiles")])
+        let env = try makeEnv(fakes) { url, _, _ in fakes.recordDownload(url) }
+        try await env.raceStore.insertAll([race(7, mapUrl: "http://192.168.1.5/media/maps/7.mbtiles")])
 
         let model = MapModel(env: env, onToast: { fakes.recordToast($0) })
         model.rebind(teamId: 42, raceId: 7)
         await waitUntil { model.availability == .notDownloaded }
 
         model.downloadMap()
-        #expect(model.availability == .failed(message: "Не удалось скачать карту гонки"))
-        #expect(fakes.toasts == ["Не удалось скачать карту гонки"])
+        await waitUntil { if case .ready = model.availability { true } else { false } }
+        #expect(fakes.downloadedURLs.map(\.absoluteString) == ["http://192.168.1.5/media/maps/7.mbtiles"])
+        #expect(fakes.toasts.isEmpty)
     }
 
     // MARK: - Пин: timeMs предпочитает trustedTakenAt

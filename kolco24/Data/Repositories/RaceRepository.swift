@@ -79,7 +79,7 @@ struct RaceRepository {
             // словить 304 на следующем переключении и пропустить переперсист своих данных.
             // Чистится ДО замены (не после), чтобы краш посреди записи не оставил чужой stale-ETag.
             try await syncMetaStore.deleteEtag(origin: otherOriginKey, resource: resourceRaces)
-            try await raceStore.replaceAll(data.map { $0.toRace() })
+            try await raceStore.replaceAll(data.map { $0.toRace(baseURL: originKey) })
             if let responseEtag {
                 try await syncMetaStore.upsert(
                     SyncMeta(origin: originKey, resource: resourceRaces, etag: responseEtag)
@@ -96,9 +96,10 @@ struct RaceRepository {
     }
 }
 
-/// Маппинг проводного DTO в доменный тип (он же — persist-модель).
+/// Маппинг проводного DTO в доменный тип (он же — persist-модель). `mapUrl` в БД — уже абсолютный:
+/// путь от корня разрешается от [baseURL] origin'а, отдавшего список (`resolveMapUrl`).
 private extension RaceDto {
-    func toRace() -> Race {
+    func toRace(baseURL: String) -> Race {
         Race(
             id: id,
             name: name,
@@ -107,7 +108,7 @@ private extension RaceDto {
             dateEnd: dateEnd,
             place: place,
             regStatus: regStatus,
-            mapUrl: mapUrl
+            mapUrl: resolveMapUrl(mapUrl, baseURL: baseURL)
         )
     }
 }

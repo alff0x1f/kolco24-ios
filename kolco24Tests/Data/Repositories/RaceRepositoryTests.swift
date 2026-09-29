@@ -43,6 +43,12 @@ struct RaceRepositoryTests {
         """
     }
 
+    private func racesJson(id: Int, mapUrl: String) -> String {
+        racesJson(id: id, name: "Кольцо24").replacingOccurrences(
+            of: #""reg_status": "open","#, with: #""reg_status": "open", "map_url": "\#(mapUrl)","#
+        )
+    }
+
     private func makeApiClient(baseURL: String, transport: FakeTransport) -> ApiClient {
         ApiClient(
             baseURL: baseURL,
@@ -268,6 +274,53 @@ struct RaceRepositoryTests {
 
         #expect(try await h.syncMetaStore.getEtag(origin: localOrigin, resource: "races") == nil)
         #expect(try await h.syncMetaStore.getEtag(origin: cloudOrigin, resource: "races") == "\"v1\"")
+    }
+
+    // MARK: - map_url
+
+    @Test func success_keepsAbsoluteMapUrl() async throws {
+        let h = try makeHarness()
+        h.cloudTransport.enqueue(statusCode: 200, bodyString: racesJson(id: 8, mapUrl: "https://cdn.test/8.mbtiles"))
+
+        #expect(try await h.repo.refreshRaces() == .updated)
+
+        #expect(try await storedRaces(h.dbWriter)[0].mapUrl == "https://cdn.test/8.mbtiles")
+    }
+
+    @Test func success_resolvesRootRelativeMapUrlAgainstCloudOrigin() async throws {
+        let h = try makeHarness()
+        h.cloudTransport.enqueue(statusCode: 200, bodyString: racesJson(id: 8, mapUrl: "/media/maps/8.mbtiles"))
+
+        #expect(try await h.repo.refreshRaces() == .updated)
+
+        #expect(try await storedRaces(h.dbWriter)[0].mapUrl == "https://cloud.test/media/maps/8.mbtiles")
+    }
+
+    @Test func localSuccess_resolvesRootRelativeMapUrlAgainstLocalOrigin() async throws {
+        let h = try makeHarness()
+        h.localTransport.enqueue(statusCode: 200, bodyString: racesJson(id: 8, mapUrl: "/media/maps/8.mbtiles"))
+
+        #expect(try await h.repo.refreshRaces(source: .local) == .updated)
+
+        #expect(try await storedRaces(h.dbWriter)[0].mapUrl == "http://local.test/media/maps/8.mbtiles")
+    }
+
+    @Test func success_protocolRelativeMapUrl_persistsNull() async throws {
+        let h = try makeHarness()
+        h.cloudTransport.enqueue(statusCode: 200, bodyString: racesJson(id: 8, mapUrl: "//evil.com/8.mbtiles"))
+
+        #expect(try await h.repo.refreshRaces() == .updated)
+
+        #expect(try await storedRaces(h.dbWriter)[0].mapUrl == nil)
+    }
+
+    @Test func success_withoutMapUrl_persistsNull() async throws {
+        let h = try makeHarness()
+        h.cloudTransport.enqueue(statusCode: 200, bodyString: racesJson(id: 8, name: "Кольцо24"))
+
+        #expect(try await h.repo.refreshRaces() == .updated)
+
+        #expect(try await storedRaces(h.dbWriter)[0].mapUrl == nil)
     }
 }
 
