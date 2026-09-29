@@ -112,4 +112,20 @@ struct RaceLeaseTests {
         let action = applySyncResponse(race: 1, dataSource: "mirror", ttlSec: nil, expiresAtSec: nil, raceId: 1, nowMs: 10_000)
         #expect(action == .keep)
     }
+
+    // MARK: - isLeaseActive
+
+    @Test func isLeaseActive_falseForNil() {
+        #expect(!isLeaseActive(nil, nowMs: 0))
+    }
+
+    @Test func isLeaseActive_trueBeforeExpiry_anyRace() {
+        #expect(isLeaseActive(RaceLease(raceId: 7, expiresAtMs: 10_000), nowMs: 9_999))
+    }
+
+    @Test func isLeaseActive_falseAtBoundaryAndPast() {
+        let lease = RaceLease(raceId: 1, expiresAtMs: 10_000)
+        #expect(!isLeaseActive(lease, nowMs: 10_000))
+        #expect(!isLeaseActive(lease, nowMs: 10_001))
+    }
 }

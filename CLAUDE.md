@@ -158,6 +158,9 @@ server 200.
   net displacement over a ~90 s window (not summed path — noise). Stops come from `.stop`-band runs ≥ 5 min, not a
   radius detector; iOS gives no fixes at rest, so a stop is usually one long (> 3 min) ~0 m step. Only over filtered
   lines — «Все точки» always draws the plain orange track.
+- **Admin sessions** (`docs/plans/completed/20260929-lan-admin-session.md`): two independent sessions, cloud and
+  LAN; each client carries only its own bearer, and only on `adminAuth: true` requests. The LAN bearer/login need
+  an active lease. Provisioning picks the server per tap (`adminRoute`); 401 clears only that server's session.
 - **MBTiles TMS y-flip** (`tile_row = 2^z − 1 − y`) lives only in `Core/Map/MBTiles.tmsRow`.
 - **`Category` collision**: in test files importing `Testing`+`Foundation`, qualify the domain type as
   `kolco24.Category`.

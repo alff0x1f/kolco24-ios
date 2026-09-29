@@ -7,7 +7,8 @@
 //  в проекте (grep-инвариант этапа 10); чистое ядро `AdminTokenStore` живёт в `Core/Stores/`
 //  и Foundation-only.
 //
-//  Один item `kSecClassGenericPassword`, service `kolco24.admin`; значение — JSON-`Data`
+//  Один item `kSecClassGenericPassword` на сервер: service `kolco24.admin` (cloud) и
+//  `kolco24.admin.local` (LAN-сервер гонки); значение — JSON-`Data`
 //  из `AdminTokenStore` (кодек — в ядре). `load` читает `kSecValueData`; `save(data)` делает
 //  add-or-update; `save(nil)` удаляет item. Ошибки Keychain не бросаются — `load` → `nil`,
 //  `save` — best-effort (та же контракт-безопасность, что и у остальных стор-адаптеров).
@@ -20,6 +21,8 @@ extension AdminTokenStore {
 
     /// Service-строка Keychain-item'а (аналог Android prefs-файла `kolco24.admin`).
     static let keychainService = "kolco24.admin"
+    /// Service-строка сессии LAN-сервера гонки (аналог Android `kolco24.admin.local`).
+    static let localKeychainService = "kolco24.admin.local"
 
     /// Продовый адаптер: подкладывает store под Keychain (`kSecClassGenericPassword`).
     static func fromKeychain(service: String = keychainService) -> AdminTokenStore {

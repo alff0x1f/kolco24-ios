@@ -121,14 +121,15 @@ struct ApiClientTests {
 
     // MARK: - Bearer
 
-    @Test func addsBearerWhenTokenProviderNonNull() async throws {
-        // Зеркало `interceptor_addsBearerWhenTokenProviderNonNull`.
+    @Test func addsBearerToAdminRequestWhenTokenProviderNonNull() async throws {
+        // Зеркало `interceptor_addsBearerToTaggedRequestWhenTokenProviderNonNull`.
         let transport = FakeTransport()
         transport.enqueue(statusCode: 200, bodyString: "{}")
         let client = fixedTsClient(transport: transport, tokenProvider: { "tok-123" })
 
         _ = try await client.send(
-            method: "GET", url: url("/app/races/"), body: nil, contentType: nil, ifNoneMatch: nil
+            method: "POST", url: url("/app/logout/"), body: Data(), contentType: nil, ifNoneMatch: nil,
+            adminAuth: true
         )
 
         #expect(transport.last?.value(forHTTPHeaderField: "Authorization") == "Bearer tok-123")
@@ -141,10 +142,43 @@ struct ApiClientTests {
         let client = fixedTsClient(transport: transport, tokenProvider: { nil })
 
         _ = try await client.send(
-            method: "GET", url: url("/app/races/"), body: nil, contentType: nil, ifNoneMatch: nil
+            method: "POST", url: url("/app/logout/"), body: Data(), contentType: nil, ifNoneMatch: nil,
+            adminAuth: true
         )
 
         #expect(transport.last?.value(forHTTPHeaderField: "Authorization") == nil)
+    }
+
+    @Test func noBearerOnNonAdminRequestEvenWithToken() async throws {
+        // Зеркало `interceptor_noBearerOnUntaggedRequestEvenWithToken`: HMAC-only вызовы (синки,
+        // выгрузки) токен не несут — LAN-клиент шлёт их по cleartext даже вне локального режима.
+        let transport = FakeTransport()
+        transport.enqueue(statusCode: 200, bodyString: "{}")
+        transport.enqueue(statusCode: 200, bodyString: #"{"accepted":[]}"#)
+        let client = fixedTsClient(transport: transport, tokenProvider: { "tok-123" })
+
+        _ = try await client.send(
+            method: "GET", url: url("/app/races/"), body: nil, contentType: nil, ifNoneMatch: nil
+        )
+        _ = await client.uploadTrack(raceId: 8, teamId: 1, points: [])
+
+        #expect(transport.recorded.count == 2)
+        #expect(transport.recorded.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == nil })
+    }
+
+    @Test func adminEndpointsCarryBearer() async throws {
+        let transport = FakeTransport()
+        for _ in 0..<3 { transport.enqueue(statusCode: 500) }
+        let client = fixedTsClient(transport: transport, tokenProvider: { "tok-123" })
+
+        _ = await client.bindTag(raceId: 8, checkpointId: 1, nfcUid: "04AA")
+        _ = await client.bindMemberTag(raceId: 8, nfcUid: "04AA", number: nil)
+        _ = await client.uploadJudgeScans(raceId: 8, sourceInstallId: "i", scans: [])
+
+        #expect(transport.recorded.count == 3)
+        #expect(transport.recorded.allSatisfy {
+            $0.value(forHTTPHeaderField: "Authorization") == "Bearer tok-123"
+        })
     }
 
     @Test func bearerDoesNotChangeSignature() async throws {
@@ -155,7 +189,8 @@ struct ApiClientTests {
         let client = fixedTsClient(transport: transport, tokenProvider: { "tok-123" })
 
         _ = try await client.send(
-            method: "GET", url: url("/app/races/"), body: nil, contentType: nil, ifNoneMatch: nil
+            method: "GET", url: url("/app/races/"), body: nil, contentType: nil, ifNoneMatch: nil,
+            adminAuth: true
         )
 
         let recorded = try #require(transport.last)

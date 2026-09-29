@@ -47,6 +47,9 @@ struct ApiClient {
     /// никогда не якорит доверенное время. `async`: `TrustedClock` — actor.
     let onServerTime: ((ServerTimeSample) async -> Void)?
     /// Опаковый bearer-токен админа (`Authorization: Bearer …`) или `nil`. НЕ входит в канонику.
+    /// Уходит **только** в запросах с `adminAuth: true` (logout, bindTag, bindMemberTag, judge scans):
+    /// HMAC-only вызовы (синки, выгрузки) токен не несут — LAN-клиент шлёт их по cleartext даже вне
+    /// локального режима.
     let tokenProvider: () -> String?
     /// Транспорт-seam: прод — `URLSessionTransport`, тесты — фейк-очередь.
     let transport: (URLRequest) async throws -> (Data, HTTPURLResponse)
@@ -88,6 +91,7 @@ struct ApiClient {
         url: URL,
         body: Data,
         contentType: String = "application/json",
+        adminAuth: Bool = false,
         parse: (Data) throws -> T
     ) async -> PostResult<T> {
         do {
@@ -96,7 +100,8 @@ struct ApiClient {
                 url: url,
                 body: body,
                 contentType: contentType,
-                ifNoneMatch: nil
+                ifNoneMatch: nil,
+                adminAuth: adminAuth
             )
             switch response.statusCode {
             case 200, 201:
@@ -270,7 +275,7 @@ struct ApiClient {
             // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
             return .error(code: nil)
         }
-        return await post(url: endpoint("/app/race/\(raceId)/judge_scans/"), body: body) {
+        return await post(url: endpoint("/app/race/\(raceId)/judge_scans/"), body: body, adminAuth: true) {
             try JSONDecoder().decode(JudgeScanUploadResponse.self, from: $0)
         }
     }
@@ -281,8 +286,8 @@ struct ApiClient {
     /// конвенция `post`). `201` при свежем bind / `200` при идемпотентном повторе того же КП →
     /// `.success` с распарсенным `TagBindResponse` (несёт hex-`code` для записи на чип); `409` →
     /// `.conflict` (чип уже привязан к **другому** КП — авто-ребинда нет); `404` → `.error(404)` (КП
-    /// нет или тип hidden); прочие статусы — по `post`. Вызывается на **cloud-клиенте** (админ-
-    /// операции не ходят на LAN, как login/logout). **Не ретраится** (гарантия `post`: 403 auth-vs-
+    /// нет или тип hidden); прочие статусы — по `post`. Клиент — cloud или LAN (на тап, по
+    /// LAN-пину гонки), bearer — сессии этого сервера. **Не ретраится** (гарантия `post`: 403 auth-vs-
     /// skew неразличим, replay небезопасен). Путь — с завершающим слэшем (он в подписанной канонике).
     func bindTag(
         raceId: Int,
@@ -296,7 +301,7 @@ struct ApiClient {
             // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
             return .error(code: nil)
         }
-        return await post(url: endpoint("/app/race/\(raceId)/tags/"), body: body) {
+        return await post(url: endpoint("/app/race/\(raceId)/tags/"), body: body, adminAuth: true) {
             try JSONDecoder().decode(TagBindResponse.self, from: $0)
         }
     }
@@ -308,7 +313,7 @@ struct ApiClient {
     /// идемпотентном повторе → `.success` с `MemberTagBindResponse` (hex-`code` для записи);
     /// `404` → `.error(404)` (при `number == nil` — UID неизвестен, UI просит номер); `409` →
     /// `.conflict` (этот UID привязан к **другому** номеру); прочие статусы — по `post`. Как и
-    /// `bindTag`: **cloud-клиент**, **без ретраев**, путь с завершающим слэшем.
+    /// `bindTag`: клиент по LAN-пину, bearer, **без ретраев**, путь с завершающим слэшем.
     func bindMemberTag(
         raceId: Int,
         nfcUid: String,
@@ -321,7 +326,7 @@ struct ApiClient {
             // Кодирование тела не должно падать; ошибка — не транспортная → .error(nil).
             return .error(code: nil)
         }
-        return await post(url: endpoint("/app/race/\(raceId)/member_tags/bind/"), body: body) {
+        return await post(url: endpoint("/app/race/\(raceId)/member_tags/bind/"), body: body, adminAuth: true) {
             try JSONDecoder().decode(MemberTagBindResponse.self, from: $0)
         }
     }
@@ -332,7 +337,7 @@ struct ApiClient {
     /// **один раз** (те же байты хэшируются в подпись и отправляются — конвенция `post`). `200`/`201`
     /// → `.success` с распарсенным `LoginResponse` (opaque bearer-токен + `expires_at`); `401` →
     /// `.unauthorized` (плохие учётные данные); `429` → `.rateLimited` (5/мин/IP); прочие статусы —
-    /// по `post`. Вызывается на **cloud-клиенте** (админ-операции не ходят на LAN). **Не ретраится**
+    /// по `post`. Cloud- и LAN-сервер выдают независимые токены (LAN — только при активном lease). **Не ретраится**
     /// (гарантия `post`). Bearer в этот запрос ещё не подставляется (токена нет), но подпись от него
     /// и так не зависит — токен не входит в канонику.
     func login(email: String, password: String) async -> PostResult<LoginResponse> {
@@ -352,7 +357,7 @@ struct ApiClient {
     /// `.success(())`. Bearer уходит из `tokenProvider` (текущий токен), что и завершает серверную
     /// сессию. **Не ретраится** (гарантия `post`).
     func logout() async -> PostResult<Void> {
-        await post(url: endpoint("/app/logout/"), body: Data()) { _ in () }
+        await post(url: endpoint("/app/logout/"), body: Data(), adminAuth: true) { _ in () }
     }
 
     /// URL эндпоинта из `baseURL` (без хвостового `/`) + `path` (с завершающим слэшем — он входит в
@@ -408,7 +413,8 @@ struct ApiClient {
         url: URL,
         body: Data?,
         contentType: String?,
-        ifNoneMatch: String?
+        ifNoneMatch: String?,
+        adminAuth: Bool = false
     ) async throws -> (Data, HTTPURLResponse) {
         // Тело сериализовано один раз вызывателем; хэшируем ровно эти байты (пусто/GET →
         // EMPTY_BODY_SHA256; пустой POST body тоже даёт EMPTY_BODY_SHA256).
@@ -417,7 +423,7 @@ struct ApiClient {
         let usedTs = await nowSeconds()
         let request = signedRequest(
             method: method, url: url, body: body, contentType: contentType,
-            ifNoneMatch: ifNoneMatch, ts: usedTs, bodyHash: bodyHash
+            ifNoneMatch: ifNoneMatch, adminAuth: adminAuth, ts: usedTs, bodyHash: bodyHash
         )
         let (data, response) = try await transportAndSample(request)
 
@@ -430,7 +436,7 @@ struct ApiClient {
            nowTs != usedTs {
             let retry = signedRequest(
                 method: method, url: url, body: body, contentType: contentType,
-                ifNoneMatch: ifNoneMatch, ts: nowTs, bodyHash: bodyHash
+                ifNoneMatch: ifNoneMatch, adminAuth: adminAuth, ts: nowTs, bodyHash: bodyHash
             )
             return try await transportAndSample(retry)
         }
@@ -456,7 +462,7 @@ struct ApiClient {
         return (data, response)
     }
 
-    /// Копия запроса с 6 заголовками подписи (+ опциональный bearer / `If-None-Match`) для `ts`.
+    /// Копия запроса с 6 заголовками подписи (+ bearer при `adminAuth` / `If-None-Match`) для `ts`.
     /// `fullPath` = encodedPath + `?query` (то, что реально отправляется — главная причина 403).
     private func signedRequest(
         method: String,
@@ -464,6 +470,7 @@ struct ApiClient {
         body: Data?,
         contentType: String?,
         ifNoneMatch: String?,
+        adminAuth: Bool,
         ts: Int64,
         bodyHash: String
     ) -> URLRequest {
@@ -491,7 +498,7 @@ struct ApiClient {
         request.setValue(installId, forHTTPHeaderField: "X-Install-Id")
         request.setValue("ios", forHTTPHeaderField: "X-App-Platform")
         request.setValue(appVersion, forHTTPHeaderField: "X-App-Version")
-        if let token = tokenProvider() {
+        if adminAuth, let token = tokenProvider() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         if let ifNoneMatch {

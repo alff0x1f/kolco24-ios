@@ -308,7 +308,8 @@ private struct ProvisioningPreviewHost: View {
         ])
         let m = ProvisioningModel(
             raceId: raceId, checkpointStore: env.checkpointStore, tagStore: env.tagStore,
-            bindTag: { _, _, _ in .forbidden }, onUnauthorized: {}, feedback: SilentFeedback()
+            route: { _ in AdminBindRoute(server: .cloud, hasSession: true, onUnauthorized: {}) },
+            bindTag: { _, _, _, _ in .forbidden }, feedback: SilentFeedback()
         )
         m.start(scanner: PreviewProvisioningScanner())
         self.model = m

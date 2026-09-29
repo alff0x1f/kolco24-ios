@@ -118,14 +118,17 @@ enum ApiClients {
     /// Пара клиентов над **общим** `TrustedClock.makeDefault()` + `InstallId.fromUserDefaults()`
     /// (только cloud якорит время). Полный вайринг в приложение (`AppContainer`-аналог) — этап 4; это
     /// удобный сборщик по умолчанию (и точка входа live-smoke).
+    /// Токены раздельные: у каждого клиента bearer только своей admin-сессии (cloud-токен никогда не
+    /// уходит на cleartext LAN-хост).
     static func makeDefaultPair(
-        tokenProvider: @escaping () -> String? = { nil }
+        cloudTokenProvider: @escaping () -> String? = { nil },
+        localTokenProvider: @escaping () -> String? = { nil }
     ) -> (cloud: ApiClient, local: ApiClient, clock: TrustedClock) {
         let clock = TrustedClock.makeDefault()
         let installId = InstallId.fromUserDefaults()
         return (
-            cloud: makeCloud(trustedClock: clock, installId: installId, tokenProvider: tokenProvider),
-            local: makeLocal(trustedClock: clock, installId: installId, tokenProvider: tokenProvider),
+            cloud: makeCloud(trustedClock: clock, installId: installId, tokenProvider: cloudTokenProvider),
+            local: makeLocal(trustedClock: clock, installId: installId, tokenProvider: localTokenProvider),
             clock: clock
         )
     }

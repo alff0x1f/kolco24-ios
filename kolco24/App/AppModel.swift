@@ -512,19 +512,19 @@ final class AppModel {
     }
 
     /// Фабрика хост-редьюсера провижининга «Привязка чипов» (этап 10). `raceId` — гонка ВЫБРАННОЙ
-    /// команды; возвращает `nil`, когда команда не выбрана (легенда/гонка неизвестна). `bindTag` бьёт
-    /// cloud-клиент (замыкание графа); `onUnauthorized` при 401 роняет admin-сессию (форма логина).
+    /// команды; возвращает `nil`, когда команда не выбрана (легенда/гонка неизвестна). Сервер (cloud или
+    /// LAN по пину гонки) решается на каждый тап (`adminRoute`); 401 роняет сессию только этого сервера.
     /// Прод-сканер `NfcChipScanner` инстанцируется здесь (App-слой в одном модуле — CoreNFC не
     /// импортируется) и умеет pending-write (реализует `ProvisioningScanning`).
     func makeProvisioningModel() -> ProvisioningModel? {
         guard let raceId = selectedRaceId else { return nil }
-        let repo = env.adminAuthRepository
+        let env = env
         let model = ProvisioningModel(
             raceId: raceId,
             checkpointStore: env.checkpointStore,
             tagStore: env.tagStore,
+            route: { env.adminRoute(raceId: $0) },
             bindTag: env.bindTag,
-            onUnauthorized: { repo.onUnauthorized() },
             feedback: env.feedback
         )
         let clock = env.trustedClock
@@ -539,16 +539,16 @@ final class AppModel {
 
     /// Фабрика хост-редьюсера записи кода на браслет участника «Записать браслет участника». `raceId` —
     /// гонка ВЫБРАННОЙ команды; `nil`, когда команда не выбрана (пул `member_tags` неизвестен).
-    /// `bindMemberTag` бьёт cloud-клиент; `onUnauthorized` при 401 роняет admin-сессию. Прод-сканер
+    /// Сервер `bindMemberTag` — на тап, как у `makeProvisioningModel`. Прод-сканер
     /// `NfcChipScanner` (pending-write, `ProvisioningScanning`) инстанцируется здесь.
     func makeMemberProvisioningModel() -> MemberProvisioningModel? {
         guard let raceId = selectedRaceId else { return nil }
-        let repo = env.adminAuthRepository
+        let env = env
         let model = MemberProvisioningModel(
             raceId: raceId,
             memberTagStore: env.memberTagStore,
+            route: { env.adminRoute(raceId: $0) },
             bindMemberTag: env.bindMemberTag,
-            onUnauthorized: { repo.onUnauthorized() },
             feedback: env.feedback
         )
         let clock = env.trustedClock
@@ -589,25 +589,49 @@ final class AppModel {
 
     // MARK: - Админ-сессия (этап 10)
 
-    /// Текущая admin-сессия (синхронное чтение держателя) — для сида ветвления `AdminHomeView`
+    /// Текущие admin-сессии cloud и LAN (синхронное чтение держателей) — для сида `AdminHomeView`
     /// и сабтайтла ряда «Администратор». Держит `env` инкапсулированным.
-    var currentAdminSession: AdminSession { env.adminSessionHolder.session }
+    var currentCloudAdminSession: AdminSession { env.cloudAdminSession.session }
+    var currentLocalAdminSession: AdminSession { env.localAdminSession.session }
 
-    /// Поток обновлений admin-сессии для `AdminHomeView` (ветвление форма/меню + реакция на
+    /// Потоки обновлений admin-сессий для `AdminHomeView` (ветвление форма/меню + реакция на
     /// 401-разлогин). `AsyncStream` держателя мультиконсумерный (свежий стрим на каждую подписку,
-    /// сидированный текущим значением). Сабтайтл ряда в `SettingsModel` тем не менее читает сессию
-    /// синхронно — не из-за одноконсумерности, а потому что шит настроек и `fullScreenCover` админа
-    /// взаимоисключающи: сессия не меняется, пока ряд «Администратор» на экране.
-    var adminSessionUpdates: AsyncStream<AdminSession> { env.adminSessionHolder.updates }
+    /// сидированный текущим значением). Сабтайтл ряда в `SettingsModel` читает сессии синхронно: шит
+    /// настроек и `fullScreenCover` админа взаимоисключающи.
+    var cloudAdminSessionUpdates: AsyncStream<AdminSession> { env.cloudAdminSession.updates }
+    var localAdminSessionUpdates: AsyncStream<AdminSession> { env.localAdminSession.updates }
 
-    /// Вход организатора: делегирует `AdminAuthRepository.login` (persist + публикация сессии на успехе).
-    func adminLogin(email: String, password: String) async -> LoginOutcome {
-        await env.adminAuthRepository.login(email: email, password: password)
+    /// Активен ли локальный режим (lease любой гонки). Опрос, не наблюдение (стрим lease одноконсумерный).
+    var isLanActive: Bool { env.isLanActive() }
+
+    /// Вход организатора. [server] `nil` — первый вход: cloud, плюс LAN только при активном lease
+    /// (LAN-хост cleartext — пароль не должен уйти туда в чужой сети); иначе — только этот сервер.
+    /// Lease перепроверяется здесь, на сабмите. Серверы пробуются параллельно, итог сворачивает
+    /// `combinedLoginOutcome`. `nil` — LAN-вход невозможен без локального режима (запроса не было).
+    func adminLogin(server: AdminServer?, email: String, password: String) async -> LoginOutcome? {
+        let lanActive = env.isLanActive()
+        var repos: [AdminAuthRepository] = []
+        if server != .lan { repos.append(env.cloudAdminAuth) }
+        if server != .cloud, lanActive { repos.append(env.localAdminAuth) }
+        guard !repos.isEmpty else { return nil }
+        let outcomes = await withTaskGroup(of: LoginOutcome.self) { group in
+            for repo in repos {
+                group.addTask { await repo.login(email: email, password: password) }
+            }
+            return await group.reduce(into: [LoginOutcome]()) { $0.append($1) }
+        }
+        return combinedLoginOutcome(outcomes)
     }
 
-    /// Выход организатора: `AdminAuthRepository.logout` (best-effort сеть, локальная сессия чистится всегда).
+    /// Выход с обоих серверов параллельно (LAN-сессия падает, не дожидаясь таймаута cloud'а); возврат —
+    /// когда оба закончили. На сервере без сессии — только отмена login'а в полёте, без запроса.
     func adminLogout() async {
-        await env.adminAuthRepository.logout()
+        let repos = [env.cloudAdminAuth, env.localAdminAuth]
+        await withTaskGroup(of: Void.self) { group in
+            for repo in repos {
+                group.addTask { await repo.logout() }
+            }
+        }
     }
 
     /// Синхронный мост к актору `TrustedClock` для `NfcChipScanner.sampleNow` (§8). Вызывается на

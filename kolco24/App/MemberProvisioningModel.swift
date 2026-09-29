@@ -97,9 +97,10 @@ final class MemberProvisioningModel: Identifiable {
     @ObservationIgnored let raceId: Int
     @ObservationIgnored private let memberTagStore: MemberTagStore
     /// `POST /app/race/<id>/member_tags/bind/` на cloud-клиенте: (`raceId`, `nfcUid`, `number`).
-    @ObservationIgnored private let bindMemberTag: (Int, String, Int?) async -> PostResult<MemberTagBindResponse>
-    /// 401 посреди записи: `AdminAuthRepository.onUnauthorized()` (чистит сессию → форма логина).
-    @ObservationIgnored private let onUnauthorized: () -> Void
+    /// Сервер для гонки (cloud или LAN по пину), решается на каждый тап; несёт наличие сессии и
+    /// 401-очистку именно этого сервера.
+    @ObservationIgnored private let route: (Int) -> AdminBindRoute
+    @ObservationIgnored private let bindMemberTag: (AdminServer, Int, String, Int?) async -> PostResult<MemberTagBindResponse>
     @ObservationIgnored private let feedback: any ScanFeedbackPlaying
     /// Пауза «успех» перед возвратом в `waitingForChip` (инжектится, чтобы тесты не ждали реальную).
     @ObservationIgnored private let successHoldMs: Int
@@ -125,15 +126,15 @@ final class MemberProvisioningModel: Identifiable {
     init(
         raceId: Int,
         memberTagStore: MemberTagStore,
-        bindMemberTag: @escaping (Int, String, Int?) async -> PostResult<MemberTagBindResponse>,
-        onUnauthorized: @escaping () -> Void,
+        route: @escaping (Int) -> AdminBindRoute,
+        bindMemberTag: @escaping (AdminServer, Int, String, Int?) async -> PostResult<MemberTagBindResponse>,
         feedback: any ScanFeedbackPlaying,
         successHoldMs: Int = MemberProvisioningModel.defaultSuccessHoldMs
     ) {
         self.raceId = raceId
         self.memberTagStore = memberTagStore
+        self.route = route
         self.bindMemberTag = bindMemberTag
-        self.onUnauthorized = onUnauthorized
         self.feedback = feedback
         self.successHoldMs = successHoldMs
         startPoolObservation()
@@ -335,23 +336,30 @@ final class MemberProvisioningModel: Identifiable {
     }
 
     /// Перевести в `binding` и запустить `bindMemberTag` в НЕструктурированном Task (захват замыкания, §6).
+    /// Без сессии на выбранном сервере — inline-ошибка без запроса.
     private func startBind(uid: String, number: Int?) {
         writeHint = nil
+        let route = route(raceId)
+        guard route.hasSession else {
+            provisionState = .failed(reason: adminNoSessionMessage(route.server))
+            feedback.play(.failure)
+            return
+        }
         provisionState = .binding(uid: uid, number: number)
         let bind = bindMemberTag
         let rid = raceId
         bindTask?.cancel()
         bindTask = Task { [weak self] in
-            let result = await bind(rid, uid, number)
+            let result = await bind(route.server, rid, uid, number)
             guard let self, !Task.isCancelled else { return }
-            self.finishBind(uid: uid, requestedNumber: number, result: result)
+            self.finishBind(uid: uid, requestedNumber: number, result: result, route: route)
         }
     }
 
     /// Результат bind: success → запись K24 типа PARTICIPANT в pending-write + `waitingForWrite`;
     /// битый hex → «Неверный код от сервера»; `404` на `number: null` → `needsNumber`; 401 →
     /// onUnauthorized + закрытие; прочее → `failed(memberProvisionErrorMessage)`.
-    private func finishBind(uid: String, requestedNumber: Int?, result: PostResult<MemberTagBindResponse>) {
+    private func finishBind(uid: String, requestedNumber: Int?, result: PostResult<MemberTagBindResponse>, route: AdminBindRoute) {
         switch result {
         case let .success(response):
             do {
@@ -368,7 +376,7 @@ final class MemberProvisioningModel: Identifiable {
             // Сервер не знает UID (пул устарел) — просим номер.
             enterNeedsNumber(uid: uid)
         case .unauthorized:
-            onUnauthorized()
+            route.onUnauthorized()
             closeRequested = true
         default:
             provisionState = .failed(reason: memberProvisionErrorMessage(result))

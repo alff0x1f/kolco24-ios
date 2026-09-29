@@ -86,4 +86,47 @@ struct AdminSessionTests {
         let session = AdminSessionHolder.seed(store: store(fake), nowUtcIso: "2026-01-01T00:00:00Z")
         #expect(session == .loggedOut)
     }
+
+    // MARK: - combinedLoginOutcome
+
+    @Test func combinedLoginOutcome_emptyIsError() {
+        #expect(combinedLoginOutcome([]) == .error)
+    }
+
+    @Test func combinedLoginOutcome_singlePassesThrough() {
+        #expect(combinedLoginOutcome([.offline]) == .offline)
+        #expect(combinedLoginOutcome([.rateLimited]) == .rateLimited)
+    }
+
+    @Test func combinedLoginOutcome_anySuccessWins() {
+        #expect(combinedLoginOutcome([.invalidCredentials, .success]) == .success)
+        #expect(combinedLoginOutcome([.success, .offline]) == .success)
+    }
+
+    @Test func combinedLoginOutcome_realAnswerBeatsOffline() {
+        #expect(combinedLoginOutcome([.offline, .invalidCredentials]) == .invalidCredentials)
+        #expect(combinedLoginOutcome([.offline, .rateLimited]) == .rateLimited)
+        #expect(combinedLoginOutcome([.error, .offline]) == .error)
+        #expect(combinedLoginOutcome([.offline, .offline]) == .offline)
+    }
+
+    @Test func combinedLoginOutcome_invalidCredentialsBeatsRateLimited() {
+        #expect(combinedLoginOutcome([.rateLimited, .invalidCredentials]) == .invalidCredentials)
+    }
+
+    // MARK: - adminRowSubtitle / adminNoSessionMessage
+
+    @Test func adminRowSubtitle_eachCombination() {
+        let cloud = AdminSession.loggedIn(email: "c@x.ru", token: "t1", expiresAt: "2099-01-01T00:00:00Z")
+        let lan = AdminSession.loggedIn(email: "l@x.ru", token: "t2", expiresAt: "2099-01-01T00:00:00Z")
+        #expect(adminRowSubtitle(cloud: cloud, local: lan) == "c@x.ru")
+        #expect(adminRowSubtitle(cloud: cloud, local: .loggedOut) == "c@x.ru · только Cloud")
+        #expect(adminRowSubtitle(cloud: .loggedOut, local: lan) == "l@x.ru · только LAN")
+        #expect(adminRowSubtitle(cloud: .loggedOut, local: .loggedOut) == "Войти")
+    }
+
+    @Test func adminNoSessionMessage_perServer() {
+        #expect(adminNoSessionMessage(.cloud) == "Нет входа на cloud-сервер")
+        #expect(adminNoSessionMessage(.lan) == "Нет входа на LAN-сервер")
+    }
 }
