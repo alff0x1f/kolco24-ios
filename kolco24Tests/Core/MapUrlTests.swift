@@ -49,6 +49,14 @@ struct MapUrlTests {
         #expect(resolveMapUrl("/\t/evil.com/8.mbtiles", baseURL: base) == nil)
         #expect(resolveMapUrl("/\n/evil.com/8.mbtiles", baseURL: base) == nil)
         #expect(resolveMapUrl("/media/maps/a b.mbtiles", baseURL: base) == nil)
+        #expect(resolveMapUrl("/media/\u{0000}8.mbtiles", baseURL: base) == nil)
+    }
+
+    @Test func encodedSlashesStayOnBaseHost() {
+        #expect(resolveMapUrl("/%2F%2Fevil.com/8.mbtiles", baseURL: base)
+                == "https://kolco24.ru/%2F%2Fevil.com/8.mbtiles")
+        #expect(resolveMapUrl("/%5Cevil.com/8.mbtiles", baseURL: base)
+                == "https://kolco24.ru/%5Cevil.com/8.mbtiles")
     }
 
     @Test func invalidBaseIsNoMap() {
