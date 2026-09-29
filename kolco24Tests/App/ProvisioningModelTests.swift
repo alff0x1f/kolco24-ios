@@ -54,9 +54,10 @@ struct ProvisioningModelTests {
     final class BindStub: @unchecked Sendable {
         var result: PostResult<TagBindResponse>
         private(set) var calls: [(Int, Int, String)] = []
+        private(set) var servers: [AdminServer] = []
         init(_ result: PostResult<TagBindResponse>) { self.result = result }
-        func bind(_ raceId: Int, _ cpId: Int, _ uid: String) async -> PostResult<TagBindResponse> {
-            calls.append((raceId, cpId, uid)); return result
+        func bind(_ server: AdminServer, _ raceId: Int, _ cpId: Int, _ uid: String) async -> PostResult<TagBindResponse> {
+            servers.append(server); calls.append((raceId, cpId, uid)); return result
         }
     }
 
@@ -81,6 +82,8 @@ struct ProvisioningModelTests {
         env: AppEnvironment,
         bind: BindStub,
         onUnauthorized: @escaping () -> Void = {},
+        server: AdminServer = .cloud,
+        hasSession: Bool = true,
         feedback: RecordingFeedback = RecordingFeedback(),
         successHoldMs: Int = 60_000
     ) -> ProvisioningModel {
@@ -88,8 +91,8 @@ struct ProvisioningModelTests {
             raceId: race,
             checkpointStore: env.checkpointStore,
             tagStore: env.tagStore,
+            route: { _ in AdminBindRoute(server: server, hasSession: hasSession, onUnauthorized: onUnauthorized) },
             bindTag: bind.bind,
-            onUnauthorized: onUnauthorized,
             feedback: feedback,
             successHoldMs: successHoldMs
         )
@@ -209,8 +212,8 @@ struct ProvisioningModelTests {
     @Test func bind401_callsOnUnauthorized_holderLoggedOut_andRequestsClose() async throws {
         let env = try makeEnv()
         try await seedCheckpoints(env, [kp(1, number: 5)])
-        env.adminSessionHolder.set(.loggedIn(email: "a@b.ru", token: "tok", expiresAt: "2999-01-01T00:00:00Z"))
-        let repo = env.adminAuthRepository
+        env.cloudAdminSession.set(.loggedIn(email: "a@b.ru", token: "tok", expiresAt: "2999-01-01T00:00:00Z"))
+        let repo = env.cloudAdminAuth
         let model = makeModel(env: env, bind: BindStub(.unauthorized),
                               onUnauthorized: { repo.onUnauthorized() })
         let scanner = FakeProvisioningScanner()
@@ -220,7 +223,42 @@ struct ProvisioningModelTests {
         scanner.emit(reading(uid: "U1"))
         await waitUntil { model.closeRequested }
         #expect(model.closeRequested)
-        #expect(env.adminSessionHolder.session == .loggedOut)
+        #expect(env.cloudAdminSession.session == .loggedOut)
+    }
+
+    // MARK: - Маршрут: сервер / нет сессии
+
+    @Test func bind_goesToRoutedServer() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5)])
+        let bind = BindStub(.error(code: 500))
+        let model = makeModel(env: env, bind: bind, server: .lan)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { !model.checkpoints.isEmpty }
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { if case .failed = model.provisionState { return true }; return false }
+        #expect(bind.servers == [.lan])
+    }
+
+    @Test func noSessionOnRoutedServer_failsInlineWithoutRequest() async throws {
+        let env = try makeEnv()
+        try await seedCheckpoints(env, [kp(1, number: 5)])
+        let bind = BindStub(okResponse(code: goodCodeHex))
+        let feedback = RecordingFeedback()
+        let model = makeModel(env: env, bind: bind, server: .lan, hasSession: false, feedback: feedback)
+        let scanner = FakeProvisioningScanner()
+        model.start(scanner: scanner)
+        await waitUntil { !model.checkpoints.isEmpty }
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { if case .failed = model.provisionState { return true }; return false }
+        #expect(model.provisionState == .failed(reason: "Нет входа на LAN-сервер"))
+        #expect(bind.calls.isEmpty)
+        #expect(scanner.pendingUid == nil)
+        #expect(feedback.failureCount == 1)
+        #expect(!model.closeRequested)
     }
 
     // MARK: - Битый hex

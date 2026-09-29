@@ -48,6 +48,54 @@ func adminErrorMessage(_ outcome: LoginOutcome) -> String? {
     }
 }
 
+/// Сервер admin-сессии. Cloud и LAN-сервер гонки выдают **независимые** токены: cloud-bearer никогда
+/// не уходит на cleartext LAN-хост, LAN-bearer — только пока активен lease.
+enum AdminServer: Equatable, Sendable {
+    case cloud
+    case lan
+}
+
+/// Куда уходит админ-запрос экрана провижининга, решённое на тап: LAN, пока гонка запинена на LAN,
+/// иначе cloud. [hasSession] `false` → тап падает inline без запроса; [onUnauthorized] чистит сессию
+/// именно этого сервера.
+struct AdminBindRoute {
+    let server: AdminServer
+    let hasSession: Bool
+    let onUnauthorized: () -> Void
+}
+
+/// Inline-ошибка тапа провижининга, когда на выбранном сервере нет входа.
+func adminNoSessionMessage(_ server: AdminServer) -> String {
+    switch server {
+    case .cloud: "Нет входа на cloud-сервер"
+    case .lan: "Нет входа на LAN-сервер"
+    }
+}
+
+/// Сворачивает итоги параллельного входа cloud + LAN в один, показываемый формой. Реальный ответ
+/// сервера бьёт «недоступен»: в лесу cloud почти всегда `.offline`, и это не должно прятать LAN-овое
+/// «неверный пароль». Ранг: success > invalidCredentials > rateLimited > error > offline. Пустой
+/// список (ничего не пробовали) → `.error`.
+func combinedLoginOutcome(_ outcomes: [LoginOutcome]) -> LoginOutcome {
+    let rank: [LoginOutcome] = [.offline, .error, .rateLimited, .invalidCredentials, .success]
+    return outcomes.max { rank.firstIndex(of: $0)! < rank.firstIndex(of: $1)! } ?? .error
+}
+
+/// Сабтайтл ряда «Администратор» в Настройках: «Войти» без сессий, email при входе на оба сервера
+/// (cloud-овый), иначе email + какой сервер единственный.
+func adminRowSubtitle(cloud: AdminSession, local: AdminSession) -> String {
+    switch (cloud, local) {
+    case let (.loggedIn(email, _, _), .loggedIn):
+        return email
+    case let (.loggedIn(email, _, _), .loggedOut):
+        return "\(email) · только Cloud"
+    case let (.loggedOut, .loggedIn(email, _, _)):
+        return "\(email) · только LAN"
+    case (.loggedOut, .loggedOut):
+        return "Войти"
+    }
+}
+
 /// Протух ли [expiresAt] на момент [nowUtcIso]. Обе строки — фиксированной ширины UTC вида
 /// `yyyy-MM-dd'T'HH:mm:ss'Z'`, поэтому обычное лексикографическое сравнение корректно (без
 /// `java.time`/`Date`-парсинга). Граница строгого равенства считается **истёкшей**.

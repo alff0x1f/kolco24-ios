@@ -55,21 +55,29 @@ final class AppEnvironment {
     let memberTagsRepository: MemberTagsRepository
 
     // MARK: - Этап 10 (админ-режим)
-    /// Единый держатель `AdminSession`: строится **до** пары клиентов (оба берут синхронный bearer
-    /// `tokenProvider = { adminSessionHolder.token }`), сидится из `adminTokenStore` (прод — Keychain;
+    /// Две независимые admin-сессии: cloud и LAN-сервер гонки (он выдаёт свои токены). Держатели
+    /// строятся **до** пары клиентов: у каждого клиента синхронный bearer только своей сессии
+    /// (`cloudAdminSession.token` / `localAdminSession.token` — последний лишь при активном lease).
+    /// Сидятся из своих `AdminTokenStore` (прод — Keychain `kolco24.admin` / `kolco24.admin.local`;
     /// `inMemory` — изолированный in-memory load/save). UI подписывается на `updates`.
-    let adminSessionHolder: AdminSessionHolder
-    /// Переходы сессии (login/logout/onUnauthorized) поверх cloud-клиента + `adminTokenStore` +
-    /// `adminSessionHolder`. Строится **после** клиентов.
-    let adminAuthRepository: AdminAuthRepository
-    /// `POST /app/race/<id>/tags/` (привязка чипа к КП) на **cloud-клиенте** (админ-операции не ходят
-    /// на LAN, как login/logout). Замыкание — `ProvisioningModel` не видит `ApiClient` напрямую (граф
-    /// инкапсулирован фабрикой `AppModel.makeProvisioningModel`).
-    let bindTag: (Int, Int, String) async -> PostResult<TagBindResponse>
+    let cloudAdminSession: AdminSessionHolder
+    let localAdminSession: AdminSessionHolder
+    /// Переходы cloud-сессии (login/logout/onUnauthorized) поверх cloud-клиента. Строится **после** клиентов.
+    let cloudAdminAuth: AdminAuthRepository
+    /// Переходы LAN-сессии поверх LAN-клиента (свой `/app/login/` LAN-сервера).
+    let localAdminAuth: AdminAuthRepository
+    /// `true`, пока активен lease любой гонки (локальный режим). Гейт LAN-входа и LAN-bearer'а: пароль
+    /// и токен уходят на cleartext LAN-хост только в этом состоянии. Wall clock, как `isRacePinned`.
+    let isLanActive: () -> Bool
+    /// `true`, пока гонка [raceId] запинена на LAN — провижининг тогда идёт на LAN-сервер.
+    let isRacePinned: (Int) -> Bool
+    /// `POST /app/race/<id>/tags/` (привязка чипа к КП) на клиенте [AdminServer]. Замыкание —
+    /// `ProvisioningModel` не видит `ApiClient` напрямую (граф инкапсулирован фабрикой
+    /// `AppModel.makeProvisioningModel`); сервер выбирает `adminRoute(raceId:)` на тап.
+    let bindTag: (AdminServer, Int, Int, String) async -> PostResult<TagBindResponse>
     /// `POST /app/race/<id>/member_tags/bind/` (запись кода на браслет участника: `raceId`, `nfcUid`,
-    /// `number` — `nil`, когда номер знает сервер) на **cloud-клиенте**, как `bindTag`. Замыкание —
-    /// граф инкапсулирован фабрикой `AppModel.makeMemberProvisioningModel`.
-    let bindMemberTag: (Int, String, Int?) async -> PostResult<MemberTagBindResponse>
+    /// `number` — `nil`, когда номер знает сервер) на клиенте [AdminServer], как `bindTag`.
+    let bindMemberTag: (AdminServer, Int, String, Int?) async -> PostResult<MemberTagBindResponse>
 
     // MARK: - Этап 9 (LAN-режим + настройки)
     /// Единый держатель текущего `RaceLease` (LAN-пин): координатор пишет через `set(_:)`, пин-гарды
@@ -181,12 +189,14 @@ final class AppEnvironment {
         installId: String,
         cloudOrigin: String,
         localOrigin: String,
-        leaseStore: RaceLeaseStore,
+        leaseHolder: LeaseHolder,
         themePreference: ThemePreference,
         trackFilterPreference: TrackFilterPreference,
         trackColorPreference: TrackColorPreference,
-        adminTokenStore: AdminTokenStore,
-        adminSessionHolder: AdminSessionHolder,
+        cloudAdminTokenStore: AdminTokenStore,
+        localAdminTokenStore: AdminTokenStore,
+        cloudAdminSession: AdminSessionHolder,
+        localAdminSession: AdminSessionHolder,
         trustedClock: TrustedClock,
         locationProvider: any CurrentLocationProvider,
         feedback: any ScanFeedbackPlaying,
@@ -231,7 +241,8 @@ final class AppEnvironment {
         self.themePreference = themePreference
         self.trackFilterPreference = trackFilterPreference
         self.trackColorPreference = trackColorPreference
-        self.adminSessionHolder = adminSessionHolder
+        self.cloudAdminSession = cloudAdminSession
+        self.localAdminSession = localAdminSession
         let writer = database.writer
 
         // Сторы — локальные константы (их захватывают замыкания координатора; ссылка на `self.<store>`
@@ -261,20 +272,16 @@ final class AppEnvironment {
         self.trackStore = trackStore
         self.judgeScanStore = judgeScanStore
 
-        // Этап 9: держатель lease конструируется ДО репозиториев — его синхронно читает `isRacePinned`
-        // (пин-гард трёх pin-guard-репозиториев). Сидится из стора; write-through — обратно в стор.
-        let leaseHolder = LeaseHolder(
-            initial: leaseStore.read(),
-            persist: { lease in
-                if let lease { leaseStore.write(lease) } else { leaseStore.clear() }
-            }
-        )
+        // Этап 9: держатель lease строится фабрикой ДО клиентов — его синхронно читают `isRacePinned`
+        // (пин-гард трёх pin-guard-репозиториев) и LAN-`tokenProvider`.
         self.leaseHolder = leaseHolder
         // Пин-гард: гонка [raceId] обслуживается с LAN, пока её lease жив. `nowMs` — wall clock (`Date()`),
         // а не `TrustedClock` (нужен синхронно, actor-hop недопустим — deviation плана, документирован).
         let leasePinned: (Int) -> Bool = { raceId in
             isPinned(leaseHolder.value, raceId: raceId, nowMs: Int64(Date().timeIntervalSince1970 * 1000))
         }
+        self.isRacePinned = leasePinned
+        self.isLanActive = { Self.isLanActive(leaseHolder) }
 
         let raceRepository = RaceRepository(
             apiClient: cloud,
@@ -319,22 +326,28 @@ final class AppEnvironment {
         self.legendRepository = legendRepository
         self.memberTagsRepository = memberTagsRepository
 
-        // Этап 10: репозиторий admin-сессии — ПОСЛЕ клиентов (login/logout бьют cloud-клиент). Сессию
-        // уже посидировал holder (передан в init ДО клиентов, чтобы оба взяли `tokenProvider`); здесь
-        // репозиторий лишь двигает её на login/logout/onUnauthorized и персистит в `adminTokenStore`.
-        adminAuthRepository = AdminAuthRepository(
+        // Этап 10: репозитории admin-сессий — ПОСЛЕ клиентов (каждый бьёт свой клиент). Сессии уже
+        // посидировали holder'ы (переданы в init ДО клиентов, чтобы клиенты взяли `tokenProvider`); здесь
+        // репозитории лишь двигают их на login/logout/onUnauthorized и персистят в свой стор.
+        cloudAdminAuth = AdminAuthRepository(
             apiLogin: { email, password in await cloud.login(email: email, password: password) },
             apiLogout: { await cloud.logout() },
-            store: adminTokenStore,
-            holder: adminSessionHolder
+            store: cloudAdminTokenStore,
+            holder: cloudAdminSession
         )
-        // Этап 10: провижининг — bind чипа к КП на cloud-клиенте (как login/logout).
-        bindTag = { raceId, checkpointId, nfcUid in
-            await cloud.bindTag(raceId: raceId, checkpointId: checkpointId, nfcUid: nfcUid)
+        localAdminAuth = AdminAuthRepository(
+            apiLogin: { email, password in await local.login(email: email, password: password) },
+            apiLogout: { await local.logout() },
+            store: localAdminTokenStore,
+            holder: localAdminSession
+        )
+        bindTag = { server, raceId, checkpointId, nfcUid in
+            let client = server == .lan ? local : cloud
+            return await client.bindTag(raceId: raceId, checkpointId: checkpointId, nfcUid: nfcUid)
         }
-        // Запись браслетов участников — тоже cloud-клиент.
-        bindMemberTag = { raceId, nfcUid, number in
-            await cloud.bindMemberTag(raceId: raceId, nfcUid: nfcUid, number: number)
+        bindMemberTag = { server, raceId, nfcUid, number in
+            let client = server == .lan ? local : cloud
+            return await client.bindMemberTag(raceId: raceId, nfcUid: nfcUid, number: number)
         }
 
         // Этап 6: дренаж взятий поверх тех же cloud/local-клиентов + `installId` (провенанс устройства).
@@ -401,11 +414,22 @@ final class AppEnvironment {
         let database = try AppDatabase.makeShared()
         // Этап 10: admin-сессия сидится из Keychain и держатель строится ДО пары клиентов, чтобы оба
         // (cloud + LAN) получили синхронный bearer `tokenProvider = { holder.token }` поверх подписи.
-        let adminTokenStore = AdminTokenStore.fromKeychain()
-        let adminSessionHolder = AdminSessionHolder(
-            initial: AdminSessionHolder.seed(store: adminTokenStore, nowUtcIso: nowUtcIso())
+        // Держатель lease — тоже ДО клиентов: LAN-bearer отдаётся только при активном lease (вне его
+        // 192.168.1.5 может оказаться чужим устройством любой сети; logout уйдёт без bearer'а, локальная
+        // сессия чистится всё равно).
+        let leaseHolder = Self.makeLeaseHolder(store: RaceLeaseStore.fromUserDefaults())
+        let cloudAdminTokenStore = AdminTokenStore.fromKeychain()
+        let localAdminTokenStore = AdminTokenStore.fromKeychain(service: AdminTokenStore.localKeychainService)
+        let cloudAdminSession = AdminSessionHolder(
+            initial: AdminSessionHolder.seed(store: cloudAdminTokenStore, nowUtcIso: nowUtcIso())
         )
-        let pair = ApiClients.makeDefaultPair(tokenProvider: { adminSessionHolder.token })
+        let localAdminSession = AdminSessionHolder(
+            initial: AdminSessionHolder.seed(store: localAdminTokenStore, nowUtcIso: nowUtcIso())
+        )
+        let pair = ApiClients.makeDefaultPair(
+            cloudTokenProvider: { cloudAdminSession.token },
+            localTokenProvider: { Self.isLanActive(leaseHolder) ? localAdminSession.token : nil }
+        )
         // Прод-чтение кадров с диска для frame-дренажа: `PhotoStorage` под `Application Support`
         // (тот же корень, что `kolco24.db`). `PhotoPaths.decode` уже отфильтровал небезопасные пути
         // до вызова reader'а, так что `absoluteURL` получает только `marks/<id>/<uuid>.jpg`.
@@ -428,12 +452,14 @@ final class AppEnvironment {
             cloudOrigin: Secrets.apiBaseURL,
             localOrigin: Secrets.localAPIBaseURL,
             // Этап 9: lease/тема персистятся в UserDefaults (тот же адаптер-идиома, что `ClockAnchorStore`).
-            leaseStore: RaceLeaseStore.fromUserDefaults(),
+            leaseHolder: leaseHolder,
             themePreference: ThemePreference.fromUserDefaults(),
             trackFilterPreference: TrackFilterPreference.fromUserDefaults(),
             trackColorPreference: TrackColorPreference.fromUserDefaults(),
-            adminTokenStore: adminTokenStore,
-            adminSessionHolder: adminSessionHolder,
+            cloudAdminTokenStore: cloudAdminTokenStore,
+            localAdminTokenStore: localAdminTokenStore,
+            cloudAdminSession: cloudAdminSession,
+            localAdminSession: localAdminSession,
             // Раньше `pair.clock` терялся; теперь общий якорь времени живёт в графе.
             trustedClock: pair.clock,
             // One-shot GPS-фикс на момент взятия (задача 6); прод аудио/тактильный фидбек (задача 7).
@@ -487,7 +513,8 @@ final class AppEnvironment {
         requestLocationAuthorization: @escaping @Sendable () -> Void = {},
         locationAuthorization: @escaping @Sendable () -> LocationAuthorization = { .granted },
         isLowPowerMode: @escaping @Sendable () -> Bool = { false },
-        adminTokenStore: AdminTokenStore? = nil
+        adminTokenStore: AdminTokenStore? = nil,
+        localAdminTokenStore: AdminTokenStore? = nil
     ) throws -> AppEnvironment {
         let database = try AppDatabase.makeInMemory()
         // In-memory prefs (изолированы от `UserDefaults.standard` — тесты не пишут глобальное состояние
@@ -510,32 +537,39 @@ final class AppEnvironment {
             load: { prefs.get(TrackColorPreference.keyColorBySpeed).map { $0 == "true" } ?? true },
             save: { prefs.set(TrackColorPreference.keyColorBySpeed, $0 ? "true" : "false") }
         )
-        // Этап 10: admin-стор — инъецируемый (тесты передают свой, чтобы посидировать/проверять его),
-        // иначе изолированный in-memory (Keychain в тестах НЕ трогается). Держатель строится ДО клиентов,
-        // оба берут его bearer.
-        let tokenStore = adminTokenStore ?? Self.makeInMemoryAdminStore()
-        let adminSessionHolder = AdminSessionHolder(
-            initial: AdminSessionHolder.seed(store: tokenStore, nowUtcIso: nowUtcIso())
+        let leaseHolder = Self.makeLeaseHolder(store: leaseStore)
+        // Этап 10: admin-сторы — инъецируемые (тесты передают свои, чтобы посидировать/проверять их),
+        // иначе изолированные in-memory (Keychain в тестах НЕ трогается). Держатели строятся ДО клиентов,
+        // каждый клиент берёт bearer своей сессии.
+        let cloudTokenStore = adminTokenStore ?? Self.makeInMemoryAdminStore()
+        let localTokenStore = localAdminTokenStore ?? Self.makeInMemoryAdminStore()
+        let cloudAdminSession = AdminSessionHolder(
+            initial: AdminSessionHolder.seed(store: cloudTokenStore, nowUtcIso: nowUtcIso())
+        )
+        let localAdminSession = AdminSessionHolder(
+            initial: AdminSessionHolder.seed(store: localTokenStore, nowUtcIso: nowUtcIso())
         )
         return AppEnvironment(
             database: database,
             cloud: testClient(
                 baseURL: cloudOrigin, transport: transport,
-                tokenProvider: { adminSessionHolder.token }
+                tokenProvider: { cloudAdminSession.token }
             ),
             local: testClient(
                 baseURL: localOrigin, transport: transport,
-                tokenProvider: { adminSessionHolder.token }
+                tokenProvider: { Self.isLanActive(leaseHolder) ? localAdminSession.token : nil }
             ),
             installId: "install-test",
             cloudOrigin: cloudOrigin,
             localOrigin: localOrigin,
-            leaseStore: leaseStore,
+            leaseHolder: leaseHolder,
             themePreference: themePreference,
             trackFilterPreference: trackFilterPreference,
             trackColorPreference: trackColorPreference,
-            adminTokenStore: tokenStore,
-            adminSessionHolder: adminSessionHolder,
+            cloudAdminTokenStore: cloudTokenStore,
+            localAdminTokenStore: localTokenStore,
+            cloudAdminSession: cloudAdminSession,
+            localAdminSession: localAdminSession,
             trustedClock: trustedClock,
             locationProvider: locationProvider,
             feedback: feedback,
@@ -559,6 +593,34 @@ final class AppEnvironment {
 
     /// Дефолтные часы для `inMemory`: фейковые провайдеры (elapsed/wall = 0, boot = nil),
     /// без персистенции. Тесты, которым важно управляемое время, инжектят собственный `TrustedClock`.
+    /// Держатель lease, сидированный из [store]; write-through — обратно в стор.
+    private static func makeLeaseHolder(store: RaceLeaseStore) -> LeaseHolder {
+        LeaseHolder(
+            initial: store.read(),
+            persist: { lease in
+                if let lease { store.write(lease) } else { store.clear() }
+            }
+        )
+    }
+
+    /// Активен ли lease любой гонки сейчас (wall clock — синхронно, как пин-гард).
+    private static func isLanActive(_ leaseHolder: LeaseHolder) -> Bool {
+        isLeaseActive(leaseHolder.value, nowMs: Int64(Date().timeIntervalSince1970 * 1000))
+    }
+
+    /// Куда уходит админ-запрос провижининга для гонки [raceId], решённое сейчас (на тап): LAN, пока
+    /// гонка запинена, иначе cloud; сессия и 401-очистка — этого сервера.
+    func adminRoute(raceId: Int) -> AdminBindRoute {
+        let server: AdminServer = isRacePinned(raceId) ? .lan : .cloud
+        let session = server == .lan ? localAdminSession : cloudAdminSession
+        let auth = server == .lan ? localAdminAuth : cloudAdminAuth
+        return AdminBindRoute(
+            server: server,
+            hasSession: session.token != nil,
+            onUnauthorized: { auth.onUnauthorized() }
+        )
+    }
+
     /// Изолированный in-memory `AdminTokenStore` для `inMemory`-графа (этап 10): не трогает Keychain,
     /// свежий бокс на каждый граф (тесты не видят чужую сессию). Тесты, которым нужно ассертить/сидировать
     /// стор, передают собственный через параметр `adminTokenStore:`.

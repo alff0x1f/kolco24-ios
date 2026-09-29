@@ -24,7 +24,7 @@
 //  сериализована единым `for await` по стриму сканера.
 //
 //  `import SwiftUI`/`GRDB`/`CoreNFC` запрещены (grep-инвариант) — хватает `Observation`/`Foundation`;
-//  модель зависит от `Core/`-логики + сторов + инжектированных замыканий (`bindTag`/`onUnauthorized`).
+//  модель зависит от `Core/`-логики + сторов + инжектированных замыканий (`route`/`bindTag`).
 //  Прод-сканер `NfcChipScanner` инстанцируется фабрикой `AppModel.makeProvisioningModel`.
 //
 
@@ -85,10 +85,11 @@ final class ProvisioningModel: Identifiable {
     @ObservationIgnored let raceId: Int
     @ObservationIgnored private let checkpointStore: CheckpointStore
     @ObservationIgnored private let tagStore: TagStore
-    /// `POST /app/race/<id>/tags/` на cloud-клиенте: привязать `nfcUid` к КП `checkpointId`.
-    @ObservationIgnored private let bindTag: (Int, Int, String) async -> PostResult<TagBindResponse>
-    /// 401 посреди провижининга: `AdminAuthRepository.onUnauthorized()` (чистит сессию → форма логина).
-    @ObservationIgnored private let onUnauthorized: () -> Void
+    /// Сервер для гонки (cloud или LAN по пину), решается на каждый тап: смена lease посреди сессии
+    /// подхватывается. Несёт наличие сессии и 401-очистку именно этого сервера.
+    @ObservationIgnored private let route: (Int) -> AdminBindRoute
+    /// `POST /app/race/<id>/tags/` на клиенте сервера: привязать `nfcUid` к КП `checkpointId`.
+    @ObservationIgnored private let bindTag: (AdminServer, Int, Int, String) async -> PostResult<TagBindResponse>
     @ObservationIgnored private let feedback: any ScanFeedbackPlaying
     /// Пауза «успех» перед автопереходом к следующему КП (инжектится, чтобы тесты не ждали реальную).
     @ObservationIgnored private let successHoldMs: Int
@@ -116,16 +117,16 @@ final class ProvisioningModel: Identifiable {
         raceId: Int,
         checkpointStore: CheckpointStore,
         tagStore: TagStore,
-        bindTag: @escaping (Int, Int, String) async -> PostResult<TagBindResponse>,
-        onUnauthorized: @escaping () -> Void,
+        route: @escaping (Int) -> AdminBindRoute,
+        bindTag: @escaping (AdminServer, Int, Int, String) async -> PostResult<TagBindResponse>,
         feedback: any ScanFeedbackPlaying,
         successHoldMs: Int = ProvisioningModel.defaultSuccessHoldMs
     ) {
         self.raceId = raceId
         self.checkpointStore = checkpointStore
         self.tagStore = tagStore
+        self.route = route
         self.bindTag = bindTag
-        self.onUnauthorized = onUnauthorized
         self.feedback = feedback
         self.successHoldMs = successHoldMs
         startObservation()
@@ -324,25 +325,32 @@ final class ProvisioningModel: Identifiable {
 
     /// Тап 1: перевести в `binding`, вооружить `bindTag` в НЕструктурированном Task (захват замыкания,
     /// `[weak self]` для обновления состояния — уход с экрана не рвёт серверную привязку, §6).
+    /// Без сессии на выбранном сервере — inline-ошибка без запроса.
     private func startBind(uid: String) {
         guard let cp = selectedCheckpoint else { return }
         writeHint = nil
+        let route = route(raceId)
+        guard route.hasSession else {
+            provisionState = .failed(reason: adminNoSessionMessage(route.server))
+            feedback.play(.failure)
+            return
+        }
         provisionState = .binding(uid: uid)
         let bind = bindTag
         let rid = raceId
         let cpId = cp.id
         bindTask?.cancel()
         bindTask = Task { [weak self] in
-            let result = await bind(rid, cpId, uid)
+            let result = await bind(route.server, rid, cpId, uid)
             guard let self, !Task.isCancelled else { return }
-            self.finishBind(uid: uid, result: result)
+            self.finishBind(uid: uid, result: result, route: route)
         }
     }
 
     /// Результат `bindTag`: success → распаковать hex-код, собрать запись, вооружить сканер и перейти в
     /// `waitingForWrite`; битый hex → «Неверный код от сервера»; 401 → onUnauthorized + закрытие;
     /// прочее → `failed(provisionErrorMessage)`.
-    private func finishBind(uid: String, result: PostResult<TagBindResponse>) {
+    private func finishBind(uid: String, result: PostResult<TagBindResponse>, route: AdminBindRoute) {
         switch result {
         case let .success(response):
             do {
@@ -357,7 +365,7 @@ final class ProvisioningModel: Identifiable {
                 feedback.play(.failure)
             }
         case .unauthorized:
-            onUnauthorized()
+            route.onUnauthorized()
             closeRequested = true
         default:
             provisionState = .failed(reason: provisionErrorMessage(result))

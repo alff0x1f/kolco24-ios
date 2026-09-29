@@ -65,6 +65,13 @@ func isPinned(_ lease: RaceLease?, raceId: Int, nowMs: Int64) -> Bool {
     return lease.raceId == raceId && nowMs < lease.expiresAtMs
 }
 
+/// `true`, когда [lease] (любой гонки) ещё не истёк на момент [nowMs] — локальный режим включён.
+/// Гейт LAN-админки: пароль и LAN-bearer уходят на cleartext LAN-хост только в этом состоянии.
+func isLeaseActive(_ lease: RaceLease?, nowMs: Int64) -> Bool {
+    guard let lease else { return false }
+    return nowMs < lease.expiresAtMs
+}
+
 /// Что проба sync-манифеста должна сделать с сохранённым lease.
 enum LeaseAction: Equatable {
     /// Манифест говорит `local` для пробуемой гонки — обновить пин.

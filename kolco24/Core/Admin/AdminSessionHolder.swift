@@ -31,6 +31,8 @@ final class AdminSessionHolder: @unchecked Sendable {
 
     private let lock = NSLock()
     private var _session: AdminSession
+    /// Поколение входа (см. `invalidateLogins`), под тем же замком.
+    private var generation = 0
 
     /// Реестр активных континуэйшнов подписчиков (мульти-консумер fan-out). Ключ — монотонный id,
     /// чтобы `onTermination` мог снять именно свою запись.
@@ -87,8 +89,44 @@ final class AdminSessionHolder: @unchecked Sendable {
     }
 
     /// Устанавливает сессию: дедуп равных (полный no-op), иначе публикация во все активные стримы.
-    func set(_ session: AdminSession) {
+    /// [persist] выполняется под тем же замком, что и смена сессии, — не перемешивается с
+    /// `commitLogin` (стор и держатель меняются согласованно).
+    func set(_ session: AdminSession, persist: () -> Void = {}) {
         lock.lock()
+        persist()
+        publishLocked(session)
+    }
+
+    /// Поколение входа: сдвигается `invalidateLogins()`. Снимается перед сетевым login-запросом.
+    var loginGeneration: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return generation
+    }
+
+    /// Отменяет все login'ы в полёте: их успех, пришедший позже, уже не поднимет сессию (параллельный
+    /// вход cloud + LAN: один ответил, админ нажал «Выйти», второй ответил поздно).
+    func invalidateLogins() {
+        lock.lock()
+        generation += 1
+        lock.unlock()
+    }
+
+    /// Успех login'а, начатого на поколении [generation]: если поколение не сдвинулось — [persist] +
+    /// публикация [session] под одним замком, `true`; иначе ничего, `false`.
+    func commitLogin(_ session: AdminSession, generation: Int, persist: () -> Void) -> Bool {
+        lock.lock()
+        guard generation == self.generation else {
+            lock.unlock()
+            return false
+        }
+        persist()
+        publishLocked(session)
+        return true
+    }
+
+    /// Вызывается под замком; снимает его.
+    private func publishLocked(_ session: AdminSession) {
         guard session != _session else {
             lock.unlock()
             return

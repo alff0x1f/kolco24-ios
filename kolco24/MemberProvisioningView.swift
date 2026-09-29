@@ -296,7 +296,8 @@ private struct MemberProvisioningPreviewHost: View {
         // До деплоя эндпоинта сервер отвечает 404 → экран просит номер.
         let m = MemberProvisioningModel(
             raceId: raceId, memberTagStore: env.memberTagStore,
-            bindMemberTag: { _, _, _ in .error(code: 404) }, onUnauthorized: {}, feedback: SilentFeedback()
+            route: { _ in AdminBindRoute(server: .cloud, hasSession: true, onUnauthorized: {}) },
+            bindMemberTag: { _, _, _, _ in .error(code: 404) }, feedback: SilentFeedback()
         )
         m.start(scanner: PreviewMemberScanner())
         self.model = m

@@ -192,12 +192,11 @@ final class SettingsModel {
         self.teamId = teamId
         self.nowMs = nowMs
         self.versionLabel = "\(versionName) (\(versionCode))"
-        // Сабтайтл ряда «Администратор»: email активной сессии, иначе «Войти» (синхронный снимок).
-        if case let .loggedIn(email, _, _) = appModel.currentAdminSession {
-            self.adminSubtitle = email
-        } else {
-            self.adminSubtitle = "Войти"
-        }
+        // Сабтайтл ряда «Администратор» по обеим сессиям (синхронный снимок).
+        self.adminSubtitle = adminRowSubtitle(
+            cloud: appModel.currentCloudAdminSession,
+            local: appModel.currentLocalAdminSession
+        )
         // Синхронный снимок размера скачанной карты гонки (файл-как-флаг не наблюдаем — читаем на открытии).
         if let raceId, let bytes = env.mapFileSize(raceId) {
             self.mapFileSizeLabel = formatBytesRu(bytes)

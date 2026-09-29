@@ -59,12 +59,14 @@ struct MemberProvisioningModelTests {
         var results: [PostResult<MemberTagBindResponse>]
         var hold = false
         private(set) var calls: [(raceId: Int, uid: String, number: Int?)] = []
+        private(set) var servers: [AdminServer] = []
         /// Сколько вызовов фактически вернули результат (после `release()` при `hold`).
         private(set) var returnedCount = 0
         private var gate: CheckedContinuation<Void, Never>?
         var isHeld: Bool { gate != nil }
         init(_ results: PostResult<MemberTagBindResponse>...) { self.results = results }
-        func bind(_ raceId: Int, _ uid: String, _ number: Int?) async -> PostResult<MemberTagBindResponse> {
+        func bind(_ server: AdminServer, _ raceId: Int, _ uid: String, _ number: Int?) async -> PostResult<MemberTagBindResponse> {
+            servers.append(server)
             calls.append((raceId, uid, number))
             if hold { await withCheckedContinuation { gate = $0 } }
             let result = results.count > 1 ? results.removeFirst() : results[0]
@@ -90,14 +92,16 @@ struct MemberProvisioningModelTests {
         env: AppEnvironment,
         bind: MemberBindStub,
         onUnauthorized: @escaping () -> Void = {},
+        server: AdminServer = .cloud,
+        hasSession: Bool = true,
         feedback: RecordingFeedback = RecordingFeedback(),
         successHoldMs: Int = 60_000
     ) -> MemberProvisioningModel {
         MemberProvisioningModel(
             raceId: race,
             memberTagStore: env.memberTagStore,
+            route: { _ in AdminBindRoute(server: server, hasSession: hasSession, onUnauthorized: onUnauthorized) },
             bindMemberTag: bind.bind,
-            onUnauthorized: onUnauthorized,
             feedback: feedback,
             successHoldMs: successHoldMs
         )
@@ -107,10 +111,13 @@ struct MemberProvisioningModelTests {
     private func started(
         env: AppEnvironment, bind: MemberBindStub,
         onUnauthorized: @escaping () -> Void = {},
+        server: AdminServer = .cloud,
+        hasSession: Bool = true,
         feedback: RecordingFeedback = RecordingFeedback(),
         successHoldMs: Int = 60_000
     ) async -> (MemberProvisioningModel, FakeProvisioningScanner) {
         let model = makeModel(env: env, bind: bind, onUnauthorized: onUnauthorized,
+                              server: server, hasSession: hasSession,
                               feedback: feedback, successHoldMs: successHoldMs)
         let scanner = FakeProvisioningScanner()
         model.start(scanner: scanner)
@@ -568,8 +575,8 @@ struct MemberProvisioningModelTests {
     @Test func bind401_callsOnUnauthorized_andRequestsClose() async throws {
         let env = try makeEnv()
         try await seedPool(env, [("U1", 101)])
-        env.adminSessionHolder.set(.loggedIn(email: "a@b.ru", token: "tok", expiresAt: "2999-01-01T00:00:00Z"))
-        let repo = env.adminAuthRepository
+        env.cloudAdminSession.set(.loggedIn(email: "a@b.ru", token: "tok", expiresAt: "2999-01-01T00:00:00Z"))
+        let repo = env.cloudAdminAuth
         var unauthorizedCalls = 0
         let feedback = RecordingFeedback()
         let (model, scanner) = await started(env: env, bind: MemberBindStub(.unauthorized),
@@ -582,7 +589,34 @@ struct MemberProvisioningModelTests {
         #expect(unauthorizedCalls == 1)
         #expect(feedback.plays.isEmpty) // экран закрывается, без звука ошибки
         #expect(scanner.pendingUid == nil)
-        #expect(env.adminSessionHolder.session == .loggedOut)
+        #expect(env.cloudAdminSession.session == .loggedOut)
+    }
+
+    @Test func bind_goesToRoutedServer() async throws {
+        let env = try makeEnv()
+        try await seedPool(env, [("U1", 101)])
+        let bind = MemberBindStub(.error(code: 500))
+        let (model, scanner) = await started(env: env, bind: bind, server: .lan)
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { isFailed(model) }
+        #expect(bind.servers == [.lan])
+    }
+
+    @Test func noSessionOnRoutedServer_failsInlineWithoutRequest() async throws {
+        let env = try makeEnv()
+        try await seedPool(env, [("U1", 101)])
+        let bind = MemberBindStub(.error(code: 500))
+        let feedback = RecordingFeedback()
+        let (model, scanner) = await started(env: env, bind: bind, server: .cloud, hasSession: false,
+                                             feedback: feedback)
+
+        scanner.emit(reading(uid: "U1"))
+        await waitUntil { isFailed(model) }
+        #expect(model.provisionState == .failed(reason: "Нет входа на cloud-сервер"))
+        #expect(bind.calls.isEmpty)
+        #expect(feedback.failureCount == 1)
+        #expect(!model.closeRequested)
     }
 
     @Test func bindSuccessWithBadHex_failedInvalidCodeString() async throws {

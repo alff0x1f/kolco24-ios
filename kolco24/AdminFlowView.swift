@@ -4,11 +4,11 @@
 //
 //  Админ-флоу организатора (этап 10). Порт ПОВЕДЕНИЯ (не структуры) `ui/admin/AdminScreen.kt`:
 //  `fullScreenCover` со своим `NavigationStack` (прецедент `TeamPickerFlowView`), поднимается из
-//  ряда «Администратор» в `SettingsView`. Корень `AdminHomeView` ветвится по admin-сессии
-//  (подписка на `AppModel.adminSessionUpdates` — мультиконсумерный стрим держателя, свежий на
-//  каждую подписку и сидированный текущим значением): `loggedOut` → форма входа (email/пароль,
-//  «Войти», спиннер, inline-ошибка из
-//  `adminErrorMessage`); `loggedIn` → email + ряды действий.
+//  ряда «Администратор» в `SettingsView`. Сессий две, независимые — cloud и LAN-сервер гонки (он
+//  выдаёт свои токены); корень `AdminHomeView` подписан на оба мультиконсумерных стрима держателей.
+//  Обе `loggedOut` → форма входа (cloud, плюс LAN только в локальном режиме; inline-ошибка из
+//  `adminErrorMessage` / `combinedLoginOutcome`); хоть одна `loggedIn` → строки статуса серверов +
+//  ряды действий. «Войти» в строке сервера открывает форму только для него («Назад» — в меню).
 //
 //  Секция «Чипы» — пары «записать → проверить»: «Привязать чип к КП» (`ProvisioningView`) /
 //  «Проверить чип КП» (`CheckChipView`), «Записать браслет участника» (`MemberProvisioningView`,
@@ -59,50 +59,90 @@ struct AdminFlowView: View {
 
 private struct AdminHomeView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.scenePhase) private var scenePhase
     let onClose: () -> Void
 
-    /// Локальная копия сессии, ведомая стримом держателя (сид — синхронный снимок; далее `for await`).
-    @State private var session: AdminSession = .loggedOut
+    /// Локальные копии сессий cloud и LAN, ведомые стримами держателей (сид — синхронный снимок).
+    @State private var cloudSession: AdminSession = .loggedOut
+    @State private var localSession: AdminSession = .loggedOut
+    /// Локальный режим гонки (lease). Опрос: на появлении, смене сессии и возврате в приложение.
+    @State private var lanActive = false
+    /// Повторный вход на один сервер из меню («Войти» в его строке статуса); `nil` — меню / первый вход.
+    @State private var reLoginTarget: AdminServer?
 
     // Форма входа.
     @State private var email = ""
     @State private var password = ""
+    @State private var passwordVisible = false
     @State private var loggingIn = false
     @State private var errorText: String?
 
     // Выход.
     @State private var loggingOut = false
 
+    private var anyLoggedIn: Bool { cloudSession != .loggedOut || localSession != .loggedOut }
+    private var reLoginShown: Bool { reLoginTarget != nil && anyLoggedIn }
+
     var body: some View {
         Group {
-            switch session {
-            case .loggedOut:
-                loginForm
-            case let .loggedIn(email, _, _):
-                menu(email: email)
+            if !anyLoggedIn || reLoginTarget != nil {
+                loginForm(target: anyLoggedIn ? reLoginTarget : nil)
+            } else {
+                menu
             }
         }
         .background(Color.paper)
         .navigationTitle("Администратор")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(reLoginShown)
         .toolbar {
+            if reLoginShown {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Назад") { reLoginTarget = nil }
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Готово") { onClose() }
             }
         }
         .task {
-            // Сид синхронным снимком, затем ведём мультиконсумерным стримом держателя (свежий на
-            // каждую подписку, сидированный текущим значением).
-            session = appModel.currentAdminSession
-            for await next in appModel.adminSessionUpdates {
-                session = next
+            cloudSession = appModel.currentCloudAdminSession
+            for await next in appModel.cloudAdminSessionUpdates {
+                cloudSession = next
             }
         }
+        .task {
+            localSession = appModel.currentLocalAdminSession
+            for await next in appModel.localAdminSessionUpdates {
+                localSession = next
+            }
+        }
+        .onAppear { lanActive = appModel.isLanActive }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { lanActive = appModel.isLanActive }
+        }
+        .onChange(of: cloudSession) { _, _ in sessionsChanged() }
+        .onChange(of: localSession) { _, _ in sessionsChanged() }
+    }
+
+    /// Форма повторного входа закрывается, когда появилась сессия её сервера — от этой формы или от
+    /// старой попытки в полёте, — а не по колбэку успеха, который могла бы дёрнуть и устаревшая попытка.
+    /// Без обеих сессий цель тоже сбрасывается: полная форма берёт верх.
+    private func sessionsChanged() {
+        lanActive = appModel.isLanActive
+        let targetSession: AdminSession? = switch reLoginTarget {
+        case .cloud: cloudSession
+        case .lan: localSession
+        case nil: nil
+        }
+        if case .loggedIn = targetSession { reLoginTarget = nil }
+        if !anyLoggedIn { reLoginTarget = nil }
     }
 
     // MARK: Форма входа
 
-    private var loginForm: some View {
+    /// [target] `nil` — первый вход: cloud, плюс LAN только в локальном режиме. Иначе — только этот сервер.
+    private func loginForm(target: AdminServer?) -> some View {
         List {
             Section {
                 TextField("Email", text: $email)
@@ -111,11 +151,29 @@ private struct AdminHomeView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .listRowBackground(Color.card)
-                SecureField("Пароль", text: $password)
+                HStack {
+                    Group {
+                        if passwordVisible {
+                            TextField("Пароль", text: $password)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                        } else {
+                            SecureField("Пароль", text: $password)
+                        }
+                    }
                     .textContentType(.password)
-                    .listRowBackground(Color.card)
+                    Button {
+                        passwordVisible.toggle()
+                    } label: {
+                        Image(systemName: passwordVisible ? "eye.slash" : "eye")
+                            .foregroundStyle(Color.sub)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(passwordVisible ? "Скрыть пароль" : "Показать пароль")
+                }
+                .listRowBackground(Color.card)
             } header: {
-                Text("Вход организатора")
+                Text(loginTitle(target))
             } footer: {
                 if let errorText {
                     Text(errorText)
@@ -125,7 +183,7 @@ private struct AdminHomeView: View {
             }
 
             Section {
-                Button(action: submitLogin) {
+                Button { submitLogin(target: target) } label: {
                     HStack {
                         Spacer()
                         if loggingIn {
@@ -148,18 +206,30 @@ private struct AdminHomeView: View {
         .background(Color.paper)
     }
 
+    private func loginTitle(_ target: AdminServer?) -> String {
+        switch target {
+        case .cloud: "Вход на cloud-сервер"
+        case .lan: "Вход на LAN-сервер гонки"
+        case nil: "Вход организатора"
+        }
+    }
+
     private var canSubmit: Bool { !loggingIn && !email.isEmpty && !password.isEmpty }
 
-    private func submitLogin() {
+    private func submitLogin(target: AdminServer?) {
         guard canSubmit else { return }
         loggingIn = true
         errorText = nil
-        let email = email
+        let email = email.trimmingCharacters(in: .whitespaces)
         let password = password
         Task {
-            let outcome = await appModel.adminLogin(email: email, password: password)
+            let outcome = await appModel.adminLogin(server: target, email: email, password: password)
             loggingIn = false
-            // Успех → стрим держателя переведёт `session` в `.loggedIn` (ветка меню). Иначе — inline-ошибка.
+            // Успех → стримы держателей переведут сессии (ветка меню). Иначе — inline-ошибка.
+            guard let outcome else {
+                errorText = "Включите локальный режим гонки"
+                return
+            }
             errorText = adminErrorMessage(outcome)
             if outcome == .success {
                 self.password = ""
@@ -167,33 +237,32 @@ private struct AdminHomeView: View {
         }
     }
 
+    /// Открыть форму входа на один сервер; email подставляется из уже активной сессии.
+    private func openReLogin(_ server: AdminServer) {
+        if case let .loggedIn(email, _, _) = cloudSession {
+            self.email = email
+        } else if case let .loggedIn(email, _, _) = localSession {
+            self.email = email
+        }
+        password = ""
+        errorText = nil
+        reLoginTarget = server
+    }
+
     // MARK: Меню действий
 
-    @ViewBuilder
-    private func menu(email: String) -> some View {
+    private var menu: some View {
         List {
             Section {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.good)
-                            .frame(width: 34, height: 34)
-                        Image(systemName: "checkmark.shield.fill")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(.white)
-                    }
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Вход выполнен")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.sub)
-                        Text(email)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(Color.ink)
-                    }
-                    Spacer()
-                }
-                .padding(.vertical, 2)
-                .listRowBackground(Color.card)
+                ServerStatusRow(label: "Cloud", session: cloudSession, loggedOutText: "нет входа",
+                                onLogin: { openReLogin(.cloud) })
+                    .listRowBackground(Color.card)
+                ServerStatusRow(label: "LAN", session: localSession,
+                                loggedOutText: lanActive ? "нет входа" : "включите локальный режим гонки",
+                                onLogin: lanActive ? { openReLogin(.lan) } : nil)
+                    .listRowBackground(Color.card)
+            } header: {
+                Text("Вход выполнен")
             }
 
             if appModel.selectedRaceId == nil {
@@ -277,8 +346,54 @@ private struct AdminHomeView: View {
         Task {
             await appModel.adminLogout()
             loggingOut = false
-            // Стрим держателя переведёт `session` в `.loggedOut` (ветка формы).
+            // Стримы держателей переведут сессии в `.loggedOut` (ветка формы).
         }
+    }
+}
+
+// MARK: - Строка статуса сервера
+
+/// Сессия одного сервера: «Cloud · email» или «Cloud · нет входа» с необязательной «Войти».
+private struct ServerStatusRow: View {
+    let label: String
+    let session: AdminSession
+    let loggedOutText: String
+    let onLogin: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(loggedIn ? Color.good : Color.sub.opacity(0.4))
+                    .frame(width: 34, height: 34)
+                Image(systemName: loggedIn ? "checkmark.shield.fill" : "shield.slash")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.sub)
+                Text(detail)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(loggedIn ? Color.ink : Color.sub)
+            }
+            Spacer()
+            if !loggedIn, let onLogin {
+                Button("Войти", action: onLogin)
+                    .buttonStyle(.borderless)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.kolcoOrange)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var loggedIn: Bool { session != .loggedOut }
+
+    private var detail: String {
+        if case let .loggedIn(email, _, _) = session { return email }
+        return loggedOutText
     }
 }
 
