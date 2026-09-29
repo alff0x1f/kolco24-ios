@@ -59,7 +59,7 @@ struct TrackMapView: UIViewRepresentable {
         )
         mapView.register(StopAnnotationView.self, forAnnotationViewWithReuseIdentifier: StopAnnotationView.reuseId)
 
-        // Оффлайн-подложка добавляется ОДИН раз (при наличии) — Apple-тайлы тогда не грузятся.
+        // Оффлайн-подложка добавляется ОДИН раз (при наличии) — поверх Apple-тайлов.
         if let overlay {
             let tileOverlay = MBTilesOverlay(metadata: overlay.metadata, tileData: overlay.tileData)
             mapView.addOverlay(tileOverlay, level: .aboveLabels)
@@ -172,54 +172,23 @@ struct TrackMapView: UIViewRepresentable {
 
     // MARK: - Камера
 
-    /// Камера под оффлайн-подложку: регион по `bounds`, `cameraBoundary` по bbox, `cameraZoomRange`
-    /// из зумов метаданных (аппроксимация зум→дистанция — device-only, без тестов).
+    /// Камера под оффлайн-подложку: регион по `bounds`. Зум и панорама не ограничены: вне файла
+    /// видна Apple-подложка, глубже `maxzoom` оверлей перезумливает тайлы.
     /// Возвращает `true`, только если камера реально спозиционирована (есть валидные `bounds`);
     /// `false` → вызывающий должен подогнать камеру под трек/пины.
     @discardableResult
     private func applyOverlayCamera(_ mapView: MKMapView, metadata: MBTilesMetadata?) -> Bool {
         guard let bounds = metadata?.bounds else { return false }
-        let centerLat = (bounds.s + bounds.n) / 2
-        let centerLon = (bounds.w + bounds.e) / 2
         let span = MKCoordinateSpan(
             latitudeDelta: max(0.001, abs(bounds.n - bounds.s)),
             longitudeDelta: max(0.001, abs(bounds.e - bounds.w))
         )
         let region = MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: centerLat, longitude: centerLon),
+            center: CLLocationCoordinate2D(latitude: (bounds.s + bounds.n) / 2, longitude: (bounds.w + bounds.e) / 2),
             span: span
         )
         mapView.setRegion(region, animated: false)
-
-        let nw = MKMapPoint(CLLocationCoordinate2D(latitude: bounds.n, longitude: bounds.w))
-        let se = MKMapPoint(CLLocationCoordinate2D(latitude: bounds.s, longitude: bounds.e))
-        let rect = MKMapRect(
-            x: min(nw.x, se.x),
-            y: min(nw.y, se.y),
-            width: abs(se.x - nw.x),
-            height: abs(se.y - nw.y)
-        )
-        mapView.cameraBoundary = MKMapView.CameraBoundary(mapRect: rect)
-
-        // Зумы санируем в 0…22 (`Core/Map`), min > max → дефолты — те же значения, что и в оверлее.
-        let zoom = sanitizedZoomRange(minZoom: metadata?.minZoom, maxZoom: metadata?.maxZoom)
-        // zoom→дистанция камеры (грубо): ширина мира на зуме z ≈ circ·cos(lat)/2^z.
-        let minDistance = cameraDistance(forZoom: zoom.max, latitude: centerLat)
-        let maxDistance = cameraDistance(forZoom: zoom.min, latitude: centerLat)
-        if let range = MKMapView.CameraZoomRange(
-            minCenterCoordinateDistance: minDistance,
-            maxCenterCoordinateDistance: maxDistance
-        ) {
-            mapView.setCameraZoomRange(range, animated: false)
-        }
         return true
-    }
-
-    /// Грубая оценка `centerCoordinateDistance` для зума `z` на широте `latitude`.
-    private func cameraDistance(forZoom z: Int, latitude: Double) -> Double {
-        let earthCircumference = 40_075_016.686 // метры по экватору
-        let latRad = latitude * .pi / 180
-        return earthCircumference * cos(latRad) / pow(2.0, Double(z))
     }
 
     /// Подгонка камеры под трек/пины (когда оффлайн-подложки нет).

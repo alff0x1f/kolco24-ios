@@ -142,4 +142,30 @@ struct MBTilesTests {
         #expect(clampZoom(100) == 22)
         #expect(clampZoom(10) == 10)
     }
+
+    // MARK: - Перезум
+
+    @Test func overzoom_atOrBelowMaxZoom_isIdentity() {
+        #expect(overzoomSource(z: 15, x: 100, y: 200, maxZoom: 15)
+            == OverzoomSource(z: 15, x: 100, y: 200, levels: 0, subX: 0, subY: 0))
+        #expect(overzoomSource(z: 12, x: 7, y: 9, maxZoom: 15)
+            == OverzoomSource(z: 12, x: 7, y: 9, levels: 0, subX: 0, subY: 0))
+    }
+
+    @Test func overzoom_oneLevel_picksQuadrant() {
+        // z16 (201, 402) → родитель z15 (100, 201), правая верхняя четверть.
+        #expect(overzoomSource(z: 16, x: 201, y: 402, maxZoom: 15)
+            == OverzoomSource(z: 15, x: 100, y: 201, levels: 1, subX: 1, subY: 0))
+    }
+
+    @Test func overzoom_threeLevels() {
+        // z18 x = 100·8 + 5, y = 200·8 + 7 → родитель z15 (100, 200), клетка (5, 7) из 8×8.
+        #expect(overzoomSource(z: 18, x: 805, y: 1607, maxZoom: 15)
+            == OverzoomSource(z: 15, x: 100, y: 200, levels: 3, subX: 5, subY: 7))
+    }
+
+    @Test func overzoom_tooDeep_isNil() {
+        #expect(overzoomSource(z: 23, x: 0, y: 0, maxZoom: 15) != nil)
+        #expect(overzoomSource(z: 24, x: 0, y: 0, maxZoom: 15) == nil)
+    }
 }

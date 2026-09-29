@@ -48,6 +48,42 @@ func sanitizedZoomRange(minZoom: Int?, maxZoom: Int?) -> (min: Int, max: Int) {
     return (lo, hi)
 }
 
+// MARK: - Перезум
+
+/// Верхний зум оверлея. MapKit не рисует оверлей глубже его `maximumZ`, поэтому оверлей
+/// объявляет этот зум, а тайлы глубже `maxzoom` файла вырезаются из тайла на `maxzoom`.
+let mbtilesOverzoomMaxZoom = 24
+
+/// Глубже этой разницы кусок родителя меньше пикселя (256 / 2^8 == 1).
+let mbtilesMaxOverzoomLevels = 8
+
+/// Откуда брать XYZ-тайл `(z, x, y)` при файле до `maxZoom`: родительский тайл
+/// `(z, x, y)` и клетка `(subX, subY)` в сетке `2^levels × 2^levels` внутри него
+/// (0,0 — северо-запад). `levels == 0` — тайл берётся как есть. `nil` — перезум
+/// глубже `mbtilesMaxOverzoomLevels`.
+struct OverzoomSource: Equatable {
+    var z: Int
+    var x: Int
+    var y: Int
+    var levels: Int
+    var subX: Int
+    var subY: Int
+}
+
+func overzoomSource(z: Int, x: Int, y: Int, maxZoom: Int) -> OverzoomSource? {
+    let levels = max(0, z - maxZoom)
+    if levels > mbtilesMaxOverzoomLevels { return nil }
+    let mask = (1 << levels) - 1
+    return OverzoomSource(
+        z: z - levels,
+        x: x >> levels,
+        y: y >> levels,
+        levels: levels,
+        subX: x & mask,
+        subY: y & mask
+    )
+}
+
 /// Распарсенные метаданные MBTiles. Все поля опциональны — отсутствующий/битый
 /// ключ даёт `nil`, а не бросок (never-throw).
 struct MBTilesMetadata: Equatable {

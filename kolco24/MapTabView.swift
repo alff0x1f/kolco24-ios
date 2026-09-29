@@ -290,9 +290,9 @@ private final class OverlayCache {
     func descriptor(for path: String?) -> MapOverlayDescriptor? {
         if path == self.path { return cached }
         self.path = path
-        // Читаемый sqlite без таблицы `tiles`/без тайлов — НЕ подложка: иначе
-        // `canReplaceMapContent` дал бы пустую подавленную карту без ретрая. При невалидности
-        // возвращаем `nil` → карта деградирует в онлайн Apple-подложку (Finding C2).
+        // Читаемый sqlite без таблицы `tiles`/без тайлов — НЕ подложка: камера встала бы по
+        // его bounds/зумам над пустым оверлеем. При невалидности возвращаем `nil` → карта
+        // деградирует в онлайн Apple-подложку (Finding C2).
         guard let path,
               let reader = try? MBTilesReader(path: path),
               reader.looksLikeValidMBTiles() else {
