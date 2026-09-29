@@ -208,15 +208,9 @@ final class MapModel {
     /// + тост, отмена → назад в `notDownloaded` молча (сторэдж чистит temp). Guard от повторного входа —
     /// если уже `downloading`. Захватывает замыкание графа (не `self`) для самого скачивания.
     func downloadMap() {
+        // Схему/хост уже проверил `resolveMapUrl` при записи в БД: абсолютный — только https, путь от
+        // корня — на хосте API (LAN — cleartext http, его пропускает `NSAllowsLocalNetworking`).
         guard let raceId = boundRaceId, let urlString = mapUrl, let url = URL(string: urlString) else { return }
-        // HTTPS-only контракт плана: `NSAllowsLocalNetworking` пропускает cleartext http к LAN-хостам —
-        // защищаемся от нехранящейся-по-https `map_url` до старта скачивания (путь тот же, что у ошибки).
-        guard url.scheme?.lowercased() == "https" else {
-            let message = "Не удалось скачать карту гонки"
-            availability = .failed(message: message)
-            onToast(message)
-            return
-        }
         if case .downloading = availability { return }
         availability = .downloading(progress: 0)
         let download = env.downloadMapFile
