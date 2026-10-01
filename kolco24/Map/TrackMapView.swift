@@ -34,6 +34,20 @@ struct MapOverlayDescriptor {
     let tileData: @Sendable (Int, Int, Int) -> Data?
 }
 
+/// Разовый перелёт камеры по кнопке на карте.
+enum MapCameraCommand {
+    /// Показать скачанную карту гонки по её `bounds`.
+    case raceMap
+    /// Центр на последнем GPS-фиксе.
+    case myLocation
+}
+
+/// Запрос перелёта: новый `id` — новое нажатие (та же команда повторяется).
+struct MapCameraRequest: Equatable {
+    let command: MapCameraCommand
+    let id: Int
+}
+
 /// Карта команды: трек-полилиния + пины КП поверх MBTiles-подложки или Apple-fallback.
 struct TrackMapView: UIViewRepresentable {
     /// Линии трека парами `Double` (уже отфильтрованы/отсортированы в `MapModel`).
@@ -46,11 +60,23 @@ struct TrackMapView: UIViewRepresentable {
     let pins: [MapMarkPin]
     /// Оффлайн-подложка (`nil` → Apple-тайлы онлайн).
     let overlay: MapOverlayDescriptor?
+    /// Последнее нажатие кнопки камеры; выполняется один раз на `id`.
+    let cameraRequest: MapCameraRequest?
+    /// «Моё местоположение» без GPS-фикса.
+    let onNoLocationFix: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> MKMapView {
-        let mapView = MKMapView()
+        let mapView = LayoutAwareMapView()
+        let coordinator = context.coordinator
+        // Пересоздание вида (`.id` по пути подложки) не должно повторять прошлое нажатие.
+        coordinator.lastRequestId = cameraRequest?.id
+        let metadata = overlay?.metadata
+        mapView.onLayout = { [weak mapView, weak coordinator] in
+            guard let mapView, let coordinator, coordinator.pendingRaceMap else { return }
+            Self.frameRaceMap(mapView, metadata: metadata, coordinator: coordinator, animated: false)
+        }
         mapView.delegate = context.coordinator
         mapView.showsUserLocation = true
         mapView.register(
@@ -64,11 +90,11 @@ struct TrackMapView: UIViewRepresentable {
             let tileOverlay = MBTilesOverlay(metadata: overlay.metadata, tileData: overlay.tileData)
             mapView.addOverlay(tileOverlay, level: .aboveLabels)
             // Флаг ставим ТОЛЬКО если камера реально спозиционирована по bounds. Без валидных
-            // bounds `applyOverlayCamera` возвращает false → падаем в `applyData`, где камера
+            // bounds `frameRaceMap` возвращает false → падаем в `applyData`, где камера
             // подгоняется под трек/пины (иначе карта открылась бы в дефолтном регионе с данными
             // команды за кадром).
-            if applyOverlayCamera(mapView, metadata: overlay.metadata) {
-                context.coordinator.didSetInitialCamera = true
+            if Self.frameRaceMap(mapView, metadata: overlay.metadata, coordinator: coordinator, animated: false) {
+                coordinator.didSetInitialCamera = true
             }
         }
 
@@ -78,6 +104,10 @@ struct TrackMapView: UIViewRepresentable {
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
         applyData(mapView, coordinator: context.coordinator)
+        if let cameraRequest, cameraRequest.id != context.coordinator.lastRequestId {
+            context.coordinator.lastRequestId = cameraRequest.id
+            runCameraCommand(cameraRequest.command, mapView: mapView, coordinator: context.coordinator)
+        }
     }
 
     // MARK: - Рендер данных
@@ -172,23 +202,69 @@ struct TrackMapView: UIViewRepresentable {
 
     // MARK: - Камера
 
-    /// Камера под оффлайн-подложку: регион по `bounds`. Зум и панорама не ограничены: вне файла
-    /// видна Apple-подложка, глубже `maxzoom` оверлей перезумливает тайлы.
-    /// Возвращает `true`, только если камера реально спозиционирована (есть валидные `bounds`);
-    /// `false` → вызывающий должен подогнать камеру под трек/пины.
+    /// Показать карту гонки: `bounds` файла целиком, но не мельче его `minzoom` — ниже MapKit оверлей
+    /// не рисует, и большой файл показал бы одну Apple-карту (тогда в кадре только его центр).
+    /// Пока у вида нет размера, кадр откладывается до `layoutSubviews`.
+    /// `false` — у файла нет `bounds`, показывать нечего.
     @discardableResult
-    private func applyOverlayCamera(_ mapView: MKMapView, metadata: MBTilesMetadata?) -> Bool {
+    private static func frameRaceMap(
+        _ mapView: MKMapView,
+        metadata: MBTilesMetadata?,
+        coordinator: Coordinator,
+        animated: Bool
+    ) -> Bool {
         guard let bounds = metadata?.bounds else { return false }
-        let span = MKCoordinateSpan(
-            latitudeDelta: max(0.001, abs(bounds.n - bounds.s)),
-            longitudeDelta: max(0.001, abs(bounds.e - bounds.w))
+        guard mapView.bounds.width > 0 else {
+            coordinator.pendingRaceMap = true
+            return true
+        }
+        coordinator.pendingRaceMap = false
+        let nw = MKMapPoint(CLLocationCoordinate2D(latitude: bounds.n, longitude: bounds.w))
+        let se = MKMapPoint(CLLocationCoordinate2D(latitude: bounds.s, longitude: bounds.e))
+        let fileRect = MKMapRect(
+            x: min(nw.x, se.x),
+            y: min(nw.y, se.y),
+            width: max(abs(se.x - nw.x), 1),
+            height: max(abs(se.y - nw.y), 1)
         )
-        let region = MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: (bounds.s + bounds.n) / 2, longitude: (bounds.w + bounds.e) / 2),
-            span: span
-        )
-        mapView.setRegion(region, animated: false)
+        var rect = mapView.mapRectThatFits(fileRect)
+        let minZoom = sanitizedZoomRange(minZoom: metadata?.minZoom, maxZoom: metadata?.maxZoom).min
+        let maxWidth = maxVisibleMapWidth(viewWidth: mapView.bounds.width, minZoom: minZoom)
+        if rect.width > maxWidth {
+            let scale = maxWidth / rect.width
+            let size = MKMapSize(width: rect.width * scale, height: rect.height * scale)
+            rect = MKMapRect(
+                origin: MKMapPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2),
+                size: size
+            )
+        }
+        mapView.setVisibleMapRect(rect, animated: animated)
         return true
+    }
+
+    private func runCameraCommand(_ command: MapCameraCommand, mapView: MKMapView, coordinator: Coordinator) {
+        switch command {
+        case .raceMap:
+            Self.frameRaceMap(mapView, metadata: overlay?.metadata, coordinator: coordinator, animated: true)
+        case .myLocation:
+            guard let location = mapView.userLocation.location else {
+                // Тост меняет состояние SwiftUI — не посреди `updateUIView`.
+                let report = onNoLocationFix
+                Task { @MainActor in report() }
+                return
+            }
+            // Ближе текущего зума не отдаляем; издалека — на ~1 км.
+            let target = MKCoordinateRegion(
+                center: location.coordinate,
+                latitudinalMeters: 1000,
+                longitudinalMeters: 1000
+            )
+            if mapView.region.span.latitudeDelta > target.span.latitudeDelta {
+                mapView.setRegion(target, animated: true)
+            } else {
+                mapView.setCenter(location.coordinate, animated: true)
+            }
+        }
     }
 
     /// Подгонка камеры под трек/пины (когда оффлайн-подложки нет).
@@ -218,6 +294,9 @@ struct TrackMapView: UIViewRepresentable {
         var strokeStyles: [ObjectIdentifier: TrackStrokeStyle] = [:]
         var stopPins: [MapStopPin] = []
         var didSetInitialCamera = false
+        /// Кадр карты гонки ждёт первого `layoutSubviews` (у вида ещё нет размера).
+        var pendingRaceMap = false
+        var lastRequestId: Int?
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let tileOverlay = overlay as? MKTileOverlay {
@@ -453,5 +532,16 @@ final class CheckpointAnnotationView: MKAnnotationView {
 
     func configure(number: Int) {
         label.text = "\(number)"
+    }
+}
+
+/// `MKMapView`, сообщающий о раскладке: кадр по `bounds` файла требует ширину вида,
+/// а в `makeUIView` она ещё нулевая.
+private final class LayoutAwareMapView: MKMapView {
+    var onLayout: (() -> Void)?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout?()
     }
 }

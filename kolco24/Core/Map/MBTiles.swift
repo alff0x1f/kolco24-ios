@@ -84,6 +84,15 @@ func overzoomSource(z: Int, x: Int, y: Int, maxZoom: Int) -> OverzoomSource? {
     )
 }
 
+// MARK: - Камера
+
+/// Самая широкая видимая область (в `MKMapPoint`), при которой подложка с [minZoom] ещё рисуется
+/// на виде шириной [viewWidth] точек. Мир MapKit — 2^28 map points: это 256-pt тайлы на z20,
+/// так что на зуме z одна экранная точка — `2^(20 − z)` map points.
+func maxVisibleMapWidth(viewWidth: Double, minZoom: Int) -> Double {
+    return viewWidth * pow(2, Double(20 - minZoom))
+}
+
 /// Распарсенные метаданные MBTiles. Все поля опциональны — отсутствующий/битый
 /// ключ даёт `nil`, а не бросок (never-throw).
 struct MBTilesMetadata: Equatable {

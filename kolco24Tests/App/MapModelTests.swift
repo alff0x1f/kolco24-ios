@@ -34,6 +34,16 @@ private final class MapFakes: @unchecked Sendable {
 
 private struct MapDownloadError: Error {}
 
+private final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Bool
+    init(_ value: Bool) { stored = value }
+    var value: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return stored }
+        set { lock.lock(); defer { lock.unlock() }; stored = newValue }
+    }
+}
+
 @MainActor
 struct MapModelTests {
 
@@ -271,6 +281,24 @@ struct MapModelTests {
                        wallMs: restEnd + Int64(i) * 15_000)
         }
         return walk1 + walk2
+    }
+
+    @Test func refreshDeviceStatePollsLocationAccess() throws {
+        let fakes = MapFakes()
+        let access = LockedFlag(false)
+        let env = try AppEnvironment.inMemory(
+            transport: FakeTransport().handle,
+            hasLocationAccess: { access.value }
+        )
+        let model = MapModel(env: env, onToast: { fakes.recordToast($0) })
+        model.refreshDeviceState()
+        #expect(!model.hasLocationAccess)
+        access.value = true
+        model.refreshDeviceState()
+        #expect(model.hasLocationAccess)
+
+        model.reportNoLocationFix()
+        #expect(fakes.toasts == ["Местоположение ещё не определено"])
     }
 
     @Test func speedModeIsOnByDefault() throws {
