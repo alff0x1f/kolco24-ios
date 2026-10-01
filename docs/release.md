@@ -1,7 +1,7 @@
 # Релиз в TestFlight — чек-лист ручных шагов
 
 Проект подготовлен к загрузке (этап 11, задача 8): `ITSAppUsesNonExemptEncryption = false`
-в `Info.plist`, privacy-манифест `kolco24/PrivacyInfo.xcprivacy`, Release-сборка зелёная.
+(build setting `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption`), privacy-манифест `kolco24/PrivacyInfo.xcprivacy`, Release-сборка зелёная.
 Ниже — ручные шаги вне кода. Нужен активный аккаунт Apple Developer; записи приложения
 в App Store Connect ещё нет.
 
