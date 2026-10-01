@@ -8,7 +8,7 @@
 ## 1. Developer Portal — App ID + capability
 
 - Certificates, Identifiers & Profiles → Identifiers → **+** → App IDs → App.
-- Bundle ID (explicit): **`kolco24.ru.kolco24`** (совпадает с `PRODUCT_BUNDLE_IDENTIFIER` таргета).
+- Bundle ID (explicit): **`org.kolco24.app`** (совпадает с `PRODUCT_BUNDLE_IDENTIFIER` таргета).
 - Capabilities: включить **NFC Tag Reading** (это entitlement на App ID, не только plist-ключ
   `NFCReaderUsageDescription`). Остальные capability не требуются (фоновая геолокация
   и локальная сеть работают через `UIBackgroundModes`/`NSAppTransportSecurity` без entitlement).
@@ -20,7 +20,7 @@
 - Platform: iOS.
 - Name: **Кольцо24** (или согласованное имя; должно быть уникальным в App Store).
 - Primary Language: **Russian (ru)**.
-- Bundle ID: выбрать зарегистрированный `kolco24.ru.kolco24`.
+- Bundle ID: выбрать зарегистрированный `org.kolco24.app`.
 - SKU: произвольный стабильный идентификатор (например `kolco24-ios`).
 - User Access: Full.
 - Создать.
