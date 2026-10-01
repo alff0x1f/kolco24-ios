@@ -11,6 +11,8 @@
 //   - `notDownloaded`/`failed` — нижняя CTA-карточка «Скачать карту гонки» (стиль CTA `MarksView`);
 //   - `downloading(p)` — карточка с прогрессом, процентом и крестиком-отменой;
 //   - `ready`          — чистая карта (оверлеев нет).
+//  Справа внизу — кнопки камеры: «Карта гонки» (есть `bounds` у скачанного файла) и «Моё местоположение»
+//  (есть доступ к геолокации; без фикса — тост).
 //  Сверху слева — чип «Все точки» (фильтр выбросов трека, общая настройка с «Настройками»): виден, когда
 //  фильтр что-то скрыл («Все точки · +N») или режим уже включён (чтобы его можно было выключить).
 //  Ошибка скачивания уходит тостом (`MapModel.onToast` → `AppModel.toastMessage`), CTA возвращается в
@@ -24,6 +26,7 @@
 //
 //  `refreshAvailability()` дёргается в `.task`/`.onAppear`: вкладки `TabView` живут постоянно, а
 //  удаление карты в настройках (файл-как-флаг) иначе не долетело бы до уже созданной модели.
+//  Доступ к геолокации (`refreshDeviceState`) — ещё и на `scenePhase == .active`.
 //
 
 import SwiftUI
@@ -35,6 +38,8 @@ struct MapTabView: View {
     /// каждый прогон `body`). Дескриптор выводится СИНХРОННО в `body` из `readyPath` — не через
     /// `@State`+`onChange`, иначе `makeUIView` при смене `.id` видел бы устаревший `nil` (Finding H1).
     @State private var overlayCache = OverlayCache()
+    @State private var cameraRequest: MapCameraRequest?
+    @Environment(\.scenePhase) private var scenePhase
     /// Точка входа во флоу выбора команды (пробрасывается хостом).
     var onChooseTeam: () -> Void = {}
 
@@ -62,8 +67,15 @@ struct MapTabView: View {
             .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeMapModel() }
                 model?.rebind(teamId: appModel.selectedTeamId, raceId: appModel.selectedRaceId)
+                model?.refreshDeviceState()
             }
-            .onAppear { model?.refreshAvailability() }
+            .onAppear {
+                model?.refreshAvailability()
+                model?.refreshDeviceState()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { model?.refreshDeviceState() }
+            }
     }
 
     @ViewBuilder
@@ -93,12 +105,14 @@ struct MapTabView: View {
             speedRuns: model.speedRuns,
             stopPins: model.stopPins,
             pins: model.pins,
-            overlay: overlay
+            overlay: overlay,
+            cameraRequest: cameraRequest,
+            onNoLocationFix: model.reportNoLocationFix
         )
         // Смена пути подложки пересоздаёт `MKMapView` — иначе оффлайн-оверлей, добавляемый в `makeUIView`
         // однократно, не подхватился бы при докачивании карты во время открытой вкладки.
         .id(readyPath ?? "")
-        .overlay { availabilityOverlay(model.availability, model: model) }
+        .overlay(alignment: .bottom) { bottomOverlay(model: model) }
         .overlay(alignment: .top) { topOverlay(model: model) }
     }
 
@@ -179,21 +193,67 @@ struct MapTabView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    private func bottomOverlay(model: MapModel) -> some View {
+        let showRaceMap = overlay?.metadata?.bounds != nil
+        let showMyLocation = model.hasLocationAccess
+        let hasCard: Bool
+        switch model.availability {
+        case .noMapForRace, .ready: hasCard = false
+        case .notDownloaded, .failed, .downloading: hasCard = true
+        }
+        return VStack(alignment: .trailing, spacing: 8) {
+            if showRaceMap || showMyLocation {
+                cameraControls(showRaceMap: showRaceMap, showMyLocation: showMyLocation)
+                    .padding(.horizontal, DS.hPad)
+                    .padding(.bottom, hasCard ? 0 : DS.hPad)
+            }
+            availabilityCard(model.availability, model: model)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    /// Кнопки камеры одной вертикальной планкой: «Карта гонки» и «Моё местоположение».
+    private func cameraControls(showRaceMap: Bool, showMyLocation: Bool) -> some View {
+        VStack(spacing: 0) {
+            if showRaceMap {
+                cameraButton(systemImage: "map", label: "Показать карту гонки", command: .raceMap)
+            }
+            if showRaceMap && showMyLocation {
+                Rectangle()
+                    .fill(Color.hairline)
+                    .frame(width: 24, height: 1)
+            }
+            if showMyLocation {
+                cameraButton(systemImage: "location", label: "Моё местоположение", command: .myLocation)
+            }
+        }
+        .background(Capsule().fill(.ultraThinMaterial))
+        .shadow(color: Color.cardShadow, radius: 4, y: 1)
+    }
+
+    private func cameraButton(systemImage: String, label: String, command: MapCameraCommand) -> some View {
+        Button {
+            cameraRequest = MapCameraRequest(command: command, id: (cameraRequest?.id ?? 0) + 1)
+        } label: {
+            Image(systemName: systemImage)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(Color.ink)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
     @ViewBuilder
-    private func availabilityOverlay(_ availability: MapAvailability, model: MapModel) -> some View {
+    private func availabilityCard(_ availability: MapAvailability, model: MapModel) -> some View {
         switch availability {
         case .noMapForRace, .ready:
             EmptyView()
         case .notDownloaded, .failed:
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                downloadCTA { model.downloadMap() }
-            }
+            downloadCTA { model.downloadMap() }
         case .downloading(let progress):
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                downloadingCard(progress: progress) { model.cancelDownload() }
-            }
+            downloadingCard(progress: progress) { model.cancelDownload() }
         }
     }
 

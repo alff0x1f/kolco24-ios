@@ -168,4 +168,14 @@ struct MBTilesTests {
         #expect(overzoomSource(z: 23, x: 0, y: 0, maxZoom: 15) != nil)
         #expect(overzoomSource(z: 24, x: 0, y: 0, maxZoom: 15) == nil)
     }
+
+    // MARK: - Камера
+
+    @Test func maxVisibleMapWidth_scalesByZoom() {
+        // z20: одна экранная точка == один map point.
+        #expect(maxVisibleMapWidth(viewWidth: 390, minZoom: 20) == 390)
+        #expect(maxVisibleMapWidth(viewWidth: 390, minZoom: 10) == 390 * 1024)
+        // z0: 256 точек показывают весь мир (2^28).
+        #expect(maxVisibleMapWidth(viewWidth: 256, minZoom: 0) == 268_435_456)
+    }
 }

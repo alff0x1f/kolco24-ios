@@ -75,6 +75,8 @@ final class MapModel {
     private(set) var checkpoints: [Checkpoint] = []
     /// Доступность оффлайн-подложки (машина состояний скачивания).
     private(set) var availability: MapAvailability = .noMapForRace
+    /// Есть ли доступ к геолокации (кнопка «Моё местоположение»). Опрашивается `refreshDeviceState`.
+    private(set) var hasLocationAccess = false
 
     @ObservationIgnored private let env: AppEnvironment
     /// Тост об ошибке скачивания (прод — прокидывает в `AppModel.toastMessage`; тесты — рекордер).
@@ -200,6 +202,16 @@ final class MapModel {
                 self.availability = .notDownloaded
             }
         }
+    }
+
+    /// Опрос доступа к геолокации — зовётся из `.task`, `onAppear` и `scenePhase == .active`.
+    func refreshDeviceState() {
+        hasLocationAccess = env.hasLocationAccess()
+    }
+
+    /// Кнопка «Моё местоположение» нажата, а GPS-фикса ещё нет.
+    func reportNoLocationFix() {
+        onToast("Местоположение ещё не определено")
     }
 
     // MARK: - Действия скачивания
