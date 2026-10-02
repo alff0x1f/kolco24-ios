@@ -168,7 +168,7 @@ server 200.
 - **`Category` collision**: in test files importing `Testing`+`Foundation`, qualify the domain type as
   `kolco24.Category`.
 - **K24 chip types**: `parseChipRecord(pages:)` stays KP-only; other types (0x2 = participant bracelet, written by
-  admin «Записать браслет участника») go through `parseChipRecord(pages:type:)`; scanner reads use `decodeTagPages`.
+  admin «Записать браслет») go through `parseChipRecord(pages:type:)`; scanner reads use `decodeTagPages`.
 - **CoreNFC sheet is modal**: a screen needing text input mid-scan must `stop()` the scanner and restart after
   `waitUntilStopped()` (see `MemberProvisioningModel.resumeScanning`).
 - `ClockAnchorStore` parse: trailing `|` with nil bootCount — use `components(separatedBy:)`

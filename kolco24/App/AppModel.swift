@@ -537,7 +537,7 @@ final class AppModel {
         return model
     }
 
-    /// Фабрика хост-редьюсера записи кода на браслет участника «Записать браслет участника». `raceId` —
+    /// Фабрика хост-редьюсера записи кода на браслет участника «Записать браслет». `raceId` —
     /// гонка ВЫБРАННОЙ команды; `nil`, когда команда не выбрана (пул `member_tags` неизвестен).
     /// Сервер `bindMemberTag` — на тап, как у `makeProvisioningModel`. Прод-сканер
     /// `NfcChipScanner` (pending-write, `ProvisioningScanning`) инстанцируется здесь.
