@@ -29,10 +29,9 @@ struct TeamView: View {
     @State private var unbindTarget: TeamMemberItem?
     /// Открыт ли шит «Загрузка данных».
     @State private var showUpload = false
-    /// Модель экрана «Настройки» — минтится при открытии шита (привязка к текущему скоупу выбора).
+    /// Модель экрана «Настройки» — минтится при открытии шита (привязка к текущему скоупу выбора);
+    /// не-nil = шит открыт.
     @State private var settingsModel: SettingsModel?
-    /// Открыт ли шит «Настройки».
-    @State private var showSettings = false
     /// Запрошен ли админ-флоу из шита настроек: тап по ряду закрывает шит, а `fullScreenCover`
     /// поднимается в `onDismiss` (шит и полноэкранный оверлей нельзя показывать одновременно).
     @State private var pendingAdmin = false
@@ -57,7 +56,7 @@ struct TeamView: View {
                     UploadView(model: uploadModel)
                 }
             }
-            .sheet(isPresented: $showSettings, onDismiss: {
+            .sheet(item: $settingsModel, onDismiss: {
                 // Админ-флоу поднимаем после закрытия шита настроек (взаимоисключающие презентации).
                 if pendingAdmin {
                     pendingAdmin = false
@@ -67,14 +66,12 @@ struct TeamView: View {
                     pendingChangeTeam = false
                     onChooseTeam()
                 }
-            }) {
-                if let settingsModel {
-                    SettingsView(
-                        model: settingsModel,
-                        onOpenAdmin: { pendingAdmin = true },
-                        onChangeTeam: { pendingChangeTeam = true }
-                    )
-                }
+            }) { settingsModel in
+                SettingsView(
+                    model: settingsModel,
+                    onOpenAdmin: { pendingAdmin = true },
+                    onChangeTeam: { pendingChangeTeam = true }
+                )
             }
             .fullScreenCover(isPresented: $showAdmin) {
                 AdminFlowView(onClose: { showAdmin = false })
@@ -197,7 +194,6 @@ struct TeamView: View {
                         .padding(.leading, DS.hPad + 30 + 12)
                     Button {
                         settingsModel = appModel.makeSettingsModel()
-                        showSettings = true
                     } label: {
                         MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: "Настройки", sub: "Команда, тема, локальный сервер, трек")
                             .padding(.horizontal, DS.hPad)

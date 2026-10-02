@@ -19,7 +19,7 @@ import Observation
 
 @MainActor
 @Observable
-final class SettingsModel {
+final class SettingsModel: Identifiable {
 
     // MARK: - Тема (прокси AppModel)
 
