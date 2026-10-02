@@ -208,7 +208,7 @@
 *Ручные шаги — вне кода, по чек-листу `docs/release.md`:*
 
 **Developer Portal / App Store Connect (у пользователя есть аккаунт, записи приложения нет):**
-- зарегистрировать App ID `kolco24.ru.kolco24` с capability **NFC Tag Reading** (это entitlement на App ID, не только plist-ключ);
+- зарегистрировать App ID `org.kolco24.app` с capability **NFC Tag Reading** (это entitlement на App ID, не только plist-ключ);
 - создать запись приложения в App Store Connect (имя, primary language ru, bundle id, SKU);
 - в Xcode: signing team на таргете, Automatic signing; Archive (Any iOS Device) → Organizer → Distribute → App Store Connect → Upload;
 - в ASC: дождаться обработки билда, заполнить App Privacy (сбор геолокации — трек/анти-фрод; связана с пользователем через команду), создать Internal Testing группу, добавить тестеров.
