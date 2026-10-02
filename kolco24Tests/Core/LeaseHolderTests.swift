@@ -108,4 +108,37 @@ struct LeaseHolderTests {
         let next = await iter.next()
         #expect((next ?? nil) == leaseB)   // не повторное leaseA — равный set пропущен
     }
+
+    /// Регрессия: отмена задачи первого подписчика (`deinit` `SettingsModel` при закрытии шита)
+    /// не глушит поток для следующих подписок.
+    @Test(.timeLimit(.minutes(1)))
+    func stream_newSubscriberAfterCancelledConsumer_receivesUpdates() async {
+        let holder = LeaseHolder(initial: leaseA, persist: { _ in })
+
+        let first = holder.updates
+        let consumer = Task {
+            for await _ in first {}
+        }
+        consumer.cancel()
+        await consumer.value
+
+        var iter = holder.updates.makeAsyncIterator()
+        #expect((await iter.next() ?? nil) == leaseA)
+
+        holder.set(leaseB)
+        #expect((await iter.next() ?? nil) == leaseB)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func stream_twoSubscribers_eachReceiveChanges() async {
+        let holder = LeaseHolder(initial: nil, persist: { _ in })
+        var iter1 = holder.updates.makeAsyncIterator()
+        var iter2 = holder.updates.makeAsyncIterator()
+        _ = await iter1.next()
+        _ = await iter2.next()
+
+        holder.set(leaseA)
+        #expect((await iter1.next() ?? nil) == leaseA)
+        #expect((await iter2.next() ?? nil) == leaseA)
+    }
 }

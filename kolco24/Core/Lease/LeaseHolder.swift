@@ -8,9 +8,11 @@
 //  подписывается на `updates` для живого тумблера. Свежий тип — прямого Kotlin-зеркала нет.
 //
 //  Потокобезопасность — `NSLock` вокруг значения (аналог `MarkUploadRepository`-actor не подходит:
-//  `isRacePinned` обязан быть синхронным, без actor-hop). Поток `updates` следует идиоме
-//  `TrustedClock.statusUpdates`: `AsyncStream` с `.bufferingNewest(1)` и ручным дедупом равных
-//  значений. Сидится из стора при создании (первое значение сразу в буфере стрима).
+//  `isRacePinned` обязан быть синхронным, без actor-hop). Поток `updates` — мульти-консумер реестр
+//  континуэйшнов, как в `AdminSessionHolder`: `.bufferingNewest(1)`, ручной дедуп равных, каждая
+//  подписка — свежий стрим, засеянный текущим значением. Одиночный `let`-стрим умирал навсегда, когда
+//  отменялась задача первого подписчика (`deinit` `SettingsModel` при закрытии шита), и повторно
+//  открытые «Настройки» переставали видеть смену lease.
 //
 
 import Foundation
@@ -23,22 +25,37 @@ final class LeaseHolder: @unchecked Sendable {
     /// Write-through в персистентный стор (`RaceLeaseStore.write`/`clear`), best-effort.
     private let persist: @Sendable (RaceLease?) -> Void
 
-    /// Поток обновлений lease (замена `StateFlow`; равные значения дедупятся).
-    /// Потребители — `SettingsModel`-тумблер и любые живые подписчики.
-    nonisolated let updates: AsyncStream<RaceLease?>
-    private let continuation: AsyncStream<RaceLease?>.Continuation
+    private var continuations: [Int: AsyncStream<RaceLease?>.Continuation] = [:]
+    private var nextContinuationId = 0
 
     /// - Parameters:
-    ///   - initial: засеянное значение (обычно `RaceLeaseStore.read()`); сразу кладётся в буфер стрима.
+    ///   - initial: засеянное значение (обычно `RaceLeaseStore.read()`).
     ///   - persist: write-through-замыкание, вызывается при **изменении** значения.
     init(initial: RaceLease?, persist: @escaping @Sendable (RaceLease?) -> Void) {
         self._value = initial
         self.persist = persist
+    }
 
-        var cont: AsyncStream<RaceLease?>.Continuation!
-        self.updates = AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont = $0 }
-        self.continuation = cont
-        cont.yield(initial)
+    /// Поток обновлений lease (замена `StateFlow`; равные значения дедупятся). **Вычисляемое**:
+    /// каждое обращение чеканит свежий стрим, засеянный текущим значением. Потребитель —
+    /// `SettingsModel`-тумблер.
+    nonisolated var updates: AsyncStream<RaceLease?> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont in
+            lock.lock()
+            let id = nextContinuationId
+            nextContinuationId += 1
+            continuations[id] = cont
+            // Сид под замком — конкурентный `set(_:)` не доставит более новое значение раньше сида.
+            cont.yield(_value)
+            lock.unlock()
+
+            cont.onTermination = { [weak self] _ in
+                guard let self else { return }
+                self.lock.lock()
+                self.continuations[id] = nil
+                self.lock.unlock()
+            }
+        }
     }
 
     /// Текущий lease (синхронное чтение под замком — для `isRacePinned`).
@@ -57,9 +74,12 @@ final class LeaseHolder: @unchecked Sendable {
             return
         }
         _value = lease
+        let targets = Array(continuations.values)
         lock.unlock()
 
         persist(lease)
-        continuation.yield(lease)
+        for cont in targets {
+            cont.yield(lease)
+        }
     }
 }
