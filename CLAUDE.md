@@ -183,7 +183,9 @@ server 200.
 - **Fixed-dark surfaces** stay dark in both themes: `DarkHeroBackground` (via the dark-valued `charcoal`
   tokens), `NFCTileView` (literal hex — a "chip card"), photo capture/lightbox. Don't "fix" their literals to
   adaptive tokens.
-- Typography: `Font.mono(_:weight:)` = JetBrains Mono (bundled, declared under `UIAppFonts`).
+- Typography: `Font.mono(_:weight:)` asks for JetBrains Mono, but the font is **not bundled** (no `.ttf`, no
+  `UIAppFonts`) — it silently falls back to the proportional system font. Add `.monospacedDigit()` where digits
+  must not jump.
   Spacing/radii in `enum DS`.
 - Recurring motif: diagonal `Canvas` line hatch (`NFCTileView`, `PhotoTileView`, `DarkHeroBackground`).
 - Removed features stay removed: no `isRecent` green ring on tiles; the `MarksEmpty` ladder is replaced by
