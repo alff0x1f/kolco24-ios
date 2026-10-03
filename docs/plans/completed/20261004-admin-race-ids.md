@@ -87,12 +87,12 @@
 - Modify: `kolco24Tests/Net/ApiClientTests.swift`
 - Modify: `kolco24Tests/Data/Repositories/AdminAuthRepositoryTests.swift` (`LoginResponse(...)` at :47)
 
-- [ ] add `adminRaceIds: [Int]` + `CodingKeys` case; put custom `init(from:)` (`decodeIfPresent ?? []`) in an `extension LoginResponse` so the synthesized memberwise init survives; update file header comment
-- [ ] fix the only construction site `AdminAuthRepositoryTests.swift:47` (`LoginResponse(token:expiresAt:adminRaceIds: [])`)
-- [ ] update the login fixture at `ApiClientTests.swift:486` to include `"admin_race_ids":[3,7]` and assert it
-- [ ] write `DtoDecodingTests` case: field present → `[3, 7]`
-- [ ] write `DtoDecodingTests` case: field missing → `[]`
-- [ ] run tests - must pass before task 2
+- [x] add `adminRaceIds: [Int]` + `CodingKeys` case; put custom `init(from:)` (`decodeIfPresent ?? []`) in an `extension LoginResponse` so the synthesized memberwise init survives; update file header comment
+- [x] fix the only construction site `AdminAuthRepositoryTests.swift:47` (`LoginResponse(token:expiresAt:adminRaceIds: [])`)
+- [x] update the login fixture at `ApiClientTests.swift:486` to include `"admin_race_ids":[3,7]` and assert it
+- [x] write `DtoDecodingTests` case: field present → `[3, 7]`
+- [x] write `DtoDecodingTests` case: field missing → `[]`
+- [x] run tests - must pass before task 2
 
 ### Task 2: Persist `adminRaceIds` in `StoredAdminSession`
 
@@ -103,13 +103,13 @@
 - Modify: `kolco24Tests/Core/AdminSessionTests.swift` (`seedJson` helper :31)
 - Modify: `kolco24Tests/Data/Repositories/AdminAuthRepositoryTests.swift` (:75, 128, 146, 159, 176, 262, 263)
 
-- [ ] add `adminRaceIds: [Int]` to `StoredAdminSession`; custom `init(from:)` (`decodeIfPresent ?? []`) in an extension so the memberwise init survives
-- [ ] `AdminAuthRepository.login` (:58) writes `response.adminRaceIds` into the stored session
-- [ ] give `seedJson` (`AdminSessionTests.swift:30`) an `adminRaceIds` parameter; fix remaining `StoredAdminSession(...)` sites (`grep -rn "StoredAdminSession(" kolco24 kolco24Tests`)
-- [ ] update comments: `AdminTokenStore.swift` header (:7 `{token, email, expiresAt}`) and `read()` doc (:36-38)
-- [ ] write test: write → read round-trip keeps ids
-- [ ] write test next to the raw-JSON fixture at `AdminTokenStoreTests.swift:105`: raw string `{token, email, expiresAt}` without the key reads as a session with `[]`
-- [ ] run tests - must pass before task 3
+- [x] add `adminRaceIds: [Int]` to `StoredAdminSession`; custom `init(from:)` (`decodeIfPresent ?? []`) in an extension so the memberwise init survives
+- [x] `AdminAuthRepository.login` (:58) writes `response.adminRaceIds` into the stored session
+- [x] give `seedJson` (`AdminSessionTests.swift:30`) an `adminRaceIds` parameter; fix remaining `StoredAdminSession(...)` sites (`grep -rn "StoredAdminSession(" kolco24 kolco24Tests`)
+- [x] update comments: `AdminTokenStore.swift` header (:7 `{token, email, expiresAt}`) and `read()` doc (:36-38)
+- [x] write test: write → read round-trip keeps ids
+- [x] write test next to the raw-JSON fixture at `AdminTokenStoreTests.swift:105`: raw string `{token, email, expiresAt}` without the key reads as a session with `[]`
+- [x] run tests - must pass before task 3
 
 ### Task 3: Carry ids in `AdminSession` + `isRaceAdmin`
 
@@ -124,39 +124,39 @@
 - Modify: `kolco24Tests/App/ProvisioningModelTests.swift`
 - Modify: `kolco24Tests/App/MemberProvisioningModelTests.swift`
 
-- [ ] change case to `loggedIn(email:token:expiresAt:adminRaceIds:)`; fix binding patterns (ignore the field with `_`): `AdminSession.swift:88, 90, 92`, `AdminSessionHolder.swift:87`, `AdminFlowView.swift:242, 244, 400` (`:138` has no bindings — leave it)
-- [ ] add pure `isRaceAdmin(raceId:cloud:local)` in `AdminSession.swift`
-- [ ] `AdminSessionHolder.seed` (:152) copies `stored.adminRaceIds` into the session
-- [ ] `AdminAuthRepository.login` (:54) puts `response.adminRaceIds` into `.loggedIn`
-- [ ] mechanical fix of test constructions: `AdminSessionTests.swift:79, 120, 121`, `AdminSessionHolderTests.swift:15, 16`, `AdminAuthRepositoryTests.swift:73, 133`, `ProvisioningModelTests.swift:215`, `MemberProvisioningModelTests.swift:578` (check with `grep -rn "\.loggedIn(" kolco24 kolco24Tests`)
-- [ ] update doc comments: `AdminSession.swift:15-17` (`loggedIn`), `AdminAuthRepository.login` (:44)
-- [ ] write `AdminSessionTests` for `isRaceAdmin`: id in cloud only; id in LAN only; id in neither; both `.loggedOut` → `false`; empty lists → `false`
-- [ ] extend `seed_futureExpiry_isLoggedIn` (`AdminSessionTests.swift:76-80`) so `seedJson` and the expected session carry `[3, 7]`
-- [ ] extend `login_success_persistsAndUpdatesHolder` (`AdminAuthRepositoryTests.swift:60-77`): add `"admin_race_ids":[3,7]` to the :64 body and expect it at :73/:75; same for the LAN login fixture at :241
-- [ ] run tests - must pass before task 4
+- [x] change case to `loggedIn(email:token:expiresAt:adminRaceIds:)`; fix binding patterns (ignore the field with `_`): `AdminSession.swift:88, 90, 92`, `AdminSessionHolder.swift:87`, `AdminFlowView.swift:242, 244, 400` (`:138` has no bindings — leave it)
+- [x] add pure `isRaceAdmin(raceId:cloud:local)` in `AdminSession.swift`
+- [x] `AdminSessionHolder.seed` (:152) copies `stored.adminRaceIds` into the session
+- [x] `AdminAuthRepository.login` (:54) puts `response.adminRaceIds` into `.loggedIn`
+- [x] mechanical fix of test constructions: `AdminSessionTests.swift:79, 120, 121`, `AdminSessionHolderTests.swift:15, 16`, `AdminAuthRepositoryTests.swift:73, 133`, `ProvisioningModelTests.swift:215`, `MemberProvisioningModelTests.swift:578` (check with `grep -rn "\.loggedIn(" kolco24 kolco24Tests`)
+- [x] update doc comments: `AdminSession.swift:15-17` (`loggedIn`), `AdminAuthRepository.login` (:44)
+- [x] write `AdminSessionTests` for `isRaceAdmin`: id in cloud only; id in LAN only; id in neither; both `.loggedOut` → `false`; empty lists → `false`
+- [x] extend `seed_futureExpiry_isLoggedIn` (`AdminSessionTests.swift:76-80`) so `seedJson` and the expected session carry `[3, 7]`
+- [x] extend `login_success_persistsAndUpdatesHolder` (`AdminAuthRepositoryTests.swift:60-77`): add `"admin_race_ids":[3,7]` to the :64 body and expect it at :73/:75; same for the LAN login fixture at :241
+- [x] run tests - must pass before task 4
 
 ### Task 4: Gate admin menu actions by race rights
 
 **Files:**
 - Modify: `kolco24/AdminFlowView.swift`
 
-- [ ] add `canAdminSelectedRace` in `AdminHomeView` as only `selectedRaceId.map { isRaceAdmin(raceId: $0, cloud: cloudSession, local: localSession) } ?? false` (no extra logic in the view)
-- [ ] add the middle branch after the nil check: section «Действия» with «Нет прав администратора на эту гонку» (13pt, `Color.sub`, `Color.card`)
-- [ ] keep server status rows and «Выйти» in every branch
-- [ ] update the file header comments: `AdminFlowView.swift:9-11` and :18-19 (third branch)
-- [ ] tests: branch logic is covered by `isRaceAdmin` tests in Task 3 (views have no unit tests); build must succeed
-- [ ] run tests - must pass before task 5
+- [x] add `canAdminSelectedRace` in `AdminHomeView` as only `selectedRaceId.map { isRaceAdmin(raceId: $0, cloud: cloudSession, local: localSession) } ?? false` (no extra logic in the view)
+- [x] add the middle branch after the nil check: section «Действия» with «Нет прав администратора на эту гонку» (13pt, `Color.sub`, `Color.card`)
+- [x] keep server status rows and «Выйти» in every branch
+- [x] update the file header comments: `AdminFlowView.swift:9-11` and :18-19 (third branch)
+- [x] tests: branch logic is covered by `isRaceAdmin` tests in Task 3 (views have no unit tests); build must succeed
+- [x] run tests - must pass before task 5
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify all requirements from Overview are implemented
-- [ ] verify edge cases: old Keychain item, LAN server without the field, cloud-only / LAN-only rights, no selected team
-- [ ] verify grep invariants: no new imports in `Core/` (Foundation only)
-- [ ] run full test suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
-- [ ] run build: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
+- [x] verify all requirements from Overview are implemented
+- [x] verify edge cases: old Keychain item, LAN server without the field, cloud-only / LAN-only rights, no selected team
+- [x] verify grep invariants: no new imports in `Core/` (Foundation only)
+- [x] run full test suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
+- [x] run build: `xcodebuild -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16' build`
 
 ### Task 6: [Final] Update documentation
-- [ ] CLAUDE.md «Admin sessions»: one line — `admin_race_ids` from login is a UI hint only; no list → `[]` (actions hidden); refreshed only by a new login
-- [ ] move this plan to `docs/plans/completed/`
+- [x] CLAUDE.md «Admin sessions»: one line — `admin_race_ids` from login is a UI hint only; no list → `[]` (actions hidden); refreshed only by a new login
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*

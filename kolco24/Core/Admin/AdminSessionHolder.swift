@@ -84,7 +84,7 @@ final class AdminSessionHolder: @unchecked Sendable {
     var token: String? {
         lock.lock()
         defer { lock.unlock() }
-        if case let .loggedIn(_, token, _) = _session { return token }
+        if case let .loggedIn(_, token, _, _) = _session { return token }
         return nil
     }
 
@@ -149,6 +149,11 @@ final class AdminSessionHolder: @unchecked Sendable {
             store.clear()
             return .loggedOut
         }
-        return .loggedIn(email: stored.email, token: stored.token, expiresAt: stored.expiresAt)
+        return .loggedIn(
+            email: stored.email,
+            token: stored.token,
+            expiresAt: stored.expiresAt,
+            adminRaceIds: stored.adminRaceIds
+        )
     }
 }

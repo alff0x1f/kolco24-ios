@@ -483,7 +483,7 @@ struct ApiClientTests {
         let transport = FakeTransport()
         transport.enqueue(
             statusCode: 200,
-            bodyString: #"{"token":"tok-abc","expires_at":"2026-07-21T14:03:00Z"}"#
+            bodyString: #"{"token":"tok-abc","expires_at":"2026-07-21T14:03:00Z","admin_race_ids":[3,7]}"#
         )
         let client = fixedTsClient(transport: transport)
 
@@ -494,6 +494,7 @@ struct ApiClientTests {
         }
         #expect(response.token == "tok-abc")
         #expect(response.expiresAt == "2026-07-21T14:03:00Z")
+        #expect(response.adminRaceIds == [3, 7])
 
         let recorded = transport.last!
         #expect(recorded.httpMethod == "POST")

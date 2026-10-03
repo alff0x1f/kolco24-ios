@@ -44,7 +44,7 @@ struct AdminAuthRepositoryTests {
 
     @Test
     func loginOutcome_mapsEachBranch() {
-        #expect(loginOutcome(PostResult.success(LoginResponse(token: "x", expiresAt: "y"))) == .success)
+        #expect(loginOutcome(PostResult.success(LoginResponse(token: "x", expiresAt: "y", adminRaceIds: []))) == .success)
         #expect(loginOutcome(PostResult<Void>.unauthorized) == .invalidCredentials)
         #expect(loginOutcome(PostResult<Void>.rateLimited) == .rateLimited)
         #expect(loginOutcome(PostResult<Void>.offline) == .offline)
@@ -61,7 +61,7 @@ struct AdminAuthRepositoryTests {
         let transport = FakeTransport()
         transport.enqueue(
             statusCode: 200,
-            bodyString: #"{"token":"new-tok","expires_at":"2099-07-21T14:03:00Z"}"#
+            bodyString: #"{"token":"new-tok","expires_at":"2099-07-21T14:03:00Z","admin_race_ids":[3,7]}"#
         )
         let fake = FakeStore()
         let env = try env(transport, adminTokenStore: fake.store())
@@ -70,10 +70,10 @@ struct AdminAuthRepositoryTests {
 
         #expect(outcome == .success)
         #expect(env.cloudAdminSession.session
-            == .loggedIn(email: "admin@kolco24.ru", token: "new-tok", expiresAt: "2099-07-21T14:03:00Z"))
+            == .loggedIn(email: "admin@kolco24.ru", token: "new-tok", expiresAt: "2099-07-21T14:03:00Z", adminRaceIds: [3, 7]))
         #expect(env.cloudAdminSession.token == "new-tok")
         #expect(fake.stored == StoredAdminSession(
-            token: "new-tok", email: "admin@kolco24.ru", expiresAt: "2099-07-21T14:03:00Z"))
+            token: "new-tok", email: "admin@kolco24.ru", expiresAt: "2099-07-21T14:03:00Z", adminRaceIds: [3, 7]))
     }
 
     @Test
@@ -126,11 +126,11 @@ struct AdminAuthRepositoryTests {
         let transport = FakeTransport()
         transport.enqueueError(URLError(.notConnectedToInternet))
         let fake = FakeStore(seed: StoredAdminSession(
-            token: "tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z"))
+            token: "tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: []))
         let env = try env(transport, adminTokenStore: fake.store())
         // Посидированная живая сессия.
         #expect(env.cloudAdminSession.session
-            == .loggedIn(email: "a@b.ru", token: "tok", expiresAt: "2099-01-01T00:00:00Z"))
+            == .loggedIn(email: "a@b.ru", token: "tok", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: []))
 
         await env.cloudAdminAuth.logout()
 
@@ -144,7 +144,7 @@ struct AdminAuthRepositoryTests {
         let transport = FakeTransport()
         transport.enqueue(statusCode: 200)
         let fake = FakeStore(seed: StoredAdminSession(
-            token: "tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z"))
+            token: "tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: []))
         let env = try env(transport, adminTokenStore: fake.store())
 
         await env.cloudAdminAuth.logout()
@@ -157,7 +157,7 @@ struct AdminAuthRepositoryTests {
     func onUnauthorized_clearsStoreAndSession() throws {
         let transport = FakeTransport()
         let fake = FakeStore(seed: StoredAdminSession(
-            token: "tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z"))
+            token: "tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: []))
         let env = try env(transport, adminTokenStore: fake.store())
         #expect(env.cloudAdminSession.token == "tok")
 
@@ -174,7 +174,7 @@ struct AdminAuthRepositoryTests {
     func seed_pastExpiry_isLoggedOut_andClearsStore() throws {
         let transport = FakeTransport()
         let fake = FakeStore(seed: StoredAdminSession(
-            token: "tok", email: "a@b.ru", expiresAt: "2000-01-01T00:00:00Z"))
+            token: "tok", email: "a@b.ru", expiresAt: "2000-01-01T00:00:00Z", adminRaceIds: []))
         let env = try env(transport, adminTokenStore: fake.store())
 
         #expect(env.cloudAdminSession.session == .loggedOut)
@@ -238,7 +238,10 @@ struct AdminAuthRepositoryTests {
     @Test
     func sessionsAreIndependent_localLoginDoesNotTouchCloud() async throws {
         let transport = FakeTransport()
-        transport.enqueue(statusCode: 200, bodyString: #"{"token":"lan-tok","expires_at":"2099-07-21T14:03:00Z"}"#)
+        transport.enqueue(
+            statusCode: 200,
+            bodyString: #"{"token":"lan-tok","expires_at":"2099-07-21T14:03:00Z","admin_race_ids":[7]}"#
+        )
         let cloudStore = FakeStore()
         let localStore = FakeStore()
         let env = try AppEnvironment.inMemory(
@@ -252,6 +255,9 @@ struct AdminAuthRepositoryTests {
         #expect(transport.last?.url?.absoluteString.hasPrefix("http://local.test") == true)
         #expect(env.localAdminSession.token == "lan-tok")
         #expect(localStore.stored?.token == "lan-tok")
+        #expect(localStore.stored?.adminRaceIds == [7])
+        #expect(env.localAdminSession.session
+            == .loggedIn(email: "a@b.ru", token: "lan-tok", expiresAt: "2099-07-21T14:03:00Z", adminRaceIds: [7]))
         #expect(env.cloudAdminSession.session == .loggedOut)
         #expect(cloudStore.stored == nil)
     }
@@ -259,8 +265,8 @@ struct AdminAuthRepositoryTests {
     // MARK: - bearer по клиентам
 
     private func loggedInEnv(_ transport: FakeTransport) throws -> AppEnvironment {
-        let cloud = FakeStore(seed: StoredAdminSession(token: "cloud-tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z"))
-        let local = FakeStore(seed: StoredAdminSession(token: "lan-tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z"))
+        let cloud = FakeStore(seed: StoredAdminSession(token: "cloud-tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: []))
+        let local = FakeStore(seed: StoredAdminSession(token: "lan-tok", email: "a@b.ru", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: []))
         return try AppEnvironment.inMemory(
             transport: transport.handle,
             adminTokenStore: cloud.store(),

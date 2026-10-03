@@ -41,7 +41,7 @@ struct AdminAuthRepository {
         self.holder = holder
     }
 
-    /// Попытка входа. На `.success` токен/email/expiry персистятся и сессия переходит в `.loggedIn`;
+    /// Попытка входа. На `.success` токен/email/expiry/adminRaceIds персистятся и сессия переходит в `.loggedIn`;
     /// неуспех **не трогает** сессию/стор. Статус маппится в `LoginOutcome` для формы через
     /// чистый `loginOutcome`. Успех, пришедший после `logout()`, начатого во время запроса,
     /// отбрасывается и возвращается как `.error`.
@@ -51,11 +51,21 @@ struct AdminAuthRepository {
         if case let .success(response) = result {
             let store = store
             let committed = holder.commitLogin(
-                .loggedIn(email: email, token: response.token, expiresAt: response.expiresAt),
+                .loggedIn(
+                    email: email,
+                    token: response.token,
+                    expiresAt: response.expiresAt,
+                    adminRaceIds: response.adminRaceIds
+                ),
                 generation: startedAt
             ) {
                 store.write(
-                    StoredAdminSession(token: response.token, email: email, expiresAt: response.expiresAt)
+                    StoredAdminSession(
+                        token: response.token,
+                        email: email,
+                        expiresAt: response.expiresAt,
+                        adminRaceIds: response.adminRaceIds
+                    )
                 )
             }
             if !committed { return .error }

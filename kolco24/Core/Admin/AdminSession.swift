@@ -13,11 +13,12 @@
 import Foundation
 
 /// Состояние admin-сессии организатора. [loggedOut] — покой; [loggedIn] несёт opaque 30-дневный
-/// bearer [token] (для подписного интерцептора), [email] для UI и сырую ISO-строку [expiresAt] от
-/// сервера (UTC, `Z`-суффикс) для ленивой проверки протухания.
+/// bearer [token] (для подписного интерцептора), [email] для UI, сырую ISO-строку [expiresAt] от
+/// сервера (UTC, `Z`-суффикс) для ленивой проверки протухания и [adminRaceIds] — id гонок, где
+/// пользователь админ (из ответа входа; только подсказка UI, сервер проверяет права на каждой записи).
 enum AdminSession: Equatable {
     case loggedOut
-    case loggedIn(email: String, token: String, expiresAt: String)
+    case loggedIn(email: String, token: String, expiresAt: String, adminRaceIds: [Int])
 }
 
 /// Итог `AdminAuthRepository.login`, показываемый форме входа.
@@ -85,14 +86,22 @@ func combinedLoginOutcome(_ outcomes: [LoginOutcome]) -> LoginOutcome {
 /// (cloud-овый), иначе email + какой сервер единственный.
 func adminRowSubtitle(cloud: AdminSession, local: AdminSession) -> String {
     switch (cloud, local) {
-    case let (.loggedIn(email, _, _), .loggedIn):
+    case let (.loggedIn(email, _, _, _), .loggedIn):
         return email
-    case let (.loggedIn(email, _, _), .loggedOut):
+    case let (.loggedIn(email, _, _, _), .loggedOut):
         return "\(email) · только Cloud"
-    case let (.loggedOut, .loggedIn(email, _, _)):
+    case let (.loggedOut, .loggedIn(email, _, _, _)):
         return "\(email) · только LAN"
     case (.loggedOut, .loggedOut):
         return "Войти"
+    }
+}
+
+/// Админ ли пользователь гонки [raceId] хотя бы на одном сервере со входом (cloud ∪ LAN).
+func isRaceAdmin(raceId: Int, cloud: AdminSession, local: AdminSession) -> Bool {
+    [cloud, local].contains { session in
+        if case let .loggedIn(_, _, _, adminRaceIds) = session { return adminRaceIds.contains(raceId) }
+        return false
     }
 }
 

@@ -12,8 +12,8 @@ import Testing
 
 struct AdminSessionHolderTests {
 
-    private let loggedIn = AdminSession.loggedIn(email: "a@b.ru", token: "tok-1", expiresAt: "2099-01-01T00:00:00Z")
-    private let loggedIn2 = AdminSession.loggedIn(email: "c@d.ru", token: "tok-2", expiresAt: "2099-01-01T00:00:00Z")
+    private let loggedIn = AdminSession.loggedIn(email: "a@b.ru", token: "tok-1", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: [])
+    private let loggedIn2 = AdminSession.loggedIn(email: "c@d.ru", token: "tok-2", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: [])
 
     // MARK: token / session
 
