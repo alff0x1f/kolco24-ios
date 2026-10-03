@@ -196,10 +196,8 @@ server 200.
 
 ## Known facts, not bugs
 
-- Backend endpoints **not yet deployed**: `POST /app/race/<id>/marks/`, the binary photo-frame endpoint,
-  `POST …/judge_scans/`, `POST …/member_tags/bind/` (bracelet code bind). Live runs show perpetual
-  «ошибка»/pending — the designed self-heal (flags stay 0, same build re-sends when deployed).
-  `POST …/track/` **is** deployed.
+- All upload endpoints are deployed on prod: `POST …/track/`, `…/marks/`, the binary photo-frame endpoint,
+  `…/judge_scans/`, `…/member_tags/bind/`. Unsent rows keep their flags at 0 and are re-sent by the drain.
 - The prod server always answers `data_source: "cloud"` → the LAN pin never engages outside a race-LAN
   deployment (`MOBILE_DATA_SOURCE=local`).
 - Force-quit kills track recording (Android `START_NOT_STICKY` parity).
@@ -212,5 +210,5 @@ server 200.
   shell env to the hosted simulator process.
 - КП map pins come from the take's own GPS fix (`Mark.locLat/locLon`) — the server has no checkpoint
   coordinates; a take without a fix is deliberately not shown.
-- Check method: until the server renames choices (`online`→`cloud`, `local_server`→`local`) old values parse as
-  offline; until `POST …/marks/` is deployed a cloud/local take can never be confirmed (dimmed tile, not scored).
+- Check method: the server renamed choices (`online`→`cloud`, `local_server`→`local`, server #270); any old value
+  still parses as offline. A cloud/local take stays dimmed and unscored until `confirm` succeeds.
