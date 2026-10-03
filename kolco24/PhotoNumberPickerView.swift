@@ -20,38 +20,26 @@ struct PhotoNumberPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var fieldFocused: Bool
 
+    private var exactMatch: Checkpoint? {
+        guard let number = Int(model.query) else { return nil }
+        return model.filteredLegend.first { $0.number == number }
+    }
+
+    /// Точное совпадение номера — первой строкой, остальные в порядке легенды.
+    private var rows: [Checkpoint] {
+        guard let exact = exactMatch else { return model.filteredLegend }
+        return [exact] + model.filteredLegend.filter { $0.id != exact.id }
+    }
+
+    private var noMatches: Bool { !model.query.isEmpty && model.filteredLegend.isEmpty }
+
     var body: some View {
         VStack(spacing: 0) {
-            TextField("Введите номер КП", text: digitQuery)
-                .keyboardType(.numberPad)
-                .focused($fieldFocused)
-                .font(.mono(18, weight: .semibold))
-                .submitLabel(.done)
-                .onSubmit(submit)
-                .padding(.horizontal, 16)
-                .frame(height: 52)
-                .background(Color.card)
-                .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.cardRadius)
-                        .stroke(model.pickerError != nil ? Color.brandRed : Color.hairline, lineWidth: 1)
-                )
-                .padding(.horizontal, DS.hPad)
-                .padding(.top, 12)
-
-            if let error = model.pickerError {
-                Text(error)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.brandRed)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, DS.hPad + 8)
-                    .padding(.top, 6)
-            }
-
+            numberInput
             list
         }
         .background(Color.paper)
-        .navigationTitle("Номер КП")
+        .navigationTitle("Фото КП")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -61,25 +49,89 @@ struct PhotoNumberPickerView: View {
         .task { fieldFocused = true }
     }
 
+    // MARK: - Ввод номера
+
+    private var numberInput: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("КП")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(Color.sub)
+                TextField("", text: digitQuery, prompt: Text("00").foregroundStyle(Color.sub.opacity(0.3)))
+                    .keyboardType(.numberPad)
+                    .focused($fieldFocused)
+                    .font(.mono(58, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.ink)
+                    .tint(Color.kolcoOrange)
+                    .submitLabel(.done)
+                    .onSubmit(submit)
+                    .accessibilityLabel("Номер КП")
+                if !model.query.isEmpty {
+                    Button { model.updateQuery("") } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Color.sub.opacity(0.5))
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Стереть номер")
+                }
+            }
+
+            Capsule()
+                .fill(underlineColor)
+                .frame(height: 3)
+                .animation(.easeOut(duration: 0.2), value: underlineColor)
+
+            Text(status)
+                .font(.system(size: 14, weight: isError ? .semibold : .regular))
+                .foregroundStyle(isError ? Color.brandRed : Color.sub)
+                .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
+        }
+        .padding(.horizontal, DS.hPad + 4)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
+
+    private var isError: Bool { model.pickerError != nil || noMatches }
+
+    private var underlineColor: Color {
+        if isError { return .brandRed }
+        if exactMatch != nil { return .kolcoOrange }
+        return Color.ink.opacity(0.12)
+    }
+
+    private var status: String {
+        if let error = model.pickerError { return error }
+        if noMatches { return "В легенде нет КП \(model.query)" }
+        if model.query.isEmpty { return "Номер написан на табличке КП" }
+        if exactMatch != nil { return "Нажмите на КП, чтобы открыть камеру" }
+        return "Введите номер полностью или выберите из списка"
+    }
+
+    // MARK: - Список
+
     @ViewBuilder
     private var list: some View {
-        if model.filteredLegend.isEmpty {
-            Text("Ничего не найдено")
-                .font(.system(size: 15))
-                .foregroundStyle(Color.sub)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.hPad + 8)
-                .padding(.top, 20)
+        if noMatches {
             Spacer()
         } else {
-            List(model.filteredLegend, id: \.id) { cp in
-                Button { model.select(cp) } label: {
-                    CheckpointPickRow(cp: cp)
+            List {
+                Section {
+                    ForEach(rows, id: \.id) { cp in
+                        let isExact = cp.id == exactMatch?.id
+                        Button { model.select(cp) } label: {
+                            CheckpointPickRow(cp: cp, highlighted: isExact)
+                        }
+                        .listRowBackground(isExact ? Color.kolcoOrange.opacity(0.12) : Color.card)
+                    }
                 }
-                .listRowBackground(Color.card)
             }
-            .listStyle(.plain)
+            .listStyle(.insetGrouped)
+            .contentMargins(.top, 8, for: .scrollContent)
             .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .animation(.snappy(duration: 0.25), value: rows.map(\.id))
         }
     }
 
@@ -102,6 +154,7 @@ struct PhotoNumberPickerView: View {
 
 private struct CheckpointPickRow: View {
     let cp: Checkpoint
+    let highlighted: Bool
 
     /// «<cost>-<number>» (padded) для открытого КП; только номер — для залоченного (cost скрыт).
     private var label: String {
@@ -114,26 +167,52 @@ private struct CheckpointPickRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if cp.locked {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 5).fill(Color.ink.opacity(0.08))
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.sub)
+            HStack(spacing: 6) {
+                if cp.locked {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 5).fill(Color.ink.opacity(0.08))
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Color.sub)
+                    }
+                    .frame(width: 18, height: 18)
                 }
-                .frame(width: 22, height: 22)
+                Text(label)
+                    .font(.mono(16, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(highlighted ? Color.kolcoOrange : (cp.locked ? Color.sub : Color.ink))
             }
-            Text(label)
-                .font(.mono(16, weight: .semibold))
-                .foregroundStyle(Color.ink)
-                .frame(minWidth: 52, alignment: .leading)
-            Text(cp.description ?? "")
-                .font(.system(size: 15))
-                .foregroundStyle(Color.sub)
+            .frame(width: 60, alignment: .leading)
+
+            Text(cp.locked ? (cp.description ?? "Описание скрыто") : (cp.description ?? ""))
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(cp.locked ? Color.sub : Color.ink)
                 .lineLimit(2)
-            Spacer(minLength: 0)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            cameraBadge
         }
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
-        .padding(.vertical, 4)
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Открыть камеру")
+    }
+
+    @ViewBuilder
+    private var cameraBadge: some View {
+        if highlighted {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.kolcoOrange))
+        } else {
+            Image(systemName: "camera")
+                .font(.system(size: 15))
+                .foregroundStyle(Color.sub.opacity(0.6))
+                .frame(width: 34, height: 34)
+        }
     }
 }
