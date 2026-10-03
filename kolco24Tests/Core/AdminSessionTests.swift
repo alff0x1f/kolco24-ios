@@ -26,9 +26,9 @@ struct AdminSessionTests {
         AdminTokenStore(load: fake.load, save: fake.save)
     }
 
-    private func seedJson(token: String, email: String, expiresAt: String) -> Data {
+    private func seedJson(token: String, email: String, expiresAt: String, adminRaceIds: [Int] = []) -> Data {
         try! JSONEncoder().encode(
-            StoredAdminSession(token: token, email: email, expiresAt: expiresAt)
+            StoredAdminSession(token: token, email: email, expiresAt: expiresAt, adminRaceIds: adminRaceIds)
         )
     }
 
@@ -73,10 +73,14 @@ struct AdminSessionTests {
 
     @Test
     func seed_futureExpiry_isLoggedIn() {
-        let fake = FakeStore(seed: seedJson(token: "tok-xyz", email: "admin@kolco24.ru", expiresAt: "2099-01-01T00:00:00Z"))
+        let fake = FakeStore(seed: seedJson(
+            token: "tok-xyz", email: "admin@kolco24.ru", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: [3, 7]
+        ))
         let session = AdminSessionHolder.seed(store: store(fake), nowUtcIso: "2026-01-01T00:00:00Z")
 
-        #expect(session == .loggedIn(email: "admin@kolco24.ru", token: "tok-xyz", expiresAt: "2099-01-01T00:00:00Z"))
+        #expect(session == .loggedIn(
+            email: "admin@kolco24.ru", token: "tok-xyz", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: [3, 7]
+        ))
         #expect(fake.data != nil) // живая сессия не тронута
     }
 
@@ -85,6 +89,32 @@ struct AdminSessionTests {
         let fake = FakeStore()
         let session = AdminSessionHolder.seed(store: store(fake), nowUtcIso: "2026-01-01T00:00:00Z")
         #expect(session == .loggedOut)
+    }
+
+    // MARK: - isRaceAdmin
+
+    private func admin(_ ids: [Int]) -> AdminSession {
+        .loggedIn(email: "a@b.ru", token: "t", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: ids)
+    }
+
+    @Test func isRaceAdmin_cloudOnly() {
+        #expect(isRaceAdmin(raceId: 3, cloud: admin([3, 7]), local: .loggedOut))
+    }
+
+    @Test func isRaceAdmin_lanOnly() {
+        #expect(isRaceAdmin(raceId: 7, cloud: admin([]), local: admin([7])))
+    }
+
+    @Test func isRaceAdmin_inNeither() {
+        #expect(!isRaceAdmin(raceId: 5, cloud: admin([3]), local: admin([7])))
+    }
+
+    @Test func isRaceAdmin_emptyLists() {
+        #expect(!isRaceAdmin(raceId: 3, cloud: admin([]), local: admin([])))
+    }
+
+    @Test func isRaceAdmin_bothLoggedOut() {
+        #expect(!isRaceAdmin(raceId: 3, cloud: .loggedOut, local: .loggedOut))
     }
 
     // MARK: - combinedLoginOutcome
@@ -117,8 +147,8 @@ struct AdminSessionTests {
     // MARK: - adminRowSubtitle / adminNoSessionMessage
 
     @Test func adminRowSubtitle_eachCombination() {
-        let cloud = AdminSession.loggedIn(email: "c@x.ru", token: "t1", expiresAt: "2099-01-01T00:00:00Z")
-        let lan = AdminSession.loggedIn(email: "l@x.ru", token: "t2", expiresAt: "2099-01-01T00:00:00Z")
+        let cloud = AdminSession.loggedIn(email: "c@x.ru", token: "t1", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: [])
+        let lan = AdminSession.loggedIn(email: "l@x.ru", token: "t2", expiresAt: "2099-01-01T00:00:00Z", adminRaceIds: [])
         #expect(adminRowSubtitle(cloud: cloud, local: lan) == "c@x.ru")
         #expect(adminRowSubtitle(cloud: cloud, local: .loggedOut) == "c@x.ru · только Cloud")
         #expect(adminRowSubtitle(cloud: .loggedOut, local: lan) == "l@x.ru · только LAN")

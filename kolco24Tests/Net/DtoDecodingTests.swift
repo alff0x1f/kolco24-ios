@@ -411,4 +411,20 @@ struct DtoDecodingTests {
         #expect(m.leaseTtlSeconds == 3600)
         #expect(m.leaseExpiresAt == 1_750_000_000)
     }
+
+    // MARK: - LoginResponse
+
+    @Test func login_withAdminRaceIds() throws {
+        let r = try decode(LoginResponse.self, #"""
+        {"token": "tok", "expires_at": "2026-07-21T14:03:00Z", "admin_race_ids": [3, 7]}
+        """#)
+        #expect(r.token == "tok")
+        #expect(r.expiresAt == "2026-07-21T14:03:00Z")
+        #expect(r.adminRaceIds == [3, 7])
+    }
+
+    @Test func login_withoutAdminRaceIds_isEmpty() throws {
+        let r = try decode(LoginResponse.self, #"{"token": "tok", "expires_at": "2026-07-21T14:03:00Z"}"#)
+        #expect(r.adminRaceIds == [])
+    }
 }

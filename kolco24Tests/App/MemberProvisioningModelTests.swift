@@ -575,7 +575,7 @@ struct MemberProvisioningModelTests {
     @Test func bind401_callsOnUnauthorized_andRequestsClose() async throws {
         let env = try makeEnv()
         try await seedPool(env, [("U1", 101)])
-        env.cloudAdminSession.set(.loggedIn(email: "a@b.ru", token: "tok", expiresAt: "2999-01-01T00:00:00Z"))
+        env.cloudAdminSession.set(.loggedIn(email: "a@b.ru", token: "tok", expiresAt: "2999-01-01T00:00:00Z", adminRaceIds: []))
         let repo = env.cloudAdminAuth
         var unauthorizedCalls = 0
         let feedback = RecordingFeedback()

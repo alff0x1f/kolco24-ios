@@ -8,7 +8,8 @@
 //  выдаёт свои токены); корень `AdminHomeView` подписан на оба мультиконсумерных стрима держателей.
 //  Обе `loggedOut` → форма входа (cloud, плюс LAN только в локальном режиме; inline-ошибка из
 //  `adminErrorMessage` / `combinedLoginOutcome`); хоть одна `loggedIn` → строки статуса серверов +
-//  ряды действий. «Войти» в строке сервера открывает форму только для него («Назад» — в меню).
+//  ряды действий (если пользователь админ выбранной гонки). «Войти» в строке сервера открывает форму
+//  только для него («Назад» — в меню).
 //
 //  Секции «Чипы КП» и «Браслеты участников» — пары «записать → проверить»: «Привязать чип к КП»
 //  (`ProvisioningView`) / «Проверить чип КП» (`CheckChipView`); «Записать браслет»
@@ -16,7 +17,8 @@
 //  «Отметка старта»/«Отметка финиша» пушат `JudgeScanView` (этап 10, задача 9).
 //
 //  Без выбранной команды (`selectedRaceId == nil`) — вместо рядов действий подсказка (гонка неизвестна,
-//  судейский `raceId` взять неоткуда).
+//  судейский `raceId` взять неоткуда). Гонки нет в `adminRaceIds` ни одной сессии (`isRaceAdmin`) —
+//  вместо рядов «Нет прав администратора на эту гонку».
 //
 
 import SwiftUI
@@ -82,6 +84,9 @@ private struct AdminHomeView: View {
 
     private var anyLoggedIn: Bool { cloudSession != .loggedOut || localSession != .loggedOut }
     private var reLoginShown: Bool { reLoginTarget != nil && anyLoggedIn }
+    private var canAdminSelectedRace: Bool {
+        appModel.selectedRaceId.map { isRaceAdmin(raceId: $0, cloud: cloudSession, local: localSession) } ?? false
+    }
 
     var body: some View {
         Group {
@@ -239,9 +244,9 @@ private struct AdminHomeView: View {
 
     /// Открыть форму входа на один сервер; email подставляется из уже активной сессии.
     private func openReLogin(_ server: AdminServer) {
-        if case let .loggedIn(email, _, _) = cloudSession {
+        if case let .loggedIn(email, _, _, _) = cloudSession {
             self.email = email
-        } else if case let .loggedIn(email, _, _) = localSession {
+        } else if case let .loggedIn(email, _, _, _) = localSession {
             self.email = email
         }
         password = ""
@@ -268,6 +273,15 @@ private struct AdminHomeView: View {
             if appModel.selectedRaceId == nil {
                 Section {
                     Text("Выберите команду на вкладке «Команда», чтобы открыть судейские действия — гонка определяется по выбранной команде.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.sub)
+                        .listRowBackground(Color.card)
+                } header: {
+                    Text("Действия")
+                }
+            } else if !canAdminSelectedRace {
+                Section {
+                    Text("Нет прав администратора на эту гонку")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.sub)
                         .listRowBackground(Color.card)
@@ -397,7 +411,7 @@ private struct ServerStatusRow: View {
     private var loggedIn: Bool { session != .loggedOut }
 
     private var detail: String {
-        if case let .loggedIn(email, _, _) = session { return email }
+        if case let .loggedIn(email, _, _, _) = session { return email }
         return loggedOutText
     }
 }

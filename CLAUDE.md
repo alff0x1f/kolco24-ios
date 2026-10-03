@@ -161,6 +161,9 @@ server 200.
 - **Admin sessions** (`docs/plans/completed/20260929-lan-admin-session.md`): two independent sessions, cloud and
   LAN; each client carries only its own bearer, and only on `adminAuth: true` requests. The LAN bearer/login need
   an active lease. Provisioning picks the server per tap (`adminRoute`); 401 clears only that server's session.
+  Admin menu actions show only if the selected race is in `adminRaceIds` of either session (`isRaceAdmin`,
+  `docs/plans/completed/20261004-admin-race-ids.md`) — a UI hint from login's `admin_race_ids`; missing → `[]`
+  (hidden), refreshed only by a new login.
 - **`map_url`**: `https://…` or a root-relative `/media/maps/…`; `RaceRepository` stores it resolved
   (`Core/Map/resolveMapUrl`) against the origin that served the list (LAN → cleartext `http`). Non-https absolute,
   `//host`, `\`/whitespace → `nil` (no map). `MapModel` trusts the stored value — no scheme guard there.

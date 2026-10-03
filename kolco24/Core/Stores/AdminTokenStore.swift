@@ -4,8 +4,8 @@
 //
 //  Хранилище admin-bearer-сессии. Порт `data/AdminTokenStore.kt`, но с **платформенной адаптацией**:
 //  Android держит три отдельных ключа в SharedPreferences-файле `kolco24.admin`; iOS — **один
-//  JSON-item в Keychain** (`{token, email, expiresAt}`), так что сессия персистится атомарно —
-//  целиком либо отсутствует (прецедент `RaceLeaseStore` с одной delimited-строкой).
+//  JSON-item в Keychain** (`{token, email, expiresAt, adminRaceIds}`), так что сессия персистится
+//  атомарно — целиком либо отсутствует (прецедент `RaceLeaseStore` с одной delimited-строкой).
 //
 //  Идиома совпадает с `ClockAnchorStore`/`RaceLeaseStore`: чистое ядро на инъецированных
 //  `load: () -> Data?` / `save: (Data?) -> Void`-замыканиях (тестируется без Keychain), а
@@ -15,12 +15,25 @@
 
 import Foundation
 
-/// Персистнутые поля admin-сессии: opaque 30-дневный bearer [token], [email] входа и сырая
-/// ISO-строка [expiresAt] от сервера (UTC, `Z`-суффикс). Кодируется в один JSON-item.
+/// Персистнутые поля admin-сессии: opaque 30-дневный bearer [token], [email] входа, сырая
+/// ISO-строка [expiresAt] от сервера (UTC, `Z`-суффикс) и [adminRaceIds] из ответа входа. Кодируется
+/// в один JSON-item.
 struct StoredAdminSession: Equatable, Codable {
     let token: String
     let email: String
     let expiresAt: String
+    let adminRaceIds: [Int]
+}
+
+extension StoredAdminSession {
+    /// Item, записанный до появления `adminRaceIds`, читается со списком `[]` (сессия жива, прав нет).
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        token = try container.decode(String.self, forKey: .token)
+        email = try container.decode(String.self, forKey: .email)
+        expiresAt = try container.decode(String.self, forKey: .expiresAt)
+        adminRaceIds = try container.decodeIfPresent([Int].self, forKey: .adminRaceIds) ?? []
+    }
 }
 
 struct AdminTokenStore {
@@ -34,7 +47,7 @@ struct AdminTokenStore {
     }
 
     /// Читает сохранённую сессию, либо `nil`, если item отсутствует, JSON битый, или **любое**
-    /// из трёх полей пустое (неполная сессия недопустима — паритет с Android «любой ключ отсутствует
+    /// из трёх строковых полей пустое (пустой `adminRaceIds` допустим) (неполная сессия недопустима — паритет с Android «любой ключ отсутствует
     /// → null»).
     func read() -> StoredAdminSession? {
         guard let data = load() else { return nil }

@@ -30,7 +30,7 @@ struct AdminTokenStoreTests {
 
     private func seedJson(token: String, email: String, expiresAt: String) -> Data {
         try! JSONEncoder().encode(
-            StoredAdminSession(token: token, email: email, expiresAt: expiresAt)
+            StoredAdminSession(token: token, email: email, expiresAt: expiresAt, adminRaceIds: [])
         )
     }
 
@@ -45,7 +45,7 @@ struct AdminTokenStoreTests {
         let fake = FakeStore()
         let s = store(fake)
         let session = StoredAdminSession(
-            token: "tok123", email: "admin@kolco24.ru", expiresAt: "2026-07-21T14:03:00Z"
+            token: "tok123", email: "admin@kolco24.ru", expiresAt: "2026-07-21T14:03:00Z", adminRaceIds: [3, 7]
         )
 
         s.write(session)
@@ -59,7 +59,7 @@ struct AdminTokenStoreTests {
             seed: seedJson(token: "seeded", email: "pre@seed.ru", expiresAt: "2026-08-01T00:00:00Z")
         )
         #expect(store(fake).read() == StoredAdminSession(
-            token: "seeded", email: "pre@seed.ru", expiresAt: "2026-08-01T00:00:00Z"
+            token: "seeded", email: "pre@seed.ru", expiresAt: "2026-08-01T00:00:00Z", adminRaceIds: []
         ))
     }
 
@@ -67,7 +67,7 @@ struct AdminTokenStoreTests {
     func clear_removesItem() {
         let fake = FakeStore()
         let s = store(fake)
-        s.write(StoredAdminSession(token: "tok", email: "a@b.ru", expiresAt: "2026-07-21T14:03:00Z"))
+        s.write(StoredAdminSession(token: "tok", email: "a@b.ru", expiresAt: "2026-07-21T14:03:00Z", adminRaceIds: []))
 
         s.clear()
 
@@ -107,15 +107,23 @@ struct AdminTokenStoreTests {
     }
 
     @Test
+    func read_legacyItemWithoutAdminRaceIds_hasEmptyList() {
+        let fake = FakeStore(seed: Data(#"{"token":"tok","email":"a@b.ru","expiresAt":"2026-07-21T14:03:00Z"}"#.utf8))
+        #expect(store(fake).read() == StoredAdminSession(
+            token: "tok", email: "a@b.ru", expiresAt: "2026-07-21T14:03:00Z", adminRaceIds: []
+        ))
+    }
+
+    @Test
     func write_replacesPreviousItemEntirely() {
         let fake = FakeStore()
         let s = store(fake)
-        s.write(StoredAdminSession(token: "old", email: "old@b.ru", expiresAt: "2026-01-01T00:00:00Z"))
+        s.write(StoredAdminSession(token: "old", email: "old@b.ru", expiresAt: "2026-01-01T00:00:00Z", adminRaceIds: []))
 
-        s.write(StoredAdminSession(token: "new", email: "new@b.ru", expiresAt: "2027-01-01T00:00:00Z"))
+        s.write(StoredAdminSession(token: "new", email: "new@b.ru", expiresAt: "2027-01-01T00:00:00Z", adminRaceIds: []))
 
         #expect(s.read() == StoredAdminSession(
-            token: "new", email: "new@b.ru", expiresAt: "2027-01-01T00:00:00Z"
+            token: "new", email: "new@b.ru", expiresAt: "2027-01-01T00:00:00Z", adminRaceIds: []
         ))
     }
 }
