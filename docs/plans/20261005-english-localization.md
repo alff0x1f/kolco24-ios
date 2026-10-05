@@ -118,7 +118,7 @@
 - Placeholders: `%lld` for `Int` (convert `Int64` explicitly, e.g. `SkewFormat.swift:23`), `%@` for `String`;
   positional `%1$lld`/`%2$lld` when en word order differs. Key names must be descriptive — args are unlabelled.
 - English test helper `kolco24Tests/Support/EnglishLocalization.swift`:
-  `func en(_ r: LocalizedStringResource) -> String` (sets `r.locale = Locale(identifier: "en")`).
+  `func en(_ r: LocalizedStringResource) -> String` + `ru(_:)` (set `r.locale`; verified in Task 1).
 - Catalog test reads compiled `ru.lproj`/`en.lproj` `Localizable.strings` + `.stringsdict` from
   `Bundle.main` and compares key sets.
 - Key pattern: `^[a-z]+(\.[a-zA-Z0-9]+)+$`.
@@ -145,19 +145,18 @@
 - Create: `kolco24Tests/Support/EnglishLocalization.swift`
 - Create: `kolco24Tests/LocalizationTests.swift`
 
-- [ ] create a branch `feat/english-localization` from `main`
-- [ ] set `developmentRegion = ru`, `knownRegions = (ru, en, Base)`; in both app configs add
+- [x] create a branch `feat/english-localization` from `main`
+- [x] set `developmentRegion = ru`, `knownRegions = (ru, en, Base)`; in both app configs add
       `STRING_CATALOG_GENERATE_SYMBOLS = YES` and set `SWIFT_EMIT_LOC_STRINGS = NO`
-- [ ] share the `kolco24` scheme (copy the user scheme or let Xcode generate it — real
-      `BlueprintIdentifier`s from pbxproj); Test action `language = "ru"`, `region = "RU"`
-- [ ] add `Localizable.xcstrings` (`sourceLanguage: "ru"`) with one key `common.cancel`
+- [x] share the `kolco24` scheme (hand-written from pbxproj ids, both testables like the auto scheme); Test action `language = "ru"`, `region = "RU"`
+- [x] add `Localizable.xcstrings` (`sourceLanguage: "ru"`) with one key `common.cancel`
       (`extractionState: manual`, ru «Отмена», en "Cancel"); confirm the symbol compiles and `en.lproj` is in
       the bundle
-- [ ] add the `en(_:)` test helper
-- [ ] write `LocalizationTests`: guard `Bundle.main.preferredLocalizations.first == "ru"` with a message
+- [x] add the `en(_:)` test helper
+- [x] write `LocalizationTests`: guard `Bundle.main.preferredLocalizations.first == "ru"` with a message
       pointing at the shared scheme; ru/en key sets equal and every value non-empty; keys match the pattern;
       `common.cancel` → «Отмена» / "Cancel"
-- [ ] build + full test suite green (also via `xcodebuild test`, confirming the scheme language reaches the
+- [x] build + full test suite green (also via `xcodebuild test`, confirming the scheme language reaches the
       hosted test process)
 
 ### Task 2: Permission strings in English
