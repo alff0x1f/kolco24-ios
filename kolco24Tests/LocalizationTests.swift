@@ -64,4 +64,27 @@ struct LocalizationTests {
         #expect(en(.localModeUntil("14:30")) == "Local mode until 14:30")
         #expect(en(.commonBytesMb) == "MB")
     }
+
+    @Test func russianPluralForms() {
+        // Правила CLDR ru: 1, 21 → one; 2–4, 22 → few; 0, 5–20, 11–14, 25 → many.
+        #expect(ru(.commonPointsCount(1)) == "1 балл")
+        #expect(ru(.commonPointsCount(21)) == "21 балл")
+        #expect(ru(.commonPointsCount(2)) == "2 балла")
+        #expect(ru(.commonPointsCount(22)) == "22 балла")
+        #expect(ru(.commonPointsCount(0)) == "0 баллов")
+        #expect(ru(.commonPointsCount(5)) == "5 баллов")
+        #expect(ru(.commonPointsCount(11)) == "11 баллов")
+        #expect(ru(.commonPointsCount(14)) == "14 баллов")
+        #expect(ru(.scanTimerRemainingChips(1)) == "Остался 1 чип")
+        #expect(ru(.scanTimerRemainingChips(3)) == "Осталось 3 чипа")
+        #expect(ru(.teamChipsUnbound(5)) == "5 чипов не привязаны")
+        #expect(ru(.trackPointsCount(2)) == "2 точки")
+    }
+
+    @Test func englishPluralForms() {
+        #expect(en(.commonPointsCount(1)) == "1 point")
+        #expect(en(.commonPointsCount(2)) == "2 points")
+        #expect(en(.scanTimerRemainingChips(1)) == "1 chip left")
+        #expect(en(.checkChipOthersOnCp(2)) == "2 more chips on this CP")
+    }
 }

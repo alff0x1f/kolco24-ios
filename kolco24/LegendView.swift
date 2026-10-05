@@ -171,7 +171,7 @@ private struct ScoreStripView: View {
                     Text("\(takenScore)")
                         .font(.mono(20, weight: .bold))
                         .foregroundStyle(Color.ink)
-                    Text("/ \(totalScore) \(pluralRu(count: totalScore, one: "балл", few: "балла", many: "баллов"))")
+                    Text(verbatim: "/ " + String(localized: .commonPointsCount(totalScore)))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Color.sub)
                 }

@@ -240,16 +240,19 @@
 - Delete: `kolco24/Core/Util/PluralRu.swift` and its tests
 - Modify: `kolco24/Localizable.xcstrings`
 
-- [ ] whole-phrase plural keys with `%lld`: `common.points.count` («%lld баллов»), `checkChip.othersOnCp`,
+- [x] whole-phrase plural keys with `%lld`: `common.points.count` («%lld баллов»), `checkChip.othersOnCp`,
       `scan.remainingChips` (verb + noun in one string), `wristband.pool.count`, `team.chips.unbound`,
       `track.points.count` (GPS), `track.segments.count`, `legend.totalScore`
-- [ ] `TeamView:603-604` metric captions: number inside the string or separate non-plural keys
-- [ ] `TrackMapView:488` КП callout uses `common.points.count` (fixes «точки» → «балла»);
+- [x] `TeamView:603-604` metric captions → fixed `track.metric.points`/`track.metric.segments` («Точки»/«Сегменты»;
+      ru captions no longer decline by count — small visible change)
+- [x] ➕ also converted the non-plural strings in the same expressions: `scan.timer.*` (ScanSheet status line),
+      `wristband.pool.notSynced`, `marks.photoReview.*`, `map.stop.title`, `map.cp.callout`; `capitalizedFirst` removed
+- [x] `TrackMapView:488` КП callout uses `common.points.count` (fixes «точки» → «балла»);
       `:384` «Стоянка …» → `map.stop.*`
-- [ ] replace every `pluralRu`/`pointsLabel`/`pointsWord`/`segmentsWord` call; delete `PluralRu.swift` and
+- [x] replace every `pluralRu`/`pointsLabel`/`pointsWord`/`segmentsWord` call; delete `PluralRu.swift` and
       its tests (grep shows no callers left)
-- [ ] write tests: ru forms for 1/2/5/11/21, en forms for 1/2, for 2–3 plural keys
-- [ ] run tests - must pass before next task
+- [x] write tests: ru forms for 1/2/5/11/21, en forms for 1/2, for 2–3 plural keys
+- [x] run tests - must pass before next task
 
 ### Task 8: Views — Marks tab, scan sheet, photo
 

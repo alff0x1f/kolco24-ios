@@ -144,7 +144,7 @@ struct ProvisioningView: View {
                 Text(String(format: "%02d", cp.number))
                     .font(.mono(64, weight: .bold))
                     .foregroundStyle(Color.ink)
-                Text(cp.cost.map { "\($0) \(pluralRu(count: $0, one: "балл", few: "балла", many: "баллов"))" } ?? "—")
+                Text(verbatim: cp.cost.map { String(localized: .commonPointsCount($0)) } ?? "—")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.sub)
 

@@ -445,13 +445,11 @@ private struct TimerHeroView: View {
 
     private var progress: Double { min(1.0, total > 0 ? Double(seconds) / Double(total) : 0) }
 
-    /// «Осталось N чип/чипа/чипов» / «Приложите метку КП» / «Все чипы отсканированы» — порт `ScanTimerStrip`.
+    /// «Осталось N чипов» / «Приложите метку КП» / «Все чипы отсканированы» — порт `ScanTimerStrip`.
     private var statusLine: String {
-        if waitingForCheckpoint { return "Приложите метку КП" }
-        if remainingScans == 0 { return "Все чипы отсканированы" }
-        let verb = pluralRu(count: remainingScans, one: "Остался", few: "Осталось", many: "Осталось")
-        let chip = pluralRu(count: remainingScans, one: "чип", few: "чипа", many: "чипов")
-        return "\(verb) \(remainingScans) \(chip)"
+        if waitingForCheckpoint { return String(localized: .scanTimerTapCpTag) }
+        if remainingScans == 0 { return String(localized: .scanTimerAllScanned) }
+        return String(localized: .scanTimerRemainingChips(remainingScans))
     }
 
     var body: some View {

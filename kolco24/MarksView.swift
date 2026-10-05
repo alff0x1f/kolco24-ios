@@ -1029,11 +1029,11 @@ private struct PhotoReviewNotice: View {
     private var title: String {
         let tokens = tokensLabel(summary.tokens)
         if summary.points > 0 {
-            // Порт `MarksScreen.kt:921`: склонение «балл/балла/баллов».
-            let word = pluralRu(count: summary.points, one: "балл", few: "балла", many: "баллов")
-            return "\(summary.count) КП по фото (\(tokens)) · \(summary.points) \(word)"
+            return String(localized: .marksPhotoReviewTitleWithPoints(
+                summary.count, tokens, String(localized: .commonPointsCount(summary.points))
+            ))
         }
-        return "\(summary.count) КП по фото (\(tokens))"
+        return String(localized: .marksPhotoReviewTitle(summary.count, tokens))
     }
 
     var body: some View {

@@ -193,7 +193,7 @@ struct SettingsView: View {
                     systemImage: "trash",
                     iconBg: Color.brandRed,
                     label: "Очистить трек",
-                    sub: pointsLabel(model.trackPointCount),
+                    sub: String(localized: .trackPointsCount(model.trackPointCount)),
                     tint: Color.brandRed
                 )
             }

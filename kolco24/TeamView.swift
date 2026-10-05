@@ -389,7 +389,7 @@ private struct MiscRowView: View {
 // MARK: - Track Card (этап 8)
 
 /// Карточка «GPS-трек» на вкладке «Команда». Порт строк/состояний `ui/track/TrackCard.kt` 1:1:
-/// - `recording` → пульсирующая точка + «Идёт запись» + `pointsLabel` (сырой live-счётчик рекордера,
+/// - `recording` → пульсирующая точка + «Идёт запись» + «N точек» (сырой live-счётчик рекордера,
 ///   плюс «· на карте N», когда фильтр выбросов скрыл точки) + «Остановить» (brandRed);
 /// - idle + 0 точек → онбординг-текст + CTA «Начать запись»;
 /// - idle + >0 → метрики Точки (+ «на карте N»)/Сегменты/Время + «Начать запись» + вторичная «Поделиться GPX».
@@ -458,7 +458,7 @@ private struct TrackCardView: View {
                 Text("Идёт запись")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color.ink)
-                Text(pointsLabel(recorder.pointCount) + shownNote(prefix: " · "))
+                Text(verbatim: String(localized: .trackPointsCount(recorder.pointCount)) + shownNote(prefix: " · "))
                     .font(.mono(11))
                     .foregroundStyle(Color.sub)
             }
@@ -589,8 +589,8 @@ private struct PulsingDot: View {
     }
 }
 
-/// Ряд метрик idle-трека: Точки / Сегменты / Время (порт `TrackMetrics`). Слова склоняются по счётчику
-/// (`pointsWord`/`segmentsWord`) и капитализируются, значения — `Font.mono`.
+/// Ряд метрик idle-трека: Точки / Сегменты / Время (порт `TrackMetrics`). Подписи фиксированные
+/// (плюрал каталога требует число в строке), значения — `Font.mono`.
 private struct TrackMetricsRow: View {
     let pointCount: Int
     /// «на карте N» под счётчиком точек (пусто — фильтр ничего не скрыл).
@@ -600,8 +600,8 @@ private struct TrackMetricsRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
-            metric(value: "\(pointCount)", label: pointsWord(pointCount).capitalizedFirst, note: shownNote)
-            metric(value: "\(segmentCount)", label: segmentsWord(segmentCount).capitalizedFirst)
+            metric(value: "\(pointCount)", label: String(localized: .trackMetricPoints), note: shownNote)
+            metric(value: "\(segmentCount)", label: String(localized: .trackMetricSegments))
             metric(value: timeRange ?? "—", label: "Время")
         }
     }
@@ -625,15 +625,7 @@ private struct TrackMetricsRow: View {
     }
 }
 
-private extension String {
-    /// Капитализирует только первый символ (порт `replaceFirstChar { it.uppercase() }`).
-    var capitalizedFirst: String {
-        guard let first else { return self }
-        return first.uppercased() + dropFirst()
-    }
-}
-
-/// Русское склонение «N чип(а/ов) не привязан(ы)» (порт `chipNotBoundText` из `TeamScreen.kt`).
+/// «N чипов не привязаны» (порт `chipNotBoundText` из `TeamScreen.kt`).
 private func chipNotBoundText(_ n: Int) -> String {
-    "\(n) \(pluralRu(count: n, one: "чип не привязан", few: "чипа не привязаны", many: "чипов не привязаны"))"
+    String(localized: .teamChipsUnbound(n))
 }

@@ -79,8 +79,8 @@ struct CheckMemberChipView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(model.poolSize > 0 ? Color.sub : Color.brandRed)
             Text(model.poolSize > 0
-                 ? "В пуле \(model.poolSize) \(pluralRu(count: model.poolSize, one: "браслет", few: "браслета", many: "браслетов"))"
-                 : "Пул не синхронизирован — синхронизируйте гонку")
+                 ? .wristbandPoolCount(model.poolSize)
+                 : .wristbandPoolNotSynced)
                 .font(.system(size: 13))
                 .foregroundStyle(model.poolSize > 0 ? Color.sub : Color.brandRed)
             Spacer(minLength: 0)

@@ -93,7 +93,7 @@ struct CheckChipView: View {
                 Text(String(format: "%02d", number))
                     .font(.mono(72, weight: .bold))
                     .foregroundStyle(Color.ink)
-                Text(cost.map { "\($0) \(pluralRu(count: $0, one: "балл", few: "балла", many: "баллов"))" } ?? "—")
+                Text(verbatim: cost.map { String(localized: .commonPointsCount($0)) } ?? "—")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.sub)
 
@@ -111,7 +111,7 @@ struct CheckChipView: View {
 
                 let others = max(chipsOnKp - 1, 0)
                 if others > 0 {
-                    Text("На этом КП ещё \(others) \(pluralRu(count: others, one: "чип", few: "чипа", many: "чипов"))")
+                    Text(.checkChipOthersOnCp(others))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.sub)
                 }

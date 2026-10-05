@@ -5,8 +5,7 @@
 //  Чистая тестируемая логика экранов выбора гонки/команды. Kotlin-источник:
 //  `ui/teampicker/TeamPickerLogic.kt`. Никакого UIKit/SwiftUI — всё юнит-покрыто.
 //  Даты сравниваются лексикографически как ISO-строки `yyyy-MM-dd`; `today`
-//  всегда приходит строкой. `effectiveEnd` — из `Core/Util/RaceDates.swift`,
-//  `pluralRu` — из `Core/Util/PluralRu.swift`.
+//  всегда приходит строкой. `effectiveEnd` — из `Core/Util/RaceDates.swift`.
 //
 
 import Foundation

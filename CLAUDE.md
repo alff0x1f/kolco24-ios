@@ -58,7 +58,7 @@ Four tabs: Отметки (`MarksView` — taken-КП grid + NFC/photo scan), Л
 
 - **`kolco24/` (root, flat)** — all SwiftUI views + `DesignTokens`, `SharedComponents`, `Secrets`.
 - **`kolco24/Core/`** — pure-Foundation logic, grouped by concern (stages 1, 4–11, map): `Util` (HexBytes,
-  PluralRu, RaceDates), `Nfc` (ChipRecord/K24 format, NfcUid), `Api` (HMAC signing), `Crypto` (LegendCrypto),
+  RelativeTime, RaceDates), `Nfc` (ChipRecord/K24 format, NfcUid), `Api` (HMAC signing), `Crypto` (LegendCrypto),
   `Scan` (ScanSession reducer, ChipScanning seams), `Team` (BindDecision, TeamPickerLogic), `Legend`,
   `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay, ControlTime, CheckMethod), `Sync`,
   `Track` (Segments, TrackPoints, TrackLines spike filter, GpxExport, TrackEngine seam), `Upload`,
