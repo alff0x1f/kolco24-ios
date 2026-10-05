@@ -310,12 +310,12 @@
 - Create: `kolco24Tests/CyrillicLiteralTests.swift`
 - Modify: `kolco24/Localizable.xcstrings`
 
-- [ ] test reads sources via `#filePath` (root views, `Core/`, `App/`, `Nfc/`, `Map/`): no Cyrillic inside
+- [x] test reads sources via `#filePath` (root views, `Core/`, `App/`, `Nfc/`, `Map/`): no Cyrillic inside
       string literals; skip comments, `log.`/`Self.log.` lines and `#if DEBUG … #endif` / `#Preview` blocks;
       explicit allow-list for any remaining exception
-- [ ] test passes on the tree
-- [ ] proofread all en values against the glossary; fix length on tight places (tiles, badges, buttons)
-- [ ] run tests - must pass before next task
+- [x] test passes on the tree
+- [x] proofread all en values against the glossary; fix length on tight places (tiles, badges, buttons)
+- [x] run tests - must pass before next task
 
 ### Task 13: Verify acceptance criteria
 - [ ] every user-visible string is in the catalog with ru + en (catalog test + Cyrillic test)
