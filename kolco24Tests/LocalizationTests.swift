@@ -57,4 +57,11 @@ struct LocalizationTests {
         }
         return result
     }
+
+    @Test func appModelEnglishTexts() {
+        #expect(en(.uploadPendingCount(3)) == "3 not sent")
+        #expect(en(.scanStatusProgress("7", 2, 4)) == "CP 7 · chips 2/4")
+        #expect(en(.localModeUntil("14:30")) == "Local mode until 14:30")
+        #expect(en(.commonBytesMb) == "MB")
+    }
 }

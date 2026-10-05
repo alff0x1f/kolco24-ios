@@ -11,7 +11,7 @@
 //  протокол не нужен — функции берут поля напрямую (плановое решение Task 1).
 //
 //  Upload-часть `TrackModels.kt` (L79–98) уже портирована в `Core/Upload/UploadModels.swift`
-//  (этап 6); словарь склонений (`pointsWord`/`segmentsWord`/`relativeTimeRu`) — в
+//  (этап 6); словарь склонений (`pointsWord`/`segmentsWord`) — в
 //  `Core/Util/PluralRu.swift` (этап 6). Здесь не дублируется.
 //
 

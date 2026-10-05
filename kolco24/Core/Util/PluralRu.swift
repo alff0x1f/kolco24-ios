@@ -4,7 +4,7 @@
 //
 //  Чистый Android-free русский плюрализатор + производные хелперы счётчиков.
 //  Kotlin-источники: `data/PluralRu.kt` (`pluralRu`), `data/track/PointsPlural.kt`
-//  (`pointsWord`/`pointsLabel`/`segmentsWord`/`relativeTimeRu`).
+//  (`pointsWord`/`pointsLabel`/`segmentsWord`).
 //
 
 import Foundation
@@ -37,16 +37,4 @@ func pointsLabel(_ count: Int) -> String {
 /// Просклонённый «сегмент» для счётчика сессий записи.
 func segmentsWord(_ count: Int) -> String {
     pluralRu(count: count, one: "сегмент", few: "сегмента", many: "сегментов")
-}
-
-/// Чистая метка относительного времени для строки статуса загрузки: «только что» под минуту,
-/// «N мин назад» под час, иначе «N ч назад». Отрицательная дельта (скью часов / будущий штамп)
-/// зажимается в 0 → «только что».
-func relativeTimeRu(atWallMs: Int64, nowMs: Int64) -> String {
-    let seconds = max(nowMs - atWallMs, 0) / 1000
-    switch seconds {
-    case ..<60: return "только что"
-    case ..<3600: return "\(seconds / 60) мин назад"
-    default: return "\(seconds / 3600) ч назад"
-    }
 }

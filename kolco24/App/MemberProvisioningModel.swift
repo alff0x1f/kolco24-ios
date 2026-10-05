@@ -369,7 +369,7 @@ final class MemberProvisioningModel: Identifiable {
                 provisionState = .waitingForWrite(uid: uid, number: response.number)
                 writeHint = ProvisionMessage.memberWriteAgainHint
             } catch {
-                provisionState = .failed(reason: "Неверный код от сервера")
+                provisionState = .failed(reason: String(localized: .provisioningErrorBadServerCode))
                 feedback.play(.failure)
             }
         case .error(let code) where code == 404 && requestedNumber == nil:
@@ -388,7 +388,7 @@ final class MemberProvisioningModel: Identifiable {
     /// `.success` → успех; иначе → остаёмся в `waitingForWrite`, pending-write СОХРАНЁН (header-last).
     private func handleWriteTap(reading: TagReading, expectedUid: String, number: Int) {
         if reading.uid != expectedUid {
-            writeHint = "Приложите тот же браслет"
+            writeHint = String(localized: .memberProvisioningHintSameWristband)
             feedback.play(.failure)
             return
         }

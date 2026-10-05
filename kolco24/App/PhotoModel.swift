@@ -182,7 +182,7 @@ final class PhotoModel: Identifiable {
     /// разрешаются намеренно (сценарий «метку сорвали»).
     func submit(number: Int) {
         guard let cp = resolvePhotoCheckpoint(number: number, legend: legend) else {
-            pickerError = "КП с таким номером нет в легенде"
+            pickerError = String(localized: .photoPickerErrorNotInLegend)
             return
         }
         select(cp)

@@ -222,14 +222,14 @@
 - Modify: `kolco24/Nfc/NfcChipScanner.swift` (`:76` alert message)
 - Modify: `kolco24/Localizable.xcstrings`, matching tests (incl. `kolco24Tests/App/SettingsModelTests.swift`)
 
-- [ ] move status/error texts to keys (reuse Core keys and `common.*` where text is the same)
-- [ ] NFC sheet texts (`NfcChipScanner:76`, `ScanModel:611,613`) → `nfc.alert.*`
-- [ ] `relativeTimeRu` usage in `UploadModel:330` → whole-phrase plural keys `upload.lastSent.*`
-      («только что», «%lld мин назад», «%lld ч назад»)
-- [ ] byte-size formatting in `SettingsModel:242,257` made locale-aware (see Technical Details); update
-      `SettingsModelTests:325,350`
-- [ ] existing Russian tests green; add en symbol assertions for upload/scan statuses and relative time
-- [ ] run tests - must pass before next task
+- [x] move status/error texts to keys (reuse Core keys and `common.*` where text is the same)
+- [x] NFC sheet texts (`NfcChipScanner:76`, `ScanModel:611,613`) → `nfc.alert.*`
+- [x] `relativeTimeRu` → `relativeTimeLabel` in `Core/Util/RelativeTime.swift` with keys `upload.lastSent.*`
+      («только что», «%lld мин назад», «%lld ч назад»); tests moved to `RelativeTimeTests`
+- [x] byte-size formatting in `SettingsModel`: units keyed `common.bytes.*`, fraction via
+      `.formatted(.number.precision(.fractionLength(1)).grouping(.never))`; `SettingsModelTests` pass unchanged
+- [x] existing Russian tests green; add en symbol assertions for upload/scan statuses and relative time
+- [x] run tests - must pass before next task
 
 ### Task 7: Plural phrases in views, remove PluralRu
 
