@@ -296,7 +296,7 @@ private struct MemberRowView: View {
                     .foregroundStyle(Color.ink)
 
                 if let binding {
-                    Text("№\(binding.participantNumber)")
+                    Text(.adminStatusParticipantNumber(String(binding.participantNumber)))
                         .font(.mono(12, weight: .semibold))
                         .foregroundStyle(Color.sub)
                 } else {

@@ -115,7 +115,7 @@ struct CheckChipView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Color.sub)
                 }
-                Text("\(bid) · \(checkMethod)")
+                Text(verbatim: "\(bid) · \(checkMethod)")
                     .font(.mono(11, weight: .medium))
                     .foregroundStyle(Color.sub)
             }

@@ -57,7 +57,7 @@ struct PhotoNumberPickerView: View {
                 Text(.commonCp)
                     .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(Color.sub)
-                TextField("", text: digitQuery, prompt: Text("00").foregroundStyle(Color.sub.opacity(0.3)))
+                TextField("", text: digitQuery, prompt: Text(verbatim: "00").foregroundStyle(Color.sub.opacity(0.3)))
                     .keyboardType(.numberPad)
                     .focused($fieldFocused)
                     .font(.mono(58, weight: .bold))

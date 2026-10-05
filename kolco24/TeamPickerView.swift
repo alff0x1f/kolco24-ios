@@ -203,7 +203,7 @@ private struct CompContextCard: View {
                     .foregroundStyle(Color.ink)
                     .lineLimit(1)
                 if let race {
-                    Text("\(shortDate(race.date)) · \(race.place)")
+                    Text(verbatim: "\(shortDate(race.date)) · \(race.place)")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.sub)
                         .lineLimit(1)

@@ -238,7 +238,7 @@ struct MemberProvisioningView: View {
                 .foregroundStyle(Color.sub)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 6)], alignment: .leading, spacing: 6) {
                 ForEach(model.freshFeed) { item in
-                    Text("№\(item.number) · \(chipTokenLabel(uid: item.uid))")
+                    Text(.memberProvisioningFeedItem(String(item.number), chipTokenLabel(uid: item.uid)))
                         .font(.mono(12, weight: .semibold))
                         .foregroundStyle(Color.good)
                         .lineLimit(1)

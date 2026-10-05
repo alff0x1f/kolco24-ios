@@ -180,7 +180,8 @@ server 200.
   `waitUntilStopped()` (see `MemberProvisioningModel.resumeScanning`).
 - **Localization** (`docs/plans/completed/20261005-english-localization.md`): semantic keys
   `<screen>.<element>[.<state>]`, letters only (the symbol generator uppercases after a digit); every key
-  `extractionState: manual` with ru + en (`SWIFT_EMIT_LOC_STRINGS = NO` — nothing is auto-extracted). Use the
+  `extractionState: manual` with ru + en (`SWIFT_EMIT_LOC_STRINGS = NO`, but the Xcode IDE indexer still syncs
+  literal `Text("…")` into the catalog → numbers/separators go through `Text(verbatim:)`). Use the
   generated symbols: `Text(.key)`, `String(localized: .key)`. Plurals are whole phrases with `%lld`. `%lld` is
   locale-grouped (ru «1 500») → ids/numbers-as-labels go as `%@` + `String(n)`. No `LocalizedStringResource`
   overload on iOS 18 for `TextField`/`SecureField` (→ `String(localized:)`) or `accessibilityLabel`

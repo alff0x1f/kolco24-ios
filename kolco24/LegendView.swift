@@ -177,7 +177,7 @@ private struct ScoreStripView: View {
         VStack(spacing: 8) {
             HStack(alignment: .lastTextBaseline) {
                 HStack(alignment: .lastTextBaseline, spacing: 4) {
-                    Text("\(takenScore)")
+                    Text(verbatim: "\(takenScore)")
                         .font(.mono(20, weight: .bold))
                         .foregroundStyle(Color.ink)
                     Text(verbatim: "/ " + String(localized: .commonPointsCount(totalScore)))
@@ -316,7 +316,7 @@ private struct CPFilterPicker: View {
                 Text(option.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.ink)
-                Text("\(count)")
+                Text(verbatim: "\(count)")
                     .font(.mono(11, weight: .bold))
                     .foregroundStyle(filter == option ? Color.sub : Color.sub.opacity(0.5))
             }

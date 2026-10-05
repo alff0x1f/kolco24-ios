@@ -105,7 +105,7 @@ private struct ReceiptRow: View {
                 }
             }
             Spacer()
-            Text("\(line.uploaded)/\(line.total)")
+            Text(verbatim: "\(line.uploaded)/\(line.total)")
                 .font(.mono(14, weight: .semibold))
                 .foregroundStyle(line.isError ? Color.brandRed : Color.sub)
                 .monospacedDigit()

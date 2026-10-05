@@ -719,7 +719,7 @@ private struct ReadinessCard: View {
                     .textCase(.uppercase)
                     .tracking(1.3)
                 Spacer(minLength: 8)
-                Text("\(summary.done) / \(summary.total)")
+                Text(verbatim: "\(summary.done) / \(summary.total)")
                     .font(.mono(10, weight: .bold))
                     .foregroundStyle(Color.sub)
             }
@@ -1005,7 +1005,7 @@ private struct PhotoTileView: View {
         .overlay(alignment: .bottomLeading) {
             // Первый кадр — это фон тайла, поэтому счётчик показывает лишь СКРЫТЫЙ остаток («+N-1»).
             if tile.photoCount > 1 {
-                Text("+\(tile.photoCount - 1)")
+                Text(verbatim: "+\(tile.photoCount - 1)")
                     .font(.mono(10, weight: .medium))
                     .foregroundStyle(.white.opacity(0.82))
                     .padding(.leading, 8)

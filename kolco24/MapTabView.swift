@@ -174,7 +174,7 @@ struct MapTabView: View {
                 Text(.mapAllPoints)
                     .font(.system(size: 13, weight: .semibold))
                 if hiddenCount > 0 {
-                    Text("· +\(hiddenCount)")
+                    Text(verbatim: "· +\(hiddenCount)")
                         .font(.mono(12, weight: .semibold))
                 }
             }
@@ -312,7 +312,7 @@ struct MapTabView: View {
                     .foregroundStyle(Color.ink)
                 ProgressView(value: clamped)
                     .tint(Color.kolcoOrange)
-                Text("\(Int(clamped * 100))%")
+                Text(verbatim: "\(Int(clamped * 100))%")
                     .font(.mono(12, weight: .semibold))
                     .foregroundStyle(Color.sub)
             }

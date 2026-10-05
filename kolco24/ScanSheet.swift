@@ -101,7 +101,7 @@ struct ScanSheet: View {
                         .foregroundStyle(Color.sub)
                         .textCase(.uppercase)
                     Spacer()
-                    Text("\(scannedCount) / \(roster.count)")
+                    Text(verbatim: "\(scannedCount) / \(roster.count)")
                         .font(.mono(13, weight: .bold))
                         .foregroundStyle(scannedCount == roster.count && !roster.isEmpty ? Color.good : Color.ink)
                 }
@@ -463,7 +463,7 @@ private struct TimerHeroView: View {
                     .rotationEffect(.degrees(-90))
                     .shadow(color: Color.amber.opacity(0.5), radius: 6)
                 VStack(spacing: 2) {
-                    Text("\(seconds)")
+                    Text(verbatim: "\(seconds)")
                         .font(.mono(26, weight: .bold))
                         .foregroundStyle(.white)
                     Text(.scanTimerSecondsUnit)

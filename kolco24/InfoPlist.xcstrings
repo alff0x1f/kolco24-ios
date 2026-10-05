@@ -1,6 +1,24 @@
 {
   "sourceLanguage" : "ru",
   "strings" : {
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kolco24"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kolco24"
+          }
+        }
+      }
+    },
     "NFCReaderUsageDescription" : {
       "extractionState" : "manual",
       "localizations" : {

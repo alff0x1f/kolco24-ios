@@ -111,7 +111,7 @@ struct PhotoLightboxView: View {
                 }
                 Spacer()
                 if photos.count > 1 {
-                    Text("\(index + 1)/\(photos.count)")
+                    Text(verbatim: "\(index + 1)/\(photos.count)")
                         .font(.mono(15, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.top, 6)
