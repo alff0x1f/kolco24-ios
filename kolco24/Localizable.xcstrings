@@ -18,6 +18,110 @@
         }
       }
     },
+    "common.duration.hoursMinutes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld ч %2$@ мин"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld h %2$@ min"
+          }
+        }
+      },
+      "comment" : "hours, zero-padded minutes «05»"
+    },
+    "common.duration.minutes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld мин"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld min"
+          }
+        }
+      }
+    },
+    "controlTime.label.finished" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Время"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time"
+          }
+        }
+      }
+    },
+    "controlTime.label.limit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "КВ"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time limit"
+          }
+        }
+      }
+    },
+    "controlTime.label.overtime" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Опоздание"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Late"
+          }
+        }
+      }
+    },
+    "controlTime.label.remaining" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "До КВ"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time left"
+          }
+        }
+      },
+      "comment" : "time left until the control time (КВ) runs out"
+    },
     "readiness.chips.bound.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -623,13 +727,13 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ошибка сервера (%lld)"
+            "value" : "Ошибка сервера (%@)"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Server error (%lld)"
+            "value" : "Server error (%@)"
           }
         }
       },

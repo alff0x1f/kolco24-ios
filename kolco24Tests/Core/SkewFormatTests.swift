@@ -45,4 +45,10 @@ struct SkewFormatTests {
         #expect(!result.hasPrefix("-"))
         #expect(!result.hasPrefix("−"))
     }
+
+    @Test func largeSkewIsGroupedByLocale() {
+        // %lld в каталоге форматируется по локали: 1500 → «1 500» (неразрывный пробел).
+        #expect(formatSkewMinutes(90_000_000).filter(\.isNumber) == "1500")
+        #expect(formatSkewMinutes(90_000_000) != "1500 мин")
+    }
 }

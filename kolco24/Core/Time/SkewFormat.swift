@@ -20,5 +20,5 @@ import Foundation
 /// Kotlin `Math.round` (half-up), что фиксирует кейс `roundsHalfUp`.
 func formatSkewMinutes(_ skewMs: Int64) -> String {
     let minutes = (abs(Double(skewMs)) / 60_000.0).rounded()
-    return "\(Int64(minutes)) мин"
+    return String(localized: .commonDurationMinutes(Int(minutes)))
 }

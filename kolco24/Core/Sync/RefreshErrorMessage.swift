@@ -22,6 +22,6 @@ func refreshErrorMessage(_ result: RefreshResult) -> String? {
     case .forbidden:
         return String(localized: .refreshErrorForbidden)
     case .httpError(let code):
-        return String(localized: .refreshErrorHttp(code))
+        return String(localized: .refreshErrorHttp(String(code)))
     }
 }

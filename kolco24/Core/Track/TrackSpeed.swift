@@ -180,8 +180,8 @@ private func trackStops(runs: [SpeedRun]) -> [TrackStop] {
 /// «3 мин», «59 мин», «1 ч 05 мин» — минуты вниз.
 func formatStopDuration(ms: Int64) -> String {
     let minutes = ms / 60_000
-    guard minutes >= 60 else { return "\(minutes) мин" }
-    return "\(minutes / 60) ч " + String(format: "%02d мин", minutes % 60)
+    guard minutes >= 60 else { return String(localized: .commonDurationMinutes(Int(minutes))) }
+    return String(localized: .commonDurationHoursMinutes(Int(minutes / 60), String(format: "%02d", minutes % 60)))
 }
 
 /// Раскраска трека: раны штрихов и стоянки (штрихи считаются один раз).

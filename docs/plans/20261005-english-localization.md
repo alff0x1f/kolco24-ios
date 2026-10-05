@@ -121,7 +121,8 @@
   `func en(_ r: LocalizedStringResource) -> String` + `ru(_:)` (set `r.locale`; verified in Task 1).
 - Catalog test reads compiled `ru.lproj`/`en.lproj` `Localizable.strings` + `.stringsdict` from
   `Bundle.main` and compares key sets.
-- Key pattern: `^[a-z]+(\.[a-zA-Z0-9]+)+$`.
+- Key pattern: `^[a-z][a-zA-Z0-9]*(\.[a-zA-Z0-9]+)+$` (first segment may be lowerCamel: `controlTime.*`).
+- ⚠️ `%lld` is formatted with the locale: ru 1500 → «1 500» (grouping). Fine for counts; identifiers (team/bib/chip numbers, codes, years) go as `%@` with `String(n)`.
 - Byte sizes: replace the hand-made units/decimal comma in `SettingsModel` with
   `ByteCountFormatter`/`.formatted(.byteCount(style: .file))` (locale-aware), or keep the hand-made one with
   keyed units — pick in Task 6 based on how tests pin today's output.
@@ -192,10 +193,10 @@
   `kolco24/Core/Time/SkewFormat.swift`
 - Modify: `kolco24/Localizable.xcstrings`, matching tests
 
-- [ ] classify every Cyrillic literal: UI text vs log/stored value
-- [ ] move UI text to `controlTime.*`, `track.speed.*`, `clock.skew.*` keys (`Int64` → `Int` where needed)
-- [ ] existing Russian tests green; add en symbol assertions (1–2 per file)
-- [ ] run tests - must pass before next task
+- [x] classify every Cyrillic literal: UI text vs log/stored value
+- [x] move UI text to `controlTime.*`, `track.speed.*`, `clock.skew.*` keys (`Int64` → `Int` where needed)
+- [x] existing Russian tests green; add en symbol assertions (1–2 per file)
+- [x] run tests - must pass before next task
 
 ### Task 5: Scan, team picker, provisioning, admin, chip logic
 

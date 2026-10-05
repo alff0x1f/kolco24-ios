@@ -217,4 +217,9 @@ struct ControlTimeTests {
         #expect(controlTimeSeconds(.overtime(overMs: 0)) == 0)
         #expect(controlTimeSeconds(.overtime(overMs: 12 * Self.min + 45_500)) == 45)
     }
+
+    @Test func englishLabels() {
+        #expect(en(.controlTimeLabelRemaining) == "Time left")
+        #expect(en(.controlTimeLabelOvertime) == "Late")
+    }
 }

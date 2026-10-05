@@ -36,6 +36,6 @@ struct RefreshErrorMessageTests {
 
     @Test func englishTexts() {
         #expect(en(.refreshErrorOffline) == "No connection — couldn't refresh")
-        #expect(en(.refreshErrorHttp(500)) == "Server error (500)")
+        #expect(en(.refreshErrorHttp("500")) == "Server error (500)")
     }
 }
