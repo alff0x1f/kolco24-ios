@@ -39,13 +39,13 @@ func adminErrorMessage(_ outcome: LoginOutcome) -> String? {
         return nil
     // Намеренно неоднозначно: никогда не раскрываем, email или пароль был неверным.
     case .invalidCredentials:
-        return "Неверный email или пароль"
+        return String(localized: .adminLoginErrorInvalidCredentials)
     case .rateLimited:
-        return "Слишком много попыток входа. Попробуйте позже"
+        return String(localized: .adminLoginErrorRateLimited)
     case .offline:
-        return "Нет соединения с сервером"
+        return String(localized: .adminLoginErrorOffline)
     case .error:
-        return "Не удалось войти. Попробуйте ещё раз"
+        return String(localized: .adminLoginErrorOther)
     }
 }
 
@@ -68,8 +68,8 @@ struct AdminBindRoute {
 /// Inline-ошибка тапа провижининга, когда на выбранном сервере нет входа.
 func adminNoSessionMessage(_ server: AdminServer) -> String {
     switch server {
-    case .cloud: "Нет входа на cloud-сервер"
-    case .lan: "Нет входа на LAN-сервер"
+    case .cloud: String(localized: .adminNoSessionCloud)
+    case .lan: String(localized: .adminNoSessionLan)
     }
 }
 
@@ -89,11 +89,11 @@ func adminRowSubtitle(cloud: AdminSession, local: AdminSession) -> String {
     case let (.loggedIn(email, _, _, _), .loggedIn):
         return email
     case let (.loggedIn(email, _, _, _), .loggedOut):
-        return "\(email) · только Cloud"
+        return String(localized: .adminRowCloudOnly(email))
     case let (.loggedOut, .loggedIn(email, _, _, _)):
-        return "\(email) · только LAN"
+        return String(localized: .adminRowLanOnly(email))
     case (.loggedOut, .loggedOut):
-        return "Войти"
+        return String(localized: .adminRowSignIn)
     }
 }
 

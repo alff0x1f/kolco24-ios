@@ -138,7 +138,7 @@ func chipCodeFromHex(_ hex: String) throws -> Data {
 /// — байт 6 (`0x0F` = NTAG213, `0x11` = NTAG215, `0x13` = NTAG216). Короткий/пустой
 /// ответ → "неизвестно". Чистая — никогда не бросает.
 func chipModelFromVersion(_ resp: Data) -> String {
-    if resp.count < 8 { return "неизвестно" }
+    if resp.count < 8 { return String(localized: .chipModelUnknown) }
     let bytes = [UInt8](resp)
     let productType = Int(bytes[2])
     let storageSize = Int(bytes[6])
@@ -148,12 +148,12 @@ func chipModelFromVersion(_ resp: Data) -> String {
         case 0x0F: return "NTAG213"
         case 0x11: return "NTAG215"
         case 0x13: return "NTAG216"
-        default: return "NTAG (неизвестно)"
+        default: return String(localized: .chipModelNtagUnknown)
         }
     case 0x03:
         return "MIFARE Ultralight"
     default:
-        return "неизвестно"
+        return String(localized: .chipModelUnknown)
     }
 }
 
@@ -240,7 +240,7 @@ private func writePage(_ t: NfcTransport, page: Int, src: Data, from: Int) throw
     ])
     let response = [UInt8](try t.transceive(frame))
     if response.isEmpty || response[0] != ACK {
-        return .failed(message: "Метка отклонила запись страницы \(page)")
+        return .failed(message: String(localized: .chipWritePageRejected(String(page))))
     }
     return nil
 }
@@ -281,7 +281,7 @@ func writeRecord(_ t: NfcTransport, record: Data) -> ChipWriteResult {
             readRecordPages(t).flatMap { parseChipRecord(pages: $0, type: recordType) }
         }
         if readBack == nil || readBack != expected {
-            return .failed(message: "Чтение после записи не совпало")
+            return .failed(message: String(localized: .chipWriteVerifyMismatch))
         }
         return .success
     } catch {
@@ -289,7 +289,7 @@ func writeRecord(_ t: NfcTransport, record: Data) -> ChipWriteResult {
         // транспортом ошибки (реальный CoreNFC-транспорт этапа 5 бросает `NSError`, чей
         // `localizedDescription` несёт осмысленное сообщение), с тем же русским фолбэком.
         let detail = error.localizedDescription
-        return .failed(message: detail.isEmpty ? "Ошибка записи" : detail)
+        return .failed(message: detail.isEmpty ? String(localized: .chipWriteFailed) : detail)
     }
 }
 

@@ -206,12 +206,12 @@
   `Core/Nfc/ChipRecord.swift`
 - Modify: `kolco24/Localizable.xcstrings`, matching tests
 
-- [ ] classify literals; leave stored/protocol values untouched
-- [ ] move UI text to `scan.*`, `teamPicker.*`, `provisioning.*`, `admin.*`, `chip.*` keys
-- [ ] `TeamPickerLogic:74,80` («Категория X · N человек») becomes one whole-phrase plural key here
-      (`teamPicker.category.members`, `%@` + `%lld`)
-- [ ] existing Russian tests green; add en symbol assertions per area (incl. the plural phrase)
-- [ ] run tests - must pass before next task
+- [x] classify literals; leave stored/protocol values untouched
+- [x] move UI text to `scan.*`, `teamPicker.*`, `provisioning.*`, `admin.*`, `chip.*` keys
+- [x] `TeamPickerLogic:74,80` («Категория X · N человек»): plural `teamPicker.people` + `teamPicker.categoryPeople`
+      (`%1$@ · %2$@`); `peopleWord` removed, its tests now check the plural key
+- [x] existing Russian tests green; add en symbol assertions per area (incl. the plural phrase)
+- [x] run tests - must pass before next task
 
 ### Task 6: App models and platform adapters
 

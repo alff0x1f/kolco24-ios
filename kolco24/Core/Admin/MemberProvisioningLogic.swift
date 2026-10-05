@@ -47,8 +47,8 @@ enum MemberProvisionState: Equatable {
 /// Остальное (включая неожиданный `.success`) делегируется `provisionErrorMessage`.
 func memberProvisionErrorMessage<T>(_ result: PostResult<T>) -> String {
     switch result {
-    case .conflict: return "Браслет уже привязан к другому участнику"
-    case .error(let code) where code == 404: return "Не найдено на сервере"
+    case .conflict: return String(localized: .memberProvisioningErrorConflict)
+    case .error(let code) where code == 404: return String(localized: .memberProvisioningErrorNotFound)
     default: return provisionErrorMessage(result)
     }
 }
@@ -57,12 +57,12 @@ func memberProvisionErrorMessage<T>(_ result: PostResult<T>) -> String {
 /// дублироваться в ней). [hint] — текущая подсказка тапа 2 (`nil` → «Приложите браслет ещё раз»). Чистая.
 func memberProvisionStatusLine(_ state: MemberProvisionState, hint: String?) -> String {
     switch state {
-    case .waitingForChip: return "Приложите браслет участника"
-    case .needsNumber: return "Введите номер участника"
-    case .binding: return "Привязка на сервере…"
-    case let .waitingForWrite(_, number): return "\(hint ?? ProvisionMessage.memberWriteAgainHint) (№\(number))"
-    case let .success(number): return "Записано: №\(number)"
-    case let .failed(reason): return "Ошибка: \(reason)"
+    case .waitingForChip: return String(localized: .memberProvisioningStatusTapWristband)
+    case .needsNumber: return String(localized: .memberProvisioningStatusEnterNumber)
+    case .binding: return String(localized: .commonBinding)
+    case let .waitingForWrite(_, number): return String(localized: .memberProvisioningStatusWaitingWrite(hint ?? ProvisionMessage.memberWriteAgainHint, String(number)))
+    case let .success(number): return String(localized: .memberProvisioningStatusWritten(String(number)))
+    case let .failed(reason): return String(localized: .commonErrorPrefixed(reason))
     }
 }
 

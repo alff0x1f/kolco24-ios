@@ -70,4 +70,10 @@ struct ProvisioningLogicTests {
         #expect(kpProvisionStatusLine(.success(number: 7), number: 7, hint: nil) == "Записано: КП 07")
         #expect(kpProvisionStatusLine(.failed(reason: "Нет сети"), number: 7, hint: nil) == "Ошибка: Нет сети")
     }
+
+    @Test func englishTexts() {
+        #expect(en(.commonCpNumber("07")) == "CP 07")
+        #expect(en(.provisioningStatusWritten("07")) == "Written: CP 07")
+        #expect(en(.provisioningErrorConflict) == "This tag is already bound to another CP")
+    }
 }

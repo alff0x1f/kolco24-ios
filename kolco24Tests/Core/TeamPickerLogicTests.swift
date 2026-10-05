@@ -237,28 +237,26 @@ struct TeamPickerLogicTests {
         #expect(initials("   ") == "")
     }
 
-    // --- peopleWord ---
+    // --- teamPicker.people (плюрал в каталоге) ---
 
-    @Test func peopleWordSingular() {
-        #expect(peopleWord(1) == "человек")
-        #expect(peopleWord(21) == "человек")
+    @Test func peopleSingular() {
+        #expect(ru(.teamPickerPeople(1)) == "1 человек")
+        #expect(ru(.teamPickerPeople(21)) == "21 человек")
     }
 
-    @Test func peopleWordFewForm() {
-        #expect(peopleWord(2) == "человека")
-        #expect(peopleWord(3) == "человека")
-        #expect(peopleWord(4) == "человека")
-        #expect(peopleWord(22) == "человека")
-        #expect(peopleWord(24) == "человека")
+    @Test func peopleFewForm() {
+        for n in [2, 3, 4, 22, 24] { #expect(ru(.teamPickerPeople(n)) == "\(n) человека") }
     }
 
-    @Test func peopleWordManyForm() {
-        #expect(peopleWord(5) == "человек")
-        #expect(peopleWord(11) == "человек")
-        #expect(peopleWord(12) == "человек")
-        #expect(peopleWord(14) == "человек")
-        #expect(peopleWord(20) == "человек")
-        #expect(peopleWord(100) == "человек")
+    @Test func peopleManyForm() {
+        for n in [5, 11, 12, 14, 20, 100] { #expect(ru(.teamPickerPeople(n)) == "\(n) человек") }
+    }
+
+    @Test func peopleEnglish() {
+        #expect(en(.teamPickerPeople(1)) == "1 person")
+        #expect(en(.teamPickerPeople(3)) == "3 people")
+        #expect(en(.teamPickerCategoryPeople("A", "3 people")) == "Category A · 3 people")
+        #expect(en(.teamPickerTeamId("42")) == "Team #42")
     }
 
     // --- peopleLine ---
