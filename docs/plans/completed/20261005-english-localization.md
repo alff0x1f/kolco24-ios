@@ -318,20 +318,23 @@
 - [x] run tests - must pass before next task
 
 ### Task 13: Verify acceptance criteria
-- [ ] every user-visible string is in the catalog with ru + en (catalog test + Cyrillic test)
-- [ ] permission prompts are English on an en simulator
-- [ ] ru UI unchanged (Russian test suite green)
-- [ ] ⚠️ check on a kk (or uk) simulator which language the app picks; report to the user and record the
+- [x] every user-visible string is in the catalog with ru + en (catalog test + Cyrillic test)
+- [x] permission prompts are English on an en simulator
+- [x] ru UI unchanged (Russian test suite green)
+- [x] check on a kk (or uk) simulator which language the app picks; report to the user and record the
       decision here (accept English, or mitigate)
-- [ ] run full test suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
+      Probe on iOS 18 simulator (`Bundle.preferredLocalizations`): kk/uk/be/de alone → `en`; `kk, ru` → `ru`.
+      **Decision (user, 2026-10-05): accepted** — CIS devices nearly always list ru; the «Язык» row leads to the switch.
+- [x] run full test suite: `xcodebuild test -project kolco24.xcodeproj -scheme kolco24 -destination 'platform=iOS Simulator,name=iPhone 16'`
+      (1581 passed incl. UI tests; no new warnings)
 
 ### Task 14: [Final] Update documentation
-- [ ] CLAUDE.md: Hard invariants — no Cyrillic UI literals (`CyrillicLiteralTests`); idioms — semantic keys +
+- [x] CLAUDE.md: Hard invariants — no Cyrillic UI literals (`CyrillicLiteralTests`); idioms — semantic keys +
       generated symbols, `extractionState: manual`, extraction off, plural keys are whole phrases, tests run in
       ru via the shared scheme (`-testLanguage ru -testRegion RU` as CLI fallback)
-- [ ] `docs/release.md`: review Notes mention the English UI follows the device language; do not promise
+- [x] ⚠️ moved to Post-Completion — `docs/release.md`: review Notes mention the English UI follows the device language; do not promise
       in-app switching
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
@@ -340,6 +343,10 @@
 - run on device/simulator in ru and en; walk the reviewer path from `docs/release.md` (demo race, photo punch,
   legend, map, organizer login); check text truncation on tiles and buttons in en
 - «Язык» row → iOS Settings: language page appears only with 2+ preferred device languages
+
+**Docs on another branch**:
+- `docs/release.md` review Notes (they live on `docs/release-checklist`, not on `main`): mention that the UI is
+  English on an English device; do not promise in-app language switching.
 
 **External system updates**:
 - App Store Connect: optional English metadata localization (description, keywords)
