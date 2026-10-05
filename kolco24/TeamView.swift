@@ -123,6 +123,7 @@ struct TeamView: View {
     private func teamContent(_ team: Team) -> some View {
         let members = team.members.sorted { $0.numberInTeam < $1.numberInTeam }
         let bound = model?.boundCount(members: members) ?? 0
+        let allBound = model?.allBound(members: members, total: team.ucount) ?? false
         let category = model?.category(for: team)
 
         return ScrollView {
@@ -160,12 +161,14 @@ struct TeamView: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
                 .padding(.horizontal, DS.hPad)
 
-                Text(.teamRosterBindHint)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.sub)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, DS.hPad + 4)
-                    .padding(.top, 8)
+                if !allBound {
+                    Text(.teamRosterBindHint)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.sub)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, DS.hPad + 4)
+                        .padding(.top, 8)
+                }
 
                 if let model {
                     TrackCardView(
