@@ -34,7 +34,7 @@ struct BindChipSheet: View {
                 .padding(.top, 8)
                 .padding(.bottom, 20)
 
-            Text("ПРИВЯЗАТЬ ЧИП")
+            Text(.bindChipTitle)
                 .font(.mono(10, weight: .bold))
                 .foregroundStyle(Color.sub)
                 .tracking(1.2)
@@ -51,7 +51,7 @@ struct BindChipSheet: View {
 
             Spacer(minLength: 24)
 
-            Button(isSuccess ? "Готово" : "Отмена") { dismiss() }
+            Button(isSuccess ? .commonDone : .commonCancel) { dismiss() }
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.ink)
                 .frame(maxWidth: .infinity)
@@ -77,26 +77,26 @@ struct BindChipSheet: View {
         switch model.bindState {
         case .waiting:
             iconBadge(system: "wave.3.right", tint: Color.kolcoOrange)
-            statusTitle("Поднесите чип к телефону")
-            statusBody("Браслет участника нужно поднести к задней панели телефона.")
+            statusTitle(String(localized: .bindChipHoldChipTitle))
+            statusBody(String(localized: .bindChipHoldChipBody))
         case .poolNotReady:
             ZStack {
                 Circle().fill(Color.cardElevated).frame(width: 72, height: 72)
                 ProgressView().tint(Color.kolcoOrange)
             }
-            statusTitle("Загружаем список участников")
-            statusBody("Данные ещё не загружены. Поднесите чип снова через несколько секунд.")
+            statusTitle(String(localized: .bindChipLoadingTitle))
+            statusBody(String(localized: .bindChipLoadingBody))
         case let .notInPool(uid):
             iconBadge(system: "exclamationmark.triangle.fill", tint: Color.brandRed, filled: false)
-            statusTitle("Чип не из этого комплекта")
+            statusTitle(String(localized: .bindChipForeignTitle))
             statusDetail(uid)
-            statusBody("Этот чип не зарегистрирован для гонки. Привязка не сохранена.")
+            statusBody(String(localized: .bindChipForeignBody))
         case let .alreadyBound(uid, participantNumber):
             iconBadge(system: "exclamationmark.triangle.fill", tint: Color.kolcoOrange, filled: false)
-            statusTitle("Чип уже привязан")
+            statusTitle(String(localized: .bindChipTakenTitle))
             statusDetail("№\(participantNumber) · \(uid)")
-            statusBody("Этот чип закреплён за другим участником. Перепривязать его к «\(member.name)»?")
-            Button("Перепривязать") {
+            statusBody(String(localized: .bindChipTakenBody(member.name)))
+            Button(.bindChipRebind) {
                 Task { await model.confirmReassign() }
             }
             .font(.system(size: 16, weight: .semibold))
@@ -108,7 +108,7 @@ struct BindChipSheet: View {
             .padding(.top, 20)
         case let .success(participantNumber):
             iconBadge(system: "checkmark.circle.fill", tint: Color.good, filled: false)
-            statusTitle("Чип привязан")
+            statusTitle(String(localized: .bindChipBoundTitle))
             statusDetail("№\(participantNumber)")
         }
     }

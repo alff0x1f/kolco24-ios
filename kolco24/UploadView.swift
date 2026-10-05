@@ -29,11 +29,11 @@ struct UploadView: View {
                 }
             }
             .background(Color.paper)
-            .navigationTitle("Загрузка данных")
+            .navigationTitle(.uploadTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { dismiss() }
+                    Button(.commonDone) { dismiss() }
                 }
             }
         }
@@ -43,9 +43,9 @@ struct UploadView: View {
         List {
             // Карточка «Интернет» — всегда; «Финиш (LAN)» — только когда LAN отчитался хоть по одному
             // скоупу (иначе обычное «всё на сайте, на финише пусто» читается одной карточкой).
-            targetSection("Интернет", lines: model.internetLines)
+            targetSection(String(localized: .uploadTargetInternet), lines: model.internetLines)
             if !model.finishLines.isEmpty {
-                targetSection("Финиш (LAN)", lines: model.finishLines)
+                targetSection(String(localized: .uploadTargetFinishLan), lines: model.finishLines)
             }
         }
         .listStyle(.insetGrouped)
@@ -70,10 +70,10 @@ struct UploadView: View {
             Image(systemName: "icloud.and.arrow.up")
                 .font(.system(size: 44))
                 .foregroundStyle(Color.sub)
-            Text("Пока нечего загружать")
+            Text(.uploadPendingNothing)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color.ink)
-            Text("Здесь появится статус загрузки отметок после сканирования КП.")
+            Text(.uploadEmptyHint)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.sub)
                 .multilineTextAlignment(.center)

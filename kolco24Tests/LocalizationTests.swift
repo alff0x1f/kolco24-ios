@@ -88,4 +88,11 @@ struct LocalizationTests {
         #expect(en(.scanTimerRemainingChips(1)) == "1 chip left")
         #expect(en(.checkChipOthersOnCp(2)) == "2 more chips on this CP")
     }
+
+    @Test func languageRowNamesActiveLanguage() {
+        // Значение берётся из каталога, поэтому само называет язык, на котором показано приложение.
+        #expect(ru(.settingsLanguageCurrent) == "Русский")
+        #expect(en(.settingsLanguageCurrent) == "English")
+        #expect(String(localized: .settingsLanguageCurrent) == "Русский")
+    }
 }

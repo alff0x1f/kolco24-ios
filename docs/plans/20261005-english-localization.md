@@ -286,11 +286,12 @@
   `TeamConfirmSheet.swift`, `CompPickerView.swift`, `BindChipSheet.swift`
 - Modify: `kolco24/Localizable.xcstrings`, `kolco24Tests/LocalizationTests.swift`
 
-- [ ] convert literals
-- [ ] add the «Язык» row: title `settings.language`, value `settings.language.current`, footer
+- [x] convert literals
+- [x] add the «Язык» row: title `settings.language`, value `settings.language.current`, footer
       `settings.language.footer` (chosen in iOS Settings); tap opens `app-settings:` via `openURL`
-- [ ] test: `settings.language.current` → «Русский» in ru, "English" in en
-- [ ] build + run tests - must pass before next task
+- [x] test: `settings.language.current` → «Русский» in ru, "English" in en
+- [x] ➕ `monthDay` month abbreviations → `compPicker.month.*`; GPX track name fallback uses `teamPicker.teamNumber`
+- [x] build + run tests - must pass before next task
 
 ### Task 11: Views — admin flows
 

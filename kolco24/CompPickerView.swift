@@ -87,7 +87,7 @@ struct CompPickerView: View {
                     .padding(.horizontal, DS.hPad)
                 }
 
-                Text("Выберите соревнование — откроется список его команд.")
+                Text(.compPickerHint)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.sub)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -97,11 +97,11 @@ struct CompPickerView: View {
             }
         }
         .background(Color.paper)
-        .navigationTitle("Соревнование")
+        .navigationTitle(.compPickerTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Закрыть") { onClose() }
+                Button(.commonClose) { onClose() }
             }
         }
         .refreshable { await model.openedCompPicker() }
@@ -111,11 +111,11 @@ struct CompPickerView: View {
     private var filterChips: some View {
         HStack(spacing: 8) {
             CompFilterChip(
-                label: "Актуальные · \(model.split.current.count)",
+                label: String(localized: .compPickerFilterCurrent(model.split.current.count)),
                 selected: !showArchive
             ) { showArchive = false }
             CompFilterChip(
-                label: "Архив · \(model.split.archive.count)",
+                label: String(localized: .compPickerFilterArchive(model.split.archive.count)),
                 selected: showArchive
             ) { showArchive = true }
             Spacer(minLength: 0)
@@ -123,7 +123,7 @@ struct CompPickerView: View {
     }
 
     private var emptyCard: some View {
-        Text("Здесь пока пусто")
+        Text(.compPickerEmpty)
             .font(.system(size: 15))
             .foregroundStyle(Color.sub)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -178,7 +178,7 @@ private struct CompRowView: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Color.ink)
                         .lineLimit(1)
-                    if isCurrent { CurrentBadge(text: "ТЕКУЩЕЕ") }
+                    if isCurrent { CurrentBadge(text: String(localized: .compPickerCurrentBadge)) }
                 }
                 HStack(spacing: 7) {
                     RaceStatusPillView(pill: raceStatusPill(race, today: today))
@@ -260,12 +260,15 @@ struct CurrentBadge: View {
 /// `YYYY-MM-DD` → (русский месяц-аббревиатура, день без ведущего нуля). Строковым срезом, как в
 /// Android (`monthDay`). Некорректный ввод деградирует безопасно.
 func monthDay(_ date: String) -> (month: String, day: String) {
-    let months = ["ЯНВ", "ФЕВ", "МАР", "АПР", "МАЙ", "ИЮН",
-                  "ИЮЛ", "АВГ", "СЕН", "ОКТ", "НОЯ", "ДЕК"]
+    let months: [LocalizedStringResource] = [
+        .compPickerMonthJan, .compPickerMonthFeb, .compPickerMonthMar, .compPickerMonthApr,
+        .compPickerMonthMay, .compPickerMonthJun, .compPickerMonthJul, .compPickerMonthAug,
+        .compPickerMonthSep, .compPickerMonthOct, .compPickerMonthNov, .compPickerMonthDec,
+    ]
     let parts = date.split(separator: "-", omittingEmptySubsequences: false)
     let monthNum = parts.count > 1 ? Int(parts[1]) : nil
     let dayRaw = parts.count > 2 ? String(parts[2]) : ""
     let day = dayRaw.drop { $0 == "0" }
-    let abbr = monthNum.flatMap { (1...12).contains($0) ? months[$0 - 1] : nil } ?? ""
+    let abbr = monthNum.flatMap { (1...12).contains($0) ? String(localized: months[$0 - 1]) : nil } ?? ""
     return (abbr, day.isEmpty ? "0" : String(day))
 }

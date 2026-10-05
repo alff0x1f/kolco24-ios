@@ -50,7 +50,7 @@ struct TeamConfirmSheet: View {
             Button(action: onConfirm) {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark").font(.system(size: 15, weight: .bold))
-                    Text("Выбрать команду").font(.system(size: 16, weight: .semibold))
+                    Text(.commonChooseTeam).font(.system(size: 16, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
@@ -59,7 +59,7 @@ struct TeamConfirmSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.ctaRadius))
             }
 
-            Button("Отмена", action: onCancel)
+            Button(.commonCancel, action: onCancel)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(Color.ink)
                 .frame(maxWidth: .infinity)
