@@ -211,7 +211,7 @@ final class MapModel {
 
     /// Кнопка «Моё местоположение» нажата, а GPS-фикса ещё нет.
     func reportNoLocationFix() {
-        onToast("Местоположение ещё не определено")
+        onToast(String(localized: .mapToastLocationUnknown))
     }
 
     // MARK: - Действия скачивания
@@ -248,7 +248,7 @@ final class MapModel {
                 // состояние оставляем отменившему (`cancelDownload` → `notDownloaded`, `rebind` — сброс).
                 if Task.isCancelled { return }
                 guard let self, self.boundRaceId == raceId else { return }
-                let message = "Не удалось скачать карту гонки"
+                let message = String(localized: .mapDownloadFailed)
                 self.availability = .failed(message: message)
                 self.onToast(message)
             }

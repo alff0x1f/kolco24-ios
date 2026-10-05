@@ -187,12 +187,12 @@ func classifyTag(
         case let .failed(reason):
             return .badKp(reason: reason)
         case .unknown:
-            return .badKp(reason: "неизвестный чип")
+            return .badKp(reason: String(localized: .scanBadKpUnknownChip))
         case nil:
-            return .badKp(reason: "не удалось расшифровать")
+            return .badKp(reason: String(localized: .scanBadKpDecryptFailed))
         }
         guard let cp = checkpointsById[checkpointId], let cost = cp.cost else {
-            return .badKp(reason: "легенда не загружена")
+            return .badKp(reason: String(localized: .scanBadKpNoLegend))
         }
         return .kp(
             checkpointId: checkpointId,

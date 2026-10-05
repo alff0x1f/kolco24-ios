@@ -5,8 +5,7 @@
 //  Чистая тестируемая логика экранов выбора гонки/команды. Kotlin-источник:
 //  `ui/teampicker/TeamPickerLogic.kt`. Никакого UIKit/SwiftUI — всё юнит-покрыто.
 //  Даты сравниваются лексикографически как ISO-строки `yyyy-MM-dd`; `today`
-//  всегда приходит строкой. `effectiveEnd` — из `Core/Util/RaceDates.swift`,
-//  `pluralRu` — из `Core/Util/PluralRu.swift`.
+//  всегда приходит строкой. `effectiveEnd` — из `Core/Util/RaceDates.swift`.
 //
 
 import Foundation
@@ -17,12 +16,12 @@ enum RaceStatusPill: String {
     case registration
     case upcoming
 
-    /// Русская подпись пилюли.
+    /// Подпись пилюли.
     var label: String {
         switch self {
-        case .finished: return "Завершено"
-        case .registration: return "Регистрация"
-        case .upcoming: return "Скоро"
+        case .finished: return String(localized: .teamPickerStatusFinished)
+        case .registration: return String(localized: .teamPickerStatusRegistration)
+        case .upcoming: return String(localized: .teamPickerStatusUpcoming)
         }
     }
 }
@@ -70,14 +69,9 @@ func filterTeams(_ teams: [Team], query: String) -> [Team] {
 /// Строка «Категория X · N человек/человека». На герой-карточке и в подтверждении.
 func peopleLine(category: Category?, ucount: Int) -> String {
     let cat = category?.shortName.nonBlank ?? category?.name.nonBlank
-    let word = peopleWord(ucount)
-    if let cat { return "Категория \(cat) · \(ucount) \(word)" }
-    return "\(ucount) \(word)"
-}
-
-/// Русское склонение «человек»: «человека» для 2–4 (не 12–14), иначе «человек».
-func peopleWord(_ n: Int) -> String {
-    pluralRu(count: n, one: "человек", few: "человека", many: "человек")
+    let people = String(localized: .teamPickerPeople(ucount))
+    if let cat { return String(localized: .teamPickerCategoryPeople(cat, people)) }
+    return people
 }
 
 /// Короткий текст токена команды: стартовый номер, если есть, иначе монограмма
@@ -96,9 +90,9 @@ func teamToken(_ team: Team) -> String {
 func displayTeamName(_ team: Team) -> String {
     if !team.teamname.isBlank { return team.teamname }
     if let number = team.startNumber, !number.isBlank {
-        return "Команда \(number)"
+        return String(localized: .teamPickerTeamNumber(number))
     }
-    return "Команда #\(team.id)"
+    return String(localized: .teamPickerTeamId(String(team.id)))
 }
 
 /// Монограмма из `text`: первая буква до `max` слов, в верхнем регистре.

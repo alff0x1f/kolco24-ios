@@ -288,4 +288,13 @@ struct ReadinessChecklistTests {
                                      checkpointsLoading: false, deviceStatePolled: true,
                                      mapUrlResolved: false) == false)
     }
+
+    @Test func englishTexts() {
+        #expect(en(.readinessTeamMissingTitle) == "No team selected")
+        #expect(en(.readinessChipsBoundOfTotal(3, 4)) == "3 of 4")
+        #expect(en(.readinessLegendCpCount(1)) == "1 CP")
+        #expect(en(.readinessLegendCpCount(12)) == "12 CPs")
+        #expect(ru(.readinessLegendCpCount(12)) == "12 КП")
+        #expect(en(.readinessClockSkewedDetail("3 min")) == "Differs from the judges' clock by 3 min")
+    }
 }

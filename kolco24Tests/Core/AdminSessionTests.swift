@@ -159,4 +159,9 @@ struct AdminSessionTests {
         #expect(adminNoSessionMessage(.cloud) == "Нет входа на cloud-сервер")
         #expect(adminNoSessionMessage(.lan) == "Нет входа на LAN-сервер")
     }
+
+    @Test func englishTexts() {
+        #expect(en(.adminLoginErrorInvalidCredentials) == "Wrong email or password")
+        #expect(en(.adminRowLanOnly("a@b.c")) == "a@b.c · LAN only")
+    }
 }

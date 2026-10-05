@@ -30,7 +30,7 @@ struct CheckChipView: View {
             .padding(.bottom, 28)
         }
         .background(Color.paper)
-        .navigationTitle("Проверка чипов КП")
+        .navigationTitle(.checkChipTitle)
         .navigationBarTitleDisplayMode(.inline)
         .task { model.beginScanning() }
         .onDisappear { model.stop() }
@@ -48,14 +48,14 @@ struct CheckChipView: View {
                    bid: bid, checkMethod: checkMethod, chipsOnKp: chipsOnKp)
         case let .noCode(uid):
             messageHero(color: Color.amber, icon: "questionmark.circle.fill",
-                        title: "Чистый чип", uid: uid, diagnostic: "Кода КП не прочитано")
+                        title: String(localized: .checkChipBlank), uid: uid, diagnostic: String(localized: .checkChipBlankDetail))
         case let .unknownChip(uid, bid):
             messageHero(color: Color.brandRed, icon: "xmark.circle.fill",
-                        title: "Неизвестный чип", uid: uid, diagnostic: "bid \(bid) — нет в этой гонке")
+                        title: String(localized: .adminStatusUnknownChip), uid: uid, diagnostic: String(localized: .checkChipUnknownDetail(String(bid))))
         case let .inconsistent(uid, bid, checkpointId):
             messageHero(color: Color.brandRed, icon: "exclamationmark.triangle.fill",
-                        title: "Рассинхрон легенды", uid: uid,
-                        diagnostic: "bid \(bid) → КП id \(checkpointId) отсутствует")
+                        title: String(localized: .checkChipMismatchTitle), uid: uid,
+                        diagnostic: String(localized: .checkChipMismatchDetail(String(bid), String(checkpointId))))
         }
     }
 
@@ -64,10 +64,10 @@ struct CheckChipView: View {
             Image(systemName: "wave.3.right")
                 .font(.system(size: 34, weight: .semibold))
                 .foregroundStyle(Color.sub)
-            Text("Приложите чип КП")
+            Text(.provisioningStatusTapCpChip)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.ink)
-            Text(model.loaded ? "Легенда загружена" : "Загрузка легенды…")
+            Text(model.loaded ? .readinessLegendLoadedTitle : .checkChipLoadingLegend)
                 .font(.system(size: 12))
                 .foregroundStyle(Color.sub)
         }
@@ -87,20 +87,20 @@ struct CheckChipView: View {
                 .fill(barColor(color))
                 .frame(width: 8)
             VStack(spacing: 8) {
-                Text("КП")
+                Text(.commonCp)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.sub)
                 Text(String(format: "%02d", number))
                     .font(.mono(72, weight: .bold))
                     .foregroundStyle(Color.ink)
-                Text(cost.map { "\($0) \(pluralRu(count: $0, one: "балл", few: "балла", many: "баллов"))" } ?? "—")
+                Text(verbatim: cost.map { String(localized: .commonPointsCount($0)) } ?? "—")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color.sub)
 
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 15, weight: .bold))
-                    Text("Привязан корректно")
+                    Text(.checkChipBoundCorrectly)
                         .font(.system(size: 15, weight: .bold))
                 }
                 .foregroundStyle(Color.good)
@@ -111,11 +111,11 @@ struct CheckChipView: View {
 
                 let others = max(chipsOnKp - 1, 0)
                 if others > 0 {
-                    Text("На этом КП ещё \(others) \(pluralRu(count: others, one: "чип", few: "чипа", many: "чипов"))")
+                    Text(.checkChipOthersOnCp(others))
                         .font(.system(size: 12))
                         .foregroundStyle(Color.sub)
                 }
-                Text("\(bid) · \(checkMethod)")
+                Text(verbatim: "\(bid) · \(checkMethod)")
                     .font(.mono(11, weight: .medium))
                     .foregroundStyle(Color.sub)
             }
@@ -168,7 +168,7 @@ struct CheckChipView: View {
 
     private var feedSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader("Недавние · \(model.feed.count)")
+            SectionHeader(String(localized: .adminRecent(model.feed.count)))
             VStack(spacing: 0) {
                 ForEach(Array(model.feed.enumerated()), id: \.element.id) { idx, item in
                     FeedRow(item: item)
@@ -223,13 +223,13 @@ private struct FeedStyle {
 private func feedStyle(_ result: ChipCheckResult) -> FeedStyle {
     switch result {
     case let .ok(_, number, _, _, _, _, _):
-        return FeedStyle(title: "КП \(String(format: "%02d", number))", icon: "checkmark.circle.fill", color: Color.good)
+        return FeedStyle(title: String(localized: .commonCpNumber(String(format: "%02d", number))), icon: "checkmark.circle.fill", color: Color.good)
     case .noCode:
-        return FeedStyle(title: "Чистый чип", icon: "questionmark.circle.fill", color: Color.amber)
+        return FeedStyle(title: String(localized: .checkChipBlank), icon: "questionmark.circle.fill", color: Color.amber)
     case .unknownChip:
-        return FeedStyle(title: "Неизвестный чип", icon: "xmark.circle.fill", color: Color.brandRed)
+        return FeedStyle(title: String(localized: .adminStatusUnknownChip), icon: "xmark.circle.fill", color: Color.brandRed)
     case .inconsistent:
-        return FeedStyle(title: "Рассинхрон", icon: "exclamationmark.triangle.fill", color: Color.brandRed)
+        return FeedStyle(title: String(localized: .checkChipMismatchShort), icon: "exclamationmark.triangle.fill", color: Color.brandRed)
     }
 }
 

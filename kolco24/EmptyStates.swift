@@ -19,14 +19,14 @@ struct TeamEmptyState: View {
     let onChooseTeam: () -> Void
 
     private var title: String {
-        missing ? "Команда больше не зарегистрирована" : "Команда не выбрана"
+        missing ? String(localized: .marksEmptyTeamGoneTitle) : String(localized: .marksEmptyNoTeamTitle)
     }
 
     private var message: String {
         if missing {
-            return "Выбранная команда снялась или удалена из списка. Выберите команду заново, чтобы продолжить отмечаться."
+            return String(localized: .marksEmptyTeamGoneBody)
         }
-        return "Отметки на КП засчитываются по NFC-чипам участников. Выберите команду, чтобы отмечаться на дистанции и видеть общий счёт."
+        return String(localized: .marksEmptyNoTeamBody)
     }
 
     var body: some View {
@@ -54,7 +54,7 @@ struct TeamEmptyState: View {
             Button(action: onChooseTeam) {
                 HStack(spacing: 8) {
                     Image(systemName: "person.3.fill").font(.system(size: 16, weight: .semibold))
-                    Text("Выбрать команду").font(.system(size: 16, weight: .semibold))
+                    Text(.commonChooseTeam).font(.system(size: 16, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)

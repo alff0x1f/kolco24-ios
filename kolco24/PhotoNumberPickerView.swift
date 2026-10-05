@@ -39,11 +39,11 @@ struct PhotoNumberPickerView: View {
             list
         }
         .background(Color.paper)
-        .navigationTitle("Фото КП")
+        .navigationTitle(.photoPickerTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Отмена") { dismiss() }
+                Button(.commonCancel) { dismiss() }
             }
         }
         .task { fieldFocused = true }
@@ -54,10 +54,10 @@ struct PhotoNumberPickerView: View {
     private var numberInput: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("КП")
+                Text(.commonCp)
                     .font(.system(size: 26, weight: .semibold))
                     .foregroundStyle(Color.sub)
-                TextField("", text: digitQuery, prompt: Text("00").foregroundStyle(Color.sub.opacity(0.3)))
+                TextField("", text: digitQuery, prompt: Text(verbatim: "00").foregroundStyle(Color.sub.opacity(0.3)))
                     .keyboardType(.numberPad)
                     .focused($fieldFocused)
                     .font(.mono(58, weight: .bold))
@@ -66,7 +66,7 @@ struct PhotoNumberPickerView: View {
                     .tint(Color.kolcoOrange)
                     .submitLabel(.done)
                     .onSubmit(submit)
-                    .accessibilityLabel("Номер КП")
+                    .accessibilityLabel(Text(.photoPickerNumberField))
                 if !model.query.isEmpty {
                     Button { model.updateQuery("") } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -74,7 +74,7 @@ struct PhotoNumberPickerView: View {
                             .foregroundStyle(Color.sub.opacity(0.5))
                             .frame(width: 44, height: 44)
                     }
-                    .accessibilityLabel("Стереть номер")
+                    .accessibilityLabel(Text(.photoPickerErase))
                 }
             }
 
@@ -103,10 +103,10 @@ struct PhotoNumberPickerView: View {
 
     private var status: String {
         if let error = model.pickerError { return error }
-        if noMatches { return "В легенде нет КП \(model.query)" }
-        if model.query.isEmpty { return "Номер написан на табличке КП" }
-        if exactMatch != nil { return "Нажмите на КП, чтобы открыть камеру" }
-        return "Введите номер полностью или выберите из списка"
+        if noMatches { return String(localized: .photoPickerHintNoMatch(model.query)) }
+        if model.query.isEmpty { return String(localized: .photoPickerHintEmpty) }
+        if exactMatch != nil { return String(localized: .photoPickerHintExact) }
+        return String(localized: .photoPickerHintPartial)
     }
 
     // MARK: - Список
@@ -184,7 +184,7 @@ private struct CheckpointPickRow: View {
             }
             .frame(width: 60, alignment: .leading)
 
-            Text(cp.locked ? (cp.description ?? "Описание скрыто") : (cp.description ?? ""))
+            Text(cp.locked ? (cp.description ?? String(localized: .legendDescriptionHidden)) : (cp.description ?? ""))
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(cp.locked ? Color.sub : Color.ink)
                 .lineLimit(2)
@@ -197,7 +197,7 @@ private struct CheckpointPickRow: View {
         .contentShape(Rectangle())
         .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Открыть камеру")
+        .accessibilityHint(Text(.photoPickerOpenCamera))
     }
 
     @ViewBuilder

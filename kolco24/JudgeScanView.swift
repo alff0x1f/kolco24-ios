@@ -22,7 +22,7 @@ struct JudgeScanView: View {
     var clockStatus: ClockStatus = .ok
 
     private var title: String {
-        model.eventType == "finish" ? "Отметка финиша" : "Отметка старта"
+        model.eventType == "finish" ? String(localized: .judgeTitleFinish) : String(localized: .judgeTitleStart)
     }
 
     var body: some View {
@@ -64,7 +64,7 @@ struct JudgeScanView: View {
                     .font(.mono(52, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(.white)
-                Text("Прикладывайте браслеты участников")
+                Text(.judgeHint)
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.7))
             }
@@ -88,10 +88,10 @@ struct JudgeScanView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.brandRed)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Синхронизируйте гонку")
+                Text(.judgeSyncRace)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.brandRed)
-                Text("Пул браслетов ещё не загружен — отметки не распознаются.")
+                Text(.judgePoolMissing)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.sub)
             }
@@ -140,7 +140,7 @@ struct JudgeScanView: View {
 
     private var feedSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader("Недавние · \(model.feed.count)")
+            SectionHeader(String(localized: .adminRecent(model.feed.count)))
                 .padding(.bottom, 0)
             VStack(spacing: 0) {
                 ForEach(Array(model.feed.enumerated()), id: \.element.id) { idx, item in
@@ -172,13 +172,13 @@ private struct StatusStyle {
 private func statusStyle(_ result: JudgeScanResult?) -> StatusStyle {
     switch result {
     case nil, .poolNotReady:
-        return StatusStyle(title: "Ожидание", subtitle: "Приложите браслет", icon: "wave.3.right", color: Color.sub)
+        return StatusStyle(title: String(localized: .adminStatusWaiting), subtitle: String(localized: .adminStatusHoldWristband), icon: "wave.3.right", color: Color.sub)
     case let .recorded(_, number):
-        return StatusStyle(title: "№\(number)", subtitle: "Отметка записана", icon: "checkmark.circle.fill", color: Color.good)
+        return StatusStyle(title: String(localized: .adminStatusParticipantNumber(String(number))), subtitle: String(localized: .judgeStatusRecorded), icon: "checkmark.circle.fill", color: Color.good)
     case .kpChip:
-        return StatusStyle(title: "Это чип КП", subtitle: "Приложите браслет участника", icon: "exclamationmark.triangle.fill", color: Color.amber)
+        return StatusStyle(title: String(localized: .adminStatusCpChip), subtitle: String(localized: .memberProvisioningStatusTapWristband), icon: "exclamationmark.triangle.fill", color: Color.amber)
     case let .unknownChip(uid):
-        return StatusStyle(title: "Неизвестный чип", subtitle: uid, icon: "xmark.circle.fill", color: Color.brandRed)
+        return StatusStyle(title: String(localized: .adminStatusUnknownChip), subtitle: uid, icon: "xmark.circle.fill", color: Color.brandRed)
     }
 }
 

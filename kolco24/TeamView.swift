@@ -43,7 +43,7 @@ struct TeamView: View {
     var body: some View {
         content
             .background(Color.paper)
-            .navigationTitle("Команда")
+            .navigationTitle(.tabTeam)
             .navigationBarTitleDisplayMode(.inline)
             .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeTeamModel() }
@@ -85,7 +85,7 @@ struct TeamView: View {
                 }
             }
             .confirmationDialog(
-                "Отвязать чип?",
+                .teamUnbindTitle,
                 isPresented: Binding(
                     get: { unbindTarget != nil },
                     set: { if !$0 { unbindTarget = nil } }
@@ -93,15 +93,15 @@ struct TeamView: View {
                 titleVisibility: .visible,
                 presenting: unbindTarget
             ) { member in
-                Button("Отвязать", role: .destructive) {
+                Button(.teamUnbindConfirm, role: .destructive) {
                     if let teamId = appModel.selectedTeamId {
                         Task { await model?.unbind(teamId: teamId, numberInTeam: member.numberInTeam) }
                     }
                     unbindTarget = nil
                 }
-                Button("Отмена", role: .cancel) { unbindTarget = nil }
+                Button(.commonCancel, role: .cancel) { unbindTarget = nil }
             } message: { member in
-                Text("Чип участника «\(member.name)» станет непривязанным.")
+                Text(.teamUnbindMessage(member.name))
             }
     }
 
@@ -135,7 +135,7 @@ struct TeamView: View {
                 )
                 .padding(.top, 8)
 
-                SectionHeader("Состав · \(members.count)")
+                SectionHeader(String(localized: .teamRosterHeader(members.count)))
                     .padding(.top, 20)
 
                 VStack(spacing: 0) {
@@ -160,7 +160,7 @@ struct TeamView: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
                 .padding(.horizontal, DS.hPad)
 
-                Text("Привяжите NFC-чип каждому участнику до старта — без него отметки не засчитаются.")
+                Text(.teamRosterBindHint)
                     .font(.system(size: 13))
                     .foregroundStyle(Color.sub)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -178,12 +178,12 @@ struct TeamView: View {
                     .padding(.top, 20)
                 }
 
-                SectionHeader("Прочее")
+                SectionHeader(String(localized: .teamMiscHeader))
                     .padding(.top, 20)
 
                 VStack(spacing: 0) {
                     Button { showUpload = true } label: {
-                        MiscRowView(systemImage: "arrow.up.circle.fill", iconBg: Color.good, label: "Загрузка данных", sub: uploadModel?.pendingLabel ?? "Пока нечего загружать")
+                        MiscRowView(systemImage: "arrow.up.circle.fill", iconBg: Color.good, label: String(localized: .uploadTitle), sub: uploadModel?.pendingLabel ?? String(localized: .uploadPendingNothing))
                             .padding(.horizontal, DS.hPad)
                             .padding(.vertical, 8)
                     }
@@ -195,7 +195,7 @@ struct TeamView: View {
                     Button {
                         settingsModel = appModel.makeSettingsModel()
                     } label: {
-                        MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: "Настройки", sub: "Команда, тема, локальный сервер, трек")
+                        MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: String(localized: .settingsTitle), sub: String(localized: .teamMiscSettingsSub))
                             .padding(.horizontal, DS.hPad)
                             .padding(.vertical, 8)
                     }
@@ -296,14 +296,14 @@ private struct MemberRowView: View {
                     .foregroundStyle(Color.ink)
 
                 if let binding {
-                    Text("№\(binding.participantNumber)")
+                    Text(.adminStatusParticipantNumber(String(binding.participantNumber)))
                         .font(.mono(12, weight: .semibold))
                         .foregroundStyle(Color.sub)
                 } else {
                     HStack(spacing: 5) {
                         Circle().fill(Color.kolcoOrange)
                             .frame(width: 5, height: 5)
-                        Text("Чип не привязан")
+                        Text(.teamMemberChipUnbound)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Color.kolcoOrange)
                     }
@@ -322,7 +322,7 @@ private struct MemberRowView: View {
                         Image(systemName: "wave.3.right")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Color.kolcoOrange)
-                        Text("Привязать")
+                        Text(.teamMemberBind)
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(Color.ink)
                     }
@@ -389,7 +389,7 @@ private struct MiscRowView: View {
 // MARK: - Track Card (этап 8)
 
 /// Карточка «GPS-трек» на вкладке «Команда». Порт строк/состояний `ui/track/TrackCard.kt` 1:1:
-/// - `recording` → пульсирующая точка + «Идёт запись» + `pointsLabel` (сырой live-счётчик рекордера,
+/// - `recording` → пульсирующая точка + «Идёт запись» + «N точек» (сырой live-счётчик рекордера,
 ///   плюс «· на карте N», когда фильтр выбросов скрыл точки) + «Остановить» (brandRed);
 /// - idle + 0 точек → онбординг-текст + CTA «Начать запись»;
 /// - idle + >0 → метрики Точки (+ «на карте N»)/Сегменты/Время + «Начать запись» + вторичная «Поделиться GPX».
@@ -423,12 +423,12 @@ private struct TrackCardView: View {
     /// Имя трека в GPX `<name>` (порт `teamForTab?.teamname ?: "Команда $label"`).
     private var trackName: String {
         let name = team.teamname.trimmingCharacters(in: .whitespaces)
-        return name.isEmpty ? "Команда \(teamLabel)" : name
+        return name.isEmpty ? String(localized: .teamPickerTeamNumber(teamLabel)) : name
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader("GPS-трек")
+            SectionHeader(String(localized: .trackHeader))
 
             VStack(alignment: .leading, spacing: 0) {
                 if recording {
@@ -455,10 +455,10 @@ private struct TrackCardView: View {
         HStack(spacing: 10) {
             PulsingDot()
             VStack(alignment: .leading, spacing: 2) {
-                Text("Идёт запись")
+                Text(.trackRecording)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color.ink)
-                Text(pointsLabel(recorder.pointCount) + shownNote(prefix: " · "))
+                Text(verbatim: String(localized: .trackPointsCount(recorder.pointCount)) + shownNote(prefix: " · "))
                     .font(.mono(11))
                     .foregroundStyle(Color.sub)
             }
@@ -469,7 +469,7 @@ private struct TrackCardView: View {
         Button { recorder.stop() } label: {
             HStack(spacing: 8) {
                 Image(systemName: "stop.fill").font(.system(size: 15))
-                Text("Остановить").font(.system(size: 15, weight: .semibold))
+                Text(.trackStop).font(.system(size: 15, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
@@ -493,7 +493,7 @@ private struct TrackCardView: View {
             )
             .padding(.bottom, 14)
         } else {
-            Text("Запишите GPS-трек команды во время гонки.")
+            Text(.trackOnboarding)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.sub)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -505,7 +505,7 @@ private struct TrackCardView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "play.fill").font(.system(size: 15))
-                Text("Начать запись").font(.system(size: 15, weight: .semibold))
+                Text(.trackStart).font(.system(size: 15, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
@@ -521,7 +521,7 @@ private struct TrackCardView: View {
             ShareLink(item: gpxURL) {
                 HStack(spacing: 8) {
                     Image(systemName: "square.and.arrow.up").font(.system(size: 15))
-                    Text("Поделиться GPX").font(.system(size: 15, weight: .semibold))
+                    Text(.trackShareGpx).font(.system(size: 15, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
@@ -537,7 +537,7 @@ private struct TrackCardView: View {
         }
 
         if model.degradedAccuracy {
-            Text("Только примерная геолокация (нет GPS).")
+            Text(.trackReducedAccuracy)
                 .font(.system(size: 11))
                 .foregroundStyle(Color.sub)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -547,7 +547,7 @@ private struct TrackCardView: View {
 
     /// «на карте N», когда фильтр выбросов скрыл часть точек; иначе пусто.
     private func shownNote(prefix: String) -> String {
-        model.filteredTrack.hiddenCount > 0 ? "\(prefix)на карте \(model.trackShownPointCount)" : ""
+        model.filteredTrack.hiddenCount > 0 ? prefix + String(localized: .trackShownOnMap(model.trackShownPointCount)) : ""
     }
 
     // MARK: GPX
@@ -589,8 +589,8 @@ private struct PulsingDot: View {
     }
 }
 
-/// Ряд метрик idle-трека: Точки / Сегменты / Время (порт `TrackMetrics`). Слова склоняются по счётчику
-/// (`pointsWord`/`segmentsWord`) и капитализируются, значения — `Font.mono`.
+/// Ряд метрик idle-трека: Точки / Сегменты / Время (порт `TrackMetrics`). Подписи фиксированные
+/// (плюрал каталога требует число в строке), значения — `Font.mono`.
 private struct TrackMetricsRow: View {
     let pointCount: Int
     /// «на карте N» под счётчиком точек (пусто — фильтр ничего не скрыл).
@@ -600,9 +600,9 @@ private struct TrackMetricsRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
-            metric(value: "\(pointCount)", label: pointsWord(pointCount).capitalizedFirst, note: shownNote)
-            metric(value: "\(segmentCount)", label: segmentsWord(segmentCount).capitalizedFirst)
-            metric(value: timeRange ?? "—", label: "Время")
+            metric(value: "\(pointCount)", label: String(localized: .trackMetricPoints), note: shownNote)
+            metric(value: "\(segmentCount)", label: String(localized: .trackMetricSegments))
+            metric(value: timeRange ?? "—", label: String(localized: .controlTimeLabelFinished))
         }
     }
 
@@ -625,15 +625,7 @@ private struct TrackMetricsRow: View {
     }
 }
 
-private extension String {
-    /// Капитализирует только первый символ (порт `replaceFirstChar { it.uppercase() }`).
-    var capitalizedFirst: String {
-        guard let first else { return self }
-        return first.uppercased() + dropFirst()
-    }
-}
-
-/// Русское склонение «N чип(а/ов) не привязан(ы)» (порт `chipNotBoundText` из `TeamScreen.kt`).
+/// «N чипов не привязаны» (порт `chipNotBoundText` из `TeamScreen.kt`).
 private func chipNotBoundText(_ n: Int) -> String {
-    "\(n) \(pluralRu(count: n, one: "чип не привязан", few: "чипа не привязаны", many: "чипов не привязаны"))"
+    String(localized: .teamChipsUnbound(n))
 }

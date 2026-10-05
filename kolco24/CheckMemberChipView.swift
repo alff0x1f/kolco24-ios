@@ -32,7 +32,7 @@ struct CheckMemberChipView: View {
             .padding(.bottom, 28)
         }
         .background(Color.paper)
-        .navigationTitle("Проверка браслетов")
+        .navigationTitle(.checkMemberChipTitle)
         .navigationBarTitleDisplayMode(.inline)
         .task { model.beginScanning() }
         .onDisappear { model.stop() }
@@ -79,8 +79,8 @@ struct CheckMemberChipView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(model.poolSize > 0 ? Color.sub : Color.brandRed)
             Text(model.poolSize > 0
-                 ? "В пуле \(model.poolSize) \(pluralRu(count: model.poolSize, one: "браслет", few: "браслета", many: "браслетов"))"
-                 : "Пул не синхронизирован — синхронизируйте гонку")
+                 ? .wristbandPoolCount(model.poolSize)
+                 : .wristbandPoolNotSynced)
                 .font(.system(size: 13))
                 .foregroundStyle(model.poolSize > 0 ? Color.sub : Color.brandRed)
             Spacer(minLength: 0)
@@ -95,7 +95,7 @@ struct CheckMemberChipView: View {
 
     private var feedSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader("Недавние · \(model.feed.count)")
+            SectionHeader(String(localized: .adminRecent(model.feed.count)))
             VStack(spacing: 0) {
                 ForEach(Array(model.feed.enumerated()), id: \.element.id) { idx, item in
                     FeedRow(item: item)
@@ -153,7 +153,7 @@ private struct CodeBadge: View {
         HStack(spacing: 4) {
             Image(systemName: hasCode ? "key.fill" : "minus.circle")
                 .font(.system(size: 10, weight: .semibold))
-            Text(hasCode ? "код записан" : "без кода")
+            Text(hasCode ? .checkMemberChipCodeWritten : .checkMemberChipNoCode)
                 .font(.system(size: 12, weight: .semibold))
         }
         .foregroundStyle(color)
@@ -176,13 +176,13 @@ private struct StatusStyle {
 private func statusStyle(_ result: MemberChipCheckResult?) -> StatusStyle {
     switch result {
     case nil:
-        return StatusStyle(title: "Ожидание", subtitle: "Приложите браслет", icon: "wave.3.right", color: Color.sub)
+        return StatusStyle(title: String(localized: .adminStatusWaiting), subtitle: String(localized: .adminStatusHoldWristband), icon: "wave.3.right", color: Color.sub)
     case let .ok(_, number):
-        return StatusStyle(title: "№\(number)", subtitle: "Участник в пуле", icon: "checkmark.circle.fill", color: Color.good)
+        return StatusStyle(title: String(localized: .adminStatusParticipantNumber(String(number))), subtitle: String(localized: .checkMemberChipInPool), icon: "checkmark.circle.fill", color: Color.good)
     case let .kpChip(uid):
-        return StatusStyle(title: "Это чип КП", subtitle: uid, icon: "exclamationmark.triangle.fill", color: Color.amber)
+        return StatusStyle(title: String(localized: .adminStatusCpChip), subtitle: uid, icon: "exclamationmark.triangle.fill", color: Color.amber)
     case let .unknown(uid):
-        return StatusStyle(title: "Неизвестный чип", subtitle: uid, icon: "xmark.circle.fill", color: Color.brandRed)
+        return StatusStyle(title: String(localized: .adminStatusUnknownChip), subtitle: uid, icon: "xmark.circle.fill", color: Color.brandRed)
     }
 }
 

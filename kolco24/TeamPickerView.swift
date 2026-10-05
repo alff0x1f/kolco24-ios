@@ -21,7 +21,7 @@ struct TeamPickerView: View {
     @State private var confirmTeam: Team?
 
     private var title: String {
-        model.selectedTeamId != nil ? "Сменить команду" : "Выбор команды"
+        model.selectedTeamId != nil ? String(localized: .teamPickerTitleChange) : String(localized: .teamPickerTitleChoose)
     }
 
     var body: some View {
@@ -38,7 +38,7 @@ struct TeamPickerView: View {
         .background(Color.paper)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $model.searchQuery, prompt: "Название или номер команды")
+        .searchable(text: $model.searchQuery, prompt: Text(.teamPickerSearchPrompt))
         .refreshable { await model.refreshTeams() }
         .task { await model.raceSelected(raceId) }
         .sheet(item: $confirmTeam) { team in
@@ -71,7 +71,7 @@ struct TeamPickerView: View {
                     .padding(.horizontal, DS.hPad)
                     .padding(.top, 12)
             }
-            Text("Зарегистрированные · \(model.teams.count)")
+            Text(.teamPickerRegistered(model.teams.count))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.sub)
                 .textCase(.uppercase)
@@ -82,7 +82,7 @@ struct TeamPickerView: View {
                 .padding(.bottom, 8)
 
             if model.sections.isEmpty {
-                Text("Ничего не найдено")
+                Text(.teamPickerNoResults)
                     .font(.system(size: 15))
                     .foregroundStyle(Color.sub)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -95,7 +95,7 @@ struct TeamPickerView: View {
                 ForEach(model.sections) { section in
                     sectionView(section)
                 }
-                Text("Выбор определяет, чьи NFC-чипы засчитываются на КП.")
+                Text(.teamPickerFooter)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.sub)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -141,9 +141,9 @@ struct TeamPickerView: View {
     }
 
     private func categoryTitle(_ category: Category?) -> String {
-        guard let category else { return "Без категории" }
+        guard let category else { return String(localized: .teamPickerNoCategory) }
         let name = category.shortName.isEmpty ? category.name : category.shortName
-        return name.isEmpty ? "Без категории" : name
+        return name.isEmpty ? String(localized: .teamPickerNoCategory) : name
     }
 
     @ViewBuilder
@@ -151,18 +151,18 @@ struct TeamPickerView: View {
         switch model.load {
         case .forbidden:
             PickerStatusCard(
-                title: "Обновите приложение",
-                message: "Текущая версия больше не поддерживается сервером."
+                title: String(localized: .teamPickerErrorUpdateAppTitle),
+                message: String(localized: .teamPickerErrorUpdateAppMessage)
             )
         case .offline, .httpError:
             PickerStatusCard(
-                title: "Не удалось загрузить команды",
-                message: "Проверьте соединение и попробуйте ещё раз.",
-                retryLabel: "Повторить",
+                title: String(localized: .teamPickerErrorLoadTitle),
+                message: String(localized: .teamPickerErrorLoadMessage),
+                retryLabel: String(localized: .commonRetry),
                 onRetry: { Task { await model.refreshTeams() } }
             )
         default:
-            Text("Пока никто не зарегистрирован")
+            Text(.teamPickerEmpty)
                 .font(.system(size: 15))
                 .foregroundStyle(Color.sub)
                 .padding(.horizontal, DS.hPad)
@@ -175,8 +175,8 @@ struct TeamPickerView: View {
     private var staleBanner: String? {
         guard !model.teams.isEmpty else { return nil }
         switch model.load {
-        case .offline, .httpError: return "Нет сети — показан сохранённый список"
-        case .forbidden: return "Требуется обновление приложения"
+        case .offline, .httpError: return String(localized: .teamPickerStaleOffline)
+        case .forbidden: return String(localized: .teamPickerStaleForbidden)
         default: return nil
         }
     }
@@ -203,14 +203,14 @@ private struct CompContextCard: View {
                     .foregroundStyle(Color.ink)
                     .lineLimit(1)
                 if let race {
-                    Text("\(shortDate(race.date)) · \(race.place)")
+                    Text(verbatim: "\(shortDate(race.date)) · \(race.place)")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.sub)
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
-            Button("Изменить", action: onChangeRace)
+            Button(.commonChange, action: onChangeRace)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Color.kolcoOrange)
         }
@@ -235,7 +235,7 @@ private struct TeamPickRowView: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Color.ink)
                         .lineLimit(1)
-                    if isCurrent { CurrentBadge(text: "ТЕКУЩАЯ") }
+                    if isCurrent { CurrentBadge(text: String(localized: .teamPickerCurrentBadge)) }
                 }
                 Text(peopleLine(category: category, ucount: team.ucount))
                     .font(.system(size: 13))

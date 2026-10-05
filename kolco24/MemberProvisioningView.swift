@@ -58,7 +58,7 @@ struct MemberProvisioningView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Color.paper)
-        .navigationTitle("Браслет участника")
+        .navigationTitle(.memberProvisioningTitle)
         .navigationBarTitleDisplayMode(.inline)
         .task { model.beginScanning() }
         .onDisappear { model.stop() }
@@ -80,8 +80,8 @@ struct MemberProvisioningView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.sub)
             Text(model.loaded
-                 ? "Браслетов в базе: \(model.poolSize)"
-                 : "Загрузка браслетов…")
+                 ? .memberProvisioningPoolSize(model.poolSize)
+                 : .memberProvisioningLoadingPool)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.sub)
             Spacer()
@@ -100,27 +100,27 @@ struct MemberProvisioningView: View {
         switch model.provisionState {
         case .waitingForChip:
             scanCard(icon: "wave.3.right", tint: Color.sub,
-                     title: model.loaded ? "Приложите браслет к телефону" : "Загрузка…",
-                     subtitle: "Тап 1 — получение кода с сервера")
+                     title: model.loaded ? String(localized: .memberProvisioningCardTapWristband) : String(localized: .commonLoading),
+                     subtitle: String(localized: .memberProvisioningCardTapOne))
         case let .needsNumber(uid):
             scanCard(icon: "number", tint: Color.kolcoOrange,
-                     title: "Браслет \(chipTokenLabel(uid: uid)) не найден",
-                     subtitle: "Введите номер участника")
+                     title: String(localized: .memberProvisioningCardNotFound(chipTokenLabel(uid: uid))),
+                     subtitle: String(localized: .memberProvisioningStatusEnterNumber))
         case let .binding(_, number):
             scanCard(icon: "arrow.triangle.2.circlepath", tint: Color.kolcoOrange,
-                     title: "Привязка на сервере…",
-                     subtitle: number.map { "Номер \($0)" }, spinning: true)
+                     title: String(localized: .commonBinding),
+                     subtitle: number.map { String(localized: .memberProvisioningCardNumber(String($0))) }, spinning: true)
         case let .waitingForWrite(_, number):
             scanCard(icon: "square.and.arrow.down", tint: Color.kolcoOrange,
                      title: model.writeHint ?? ProvisionMessage.memberWriteAgainHint,
-                     subtitle: "Тап 2 — запись кода, участник №\(number)")
+                     subtitle: String(localized: .memberProvisioningCardTapTwo(String(number))))
         case let .success(number):
             scanCard(icon: "checkmark.circle.fill", tint: Color.good,
-                     title: "Записано: №\(number)",
-                     subtitle: "Можно прикладывать следующий браслет")
+                     title: String(localized: .memberProvisioningStatusWritten(String(number))),
+                     subtitle: String(localized: .memberProvisioningCardNext))
         case let .failed(reason):
             scanCard(icon: "xmark.circle.fill", tint: Color.brandRed,
-                     title: "Ошибка", subtitle: reason)
+                     title: String(localized: .commonError), subtitle: reason)
         }
     }
 
@@ -159,10 +159,10 @@ struct MemberProvisioningView: View {
         let parsed = parseMemberNumber(numberText)
         return VStack(spacing: 12) {
             HStack(spacing: 8) {
-                Text("№")
+                Text(.memberProvisioningNumberSign)
                     .font(.mono(22, weight: .bold))
                     .foregroundStyle(Color.sub)
-                TextField("Номер", text: $numberText)
+                TextField(String(localized: .memberProvisioningNumberField), text: $numberText)
                     .keyboardType(.numberPad)
                     .font(.mono(28, weight: .bold))
                     .foregroundStyle(Color.ink)
@@ -182,7 +182,7 @@ struct MemberProvisioningView: View {
                 numberFocused = false
                 model.confirmNumber(n)
             } label: {
-                Text("Привязать")
+                Text(.teamMemberBind)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -204,7 +204,7 @@ struct MemberProvisioningView: View {
             numberFocused = false
             model.cancel()
         } label: {
-            Text("Отмена")
+            Text(.commonCancel)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.brandRed)
                 .frame(maxWidth: .infinity)
@@ -218,7 +218,7 @@ struct MemberProvisioningView: View {
         Button {
             model.resumeScanning()
         } label: {
-            Label("Сканировать", systemImage: "wave.3.right")
+            Label(.adminScan, systemImage: "wave.3.right")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -233,12 +233,12 @@ struct MemberProvisioningView: View {
 
     private var freshSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Записано в этой сессии: \(model.freshFeed.count)")
+            Text(.memberProvisioningSessionCount(model.freshFeed.count))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.sub)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 6)], alignment: .leading, spacing: 6) {
                 ForEach(model.freshFeed) { item in
-                    Text("№\(item.number) · \(chipTokenLabel(uid: item.uid))")
+                    Text(.memberProvisioningFeedItem(String(item.number), chipTokenLabel(uid: item.uid)))
                         .font(.mono(12, weight: .semibold))
                         .foregroundStyle(Color.good)
                         .lineLimit(1)

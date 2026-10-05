@@ -101,7 +101,7 @@ final class AppModel {
         )
         // Отказ геодоступа на старте записи → тост (все stored props уже проинициализированы — `self` готов).
         trackRecorder.onGeoDenied = { [weak self] in
-            self?.toastMessage = "Нет доступа к геолокации — разрешите его в настройках, чтобы записывать трек."
+            self?.toastMessage = String(localized: .trackToastNoLocationAccess)
         }
     }
 
@@ -286,20 +286,20 @@ final class AppModel {
         }
     }
 
-    /// Русский тост по исходу LAN-переключения (Technical Details, таблица тостов). `internal` (не
+    /// Тост по исходу LAN-переключения (Technical Details, таблица тостов). `internal` (не
     /// `private`) — таблицу маппинга исход→строка напрямую покрывает `AppModelTests`.
     static func localModeToast(_ outcome: LocalModeOutcome) -> String {
         switch outcome {
         case let .pinnedUntil(expiresAtMs, dataStale):
-            return localModeUntilLabel(expiresAtMs: expiresAtMs) + (dataStale ? " (данные не обновлены)" : "")
+            return localModeUntilLabel(expiresAtMs: expiresAtMs) + (dataStale ? String(localized: .localModeDataStaleSuffix) : "")
         case .localNoPin, .cloudUpdated:
-            return "Обновлено из интернета"
+            return String(localized: .localModeToastCloudUpdated)
         case .localUnreachable:
-            return "Локальный сервер недоступен"
+            return String(localized: .localModeToastLocalUnreachable)
         case .offline:
-            return "Нет сети"
+            return String(localized: .localModeToastOffline)
         case .noRace:
-            return "Гонка не выбрана"
+            return String(localized: .localModeToastNoRace)
         }
     }
 
@@ -736,5 +736,5 @@ final class AppModel {
 func localModeUntilLabel(expiresAtMs: Int64) -> String {
     let time = Date(timeIntervalSince1970: Double(expiresAtMs) / 1000)
         .formatted(.dateTime.hour().minute())
-    return "Локальный режим до \(time)"
+    return String(localized: .localModeUntil(time))
 }

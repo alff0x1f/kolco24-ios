@@ -81,15 +81,15 @@ func formatHoursMinutes(_ ms: Int64) -> String {
 func controlTimeDisplay(_ state: ControlTimeState) -> (label: String, value: String, isWarning: Bool) {
     switch state {
     case .unknown:
-        return ("До КВ", "—", false)
+        return (String(localized: .controlTimeLabelRemaining), "—", false)
     case .notStarted(let limitMs):
-        return ("КВ", formatHoursMinutes(limitMs), false)
+        return (String(localized: .controlTimeLabelLimit), formatHoursMinutes(limitMs), false)
     case .running(let remainingMs):
-        return ("До КВ", formatHoursMinutes(remainingMs), false)
+        return (String(localized: .controlTimeLabelRemaining), formatHoursMinutes(remainingMs), false)
     case .overtime(let overMs):
-        return ("Опоздание", "+" + formatHoursMinutes(overMs), true)
+        return (String(localized: .controlTimeLabelOvertime), "+" + formatHoursMinutes(overMs), true)
     case .finished(let elapsedMs, let overMs):
-        return ("Время", formatHoursMinutes(elapsedMs), overMs != nil)
+        return (String(localized: .controlTimeLabelFinished), formatHoursMinutes(elapsedMs), overMs != nil)
     }
 }
 

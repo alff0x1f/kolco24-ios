@@ -323,4 +323,9 @@ struct TrackSpeedTests {
         #expect(memo.get(lines: other) == SpeedTrack(lines: other))
         #expect(memo.get(lines: []) == SpeedTrack(lines: []))
     }
+
+    @Test func englishStopDuration() {
+        #expect(en(.commonDurationMinutes(3)) == "3 min")
+        #expect(en(.commonDurationHoursMinutes(1, "05")) == "1 h 05 min")
+    }
 }

@@ -53,14 +53,14 @@ enum ProvisionState: Equatable {
 ///   `403` в обоих случаях), отсюда объединённая строка.
 func provisionErrorMessage<T>(_ result: PostResult<T>) -> String {
     switch result {
-    case .conflict: return "Этот тег уже привязан к другому КП"
-    case .forbidden: return "Нет прав администратора этой гонки или ошибка подписи/часов"
-    case .unauthorized: return "Сессия истекла, войдите снова"
-    case .badRequest: return "Неверный запрос"
-    case .rateLimited: return "Слишком часто, подождите немного"
-    case .offline: return "Нет сети, попробуйте снова"
-    case .error(let code): return code == 404 ? "КП не найдено" : "Ошибка сервера"
-    case .success: return "Ошибка сервера"
+    case .conflict: return String(localized: .provisioningErrorConflict)
+    case .forbidden: return String(localized: .provisioningErrorForbidden)
+    case .unauthorized: return String(localized: .provisioningErrorUnauthorized)
+    case .badRequest: return String(localized: .provisioningErrorBadRequest)
+    case .rateLimited: return String(localized: .provisioningErrorRateLimited)
+    case .offline: return String(localized: .provisioningErrorOffline)
+    case .error(let code): return code == 404 ? String(localized: .provisioningErrorCpNotFound) : String(localized: .provisioningErrorServer)
+    case .success: return String(localized: .provisioningErrorServer)
     }
 }
 
@@ -68,35 +68,35 @@ func provisionErrorMessage<T>(_ result: PostResult<T>) -> String {
 /// модальна и закрывает экран — номер выбранного КП должен быть виден в ней. [hint] — подсказка тапа 2
 /// (`nil` → «Приложите чип ещё раз»). Чистая.
 func kpProvisionStatusLine(_ state: ProvisionState, number: Int?, hint: String?) -> String {
-    let kp = number.map { "КП \(String(format: "%02d", $0))" }
+    let kp = number.map { String(localized: .commonCpNumber(String(format: "%02d", $0))) }
     switch state {
-    case .waitingForChip: return kp.map { "\($0) · Приложите чип" } ?? "Приложите чип КП"
-    case .binding: return "Привязка на сервере…"
+    case .waitingForChip: return kp.map { "\($0) · \(String(localized: .provisioningStatusTapChip))" } ?? String(localized: .provisioningStatusTapCpChip)
+    case .binding: return String(localized: .commonBinding)
     case .waitingForWrite:
         let text = hint ?? ProvisionMessage.kpWriteAgainHint
         return kp.map { "\($0) · \(text)" } ?? text
-    case let .success(n): return "Записано: КП \(String(format: "%02d", n))"
-    case let .failed(reason): return "Ошибка: \(reason)"
+    case let .success(n): return String(localized: .provisioningStatusWritten(String(format: "%02d", n)))
+    case let .failed(reason): return String(localized: .commonErrorPrefixed(reason))
     }
 }
 
-/// Общие RU-строки обоих экранов записи (чипы КП и браслеты участников) + pre-write guard'а
+/// Общие строки обоих экранов записи (чипы КП и браслеты участников) + pre-write guard'а
 /// сканера (``writeGuardDecision(currentPages:record:)``) — один источник для Core, моделей и вьюх.
 enum ProvisionMessage {
     /// Тап 1 не прочитался (`TagReading.readFailed`) или не прочитался pre-write guard тапа 2.
-    static let readFailedTapAgain = "Не удалось прочитать, приложите снова"
+    static let readFailedTapAgain = String(localized: .provisioningMessageReadFailedTapAgain)
     /// Запись на тапе 2 не удалась (`failed`/`unsupported`) — pending-write сохранён.
-    static let writeFailedTapAgain = "Не удалось записать, приложите снова"
+    static let writeFailedTapAgain = String(localized: .provisioningMessageWriteFailedTapAgain)
     /// Подсказка тапа 2 по умолчанию, экран КП.
-    static let kpWriteAgainHint = "Приложите чип ещё раз"
+    static let kpWriteAgainHint = String(localized: .provisioningMessageCpWriteAgain)
     /// Подсказка тапа 2 по умолчанию, экран браслетов (зона скана и системная NFC-шторка).
-    static let memberWriteAgainHint = "Приложите браслет ещё раз"
+    static let memberWriteAgainHint = String(localized: .provisioningMessageWristbandWriteAgain)
     /// На экране браслетов приложен чип КП.
-    static let kpChipNotBracelet = "Это чип КП, а не браслет"
+    static let kpChipNotBracelet = String(localized: .provisioningMessageCpChipNotWristband)
     /// На экране КП приложен браслет участника.
-    static let memberBracelet = "Это браслет участника"
+    static let memberBracelet = String(localized: .provisioningMessageIsWristband)
     /// На чипе K24-запись неизвестного типа.
-    static let otherChipType = "Чип другого типа"
+    static let otherChipType = String(localized: .provisioningMessageOtherChipType)
 }
 
 /// Отказ записи из-за K24-записи типа [type], уже лежащей на чипе. Чистая.

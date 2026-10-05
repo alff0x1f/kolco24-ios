@@ -361,7 +361,7 @@ final class ProvisioningModel: Identifiable {
                 provisionState = .waitingForWrite(uid: uid, code: response.code)
                 writeHint = ProvisionMessage.kpWriteAgainHint
             } catch {
-                provisionState = .failed(reason: "Неверный код от сервера")
+                provisionState = .failed(reason: String(localized: .provisioningErrorBadServerCode))
                 feedback.play(.failure)
             }
         case .unauthorized:
@@ -378,7 +378,7 @@ final class ProvisioningModel: Identifiable {
     /// остаёмся в `waitingForWrite`, pending-write СОХРАНЁН (повтор безопасен, header-last).
     private func handleWriteTap(reading: TagReading, expectedUid: String) {
         if reading.uid != expectedUid {
-            writeHint = "Приложите тот же чип"
+            writeHint = String(localized: .provisioningHintSameChip)
             feedback.play(.failure)
             return
         }

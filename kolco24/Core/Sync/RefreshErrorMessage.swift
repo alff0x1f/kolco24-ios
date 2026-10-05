@@ -2,7 +2,7 @@
 //  RefreshErrorMessage.swift
 //  kolco24
 //
-//  Чистый маппинг исхода pull-to-refresh в текст тоста (RU), либо `nil`, когда
+//  Чистый маппинг исхода pull-to-refresh в текст тоста, либо `nil`, когда
 //  показывать нечего. Kotlin-источник: `refreshErrorMessage` из
 //  `ui/common/PullToRefresh.kt`. Никакого UIKit/SwiftUI.
 //
@@ -18,10 +18,10 @@ func refreshErrorMessage(_ result: RefreshResult) -> String? {
     case .updated, .notModified, .skipped:
         return nil
     case .offline:
-        return "Нет сети — не удалось обновить"
+        return String(localized: .refreshErrorOffline)
     case .forbidden:
-        return "Доступ запрещён"
+        return String(localized: .refreshErrorForbidden)
     case .httpError(let code):
-        return "Ошибка сервера (\(code))"
+        return String(localized: .refreshErrorHttp(String(code)))
     }
 }

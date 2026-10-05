@@ -17,6 +17,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    /// «Язык» ведёт на страницу приложения в настройках iOS (`app-settings:` — без UIKit-константы).
+    @Environment(\.openURL) private var openURL
     /// Наследуется из окружения корня — канал тостов для 10-тап разблокировки отладки.
     @Environment(AppModel.self) private var appModel
     let model: SettingsModel
@@ -62,33 +64,33 @@ struct SettingsView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Color.paper)
-            .navigationTitle("Настройки")
+            .navigationTitle(.settingsTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { dismiss() }
+                    Button(.commonDone) { dismiss() }
                 }
             }
         }
         .confirmationDialog(
-            "Очистить трек?",
+            .settingsClearTrackTitle,
             isPresented: $showClearTrackConfirm,
             titleVisibility: .visible
         ) {
-            Button("Очистить", role: .destructive) { model.clearTrack() }
-            Button("Отмена", role: .cancel) {}
+            Button(.commonClear, role: .destructive) { model.clearTrack() }
+            Button(.commonCancel, role: .cancel) {}
         } message: {
-            Text("Все записанные точки этой команды будут удалены без возможности восстановления.")
+            Text(.settingsClearTrackMessage)
         }
         .confirmationDialog(
-            "Удалить карту гонки?",
+            .settingsDeleteMapTitle,
             isPresented: $showDeleteMapConfirm,
             titleVisibility: .visible
         ) {
-            Button("Удалить", role: .destructive) { model.deleteRaceMap() }
-            Button("Отмена", role: .cancel) {}
+            Button(.commonDelete, role: .destructive) { model.deleteRaceMap() }
+            Button(.commonCancel, role: .cancel) {}
         } message: {
-            Text("Оффлайн-подложка будет удалена. Скачать заново можно на вкладке «Карта».")
+            Text(.settingsDeleteMapMessage)
         }
         .confirmationDialog(
             debugConfirm?.title ?? "",
@@ -105,7 +107,7 @@ struct SettingsView: View {
                 case .clearDatabase: model.wipeDatabase()
                 }
             }
-            Button("Отмена", role: .cancel) {}
+            Button(.commonCancel, role: .cancel) {}
         } message: { kind in
             Text(kind.message)
         }
@@ -122,15 +124,15 @@ struct SettingsView: View {
                 SettingsRow(
                     systemImage: "arrow.left.arrow.right",
                     iconBg: Color.charcoal,
-                    label: "Сменить команду",
-                    sub: "Выбрать другое соревнование или команду",
+                    label: String(localized: .teamPickerTitleChange),
+                    sub: String(localized: .settingsTeamChangeSub),
                     showChevron: true
                 )
             }
             .buttonStyle(.plain)
             .listRowBackground(Color.card)
         } header: {
-            Text("Команда")
+            Text(.tabTeam)
         }
     }
 
@@ -139,16 +141,31 @@ struct SettingsView: View {
     private var appearanceSection: some View {
         @Bindable var model = model
         return Section {
-            Picker("Тема", selection: $model.themeMode) {
-                Text("Системная").tag(ThemeMode.system)
-                Text("Светлая").tag(ThemeMode.light)
-                Text("Тёмная").tag(ThemeMode.dark)
+            Picker(.settingsTheme, selection: $model.themeMode) {
+                Text(.settingsThemeSystem).tag(ThemeMode.system)
+                Text(.settingsThemeLight).tag(ThemeMode.light)
+                Text(.settingsThemeDark).tag(ThemeMode.dark)
             }
             .pickerStyle(.menu)
             .tint(Color.kolcoOrange)
             .listRowBackground(Color.card)
+            Button {
+                if let url = URL(string: "app-settings:") { openURL(url) }
+            } label: {
+                SettingsRow(
+                    systemImage: "globe",
+                    iconBg: Color.charcoal,
+                    label: String(localized: .settingsLanguage),
+                    sub: String(localized: .settingsLanguageCurrent),
+                    showChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(Color.card)
         } header: {
-            Text("Внешний вид")
+            Text(.settingsAppearance)
+        } footer: {
+            Text(.settingsLanguageFooter)
         }
     }
 
@@ -161,12 +178,12 @@ struct SettingsView: View {
                 SettingsRow(
                     systemImage: "speedometer",
                     iconBg: Color.kolcoOrange,
-                    label: "Цвет трека по скорости",
+                    label: String(localized: .mapSpeedLegendLabel),
                     sub: model.colorBySpeedAvailable
-                        ? "Стоянки от 5 мин — отметкой на карте"
-                        : "Недоступно при показе всех точек"
+                        ? String(localized: .settingsSpeedColorOn)
+                        : String(localized: .settingsSpeedColorUnavailable)
                 )
-                Toggle("Цвет трека по скорости", isOn: $model.colorTrackBySpeed)
+                Toggle(.mapSpeedLegendLabel, isOn: $model.colorTrackBySpeed)
                     .labelsHidden()
                     .tint(Color.kolcoOrange)
                     .disabled(!model.colorBySpeedAvailable)
@@ -177,10 +194,10 @@ struct SettingsView: View {
                 SettingsRow(
                     systemImage: "point.topleft.down.to.point.bottomright.curvepath",
                     iconBg: Color.kolcoOrange,
-                    label: "Показывать все точки трека",
-                    sub: "Без фильтрации выбросов GPS"
+                    label: String(localized: .settingsAllPoints),
+                    sub: String(localized: .settingsAllPointsSub)
                 )
-                Toggle("Показывать все точки трека", isOn: $model.showAllTrackPoints)
+                Toggle(.settingsAllPoints, isOn: $model.showAllTrackPoints)
                     .labelsHidden()
                     .tint(Color.kolcoOrange)
             }
@@ -192,8 +209,8 @@ struct SettingsView: View {
                 SettingsRow(
                     systemImage: "trash",
                     iconBg: Color.brandRed,
-                    label: "Очистить трек",
-                    sub: pointsLabel(model.trackPointCount),
+                    label: String(localized: .settingsClearTrack),
+                    sub: String(localized: .trackPointsCount(model.trackPointCount)),
                     tint: Color.brandRed
                 )
             }
@@ -201,7 +218,7 @@ struct SettingsView: View {
             .disabled(!model.clearTrackEnabled)
             .listRowBackground(Color.card)
         } header: {
-            Text("Запись трека")
+            Text(.settingsTrackSection)
         }
     }
 
@@ -213,13 +230,13 @@ struct SettingsView: View {
                 SettingsRow(
                     systemImage: "wifi",
                     iconBg: Color.good,
-                    label: "Локальный сервер (Wi-Fi гонки)",
-                    sub: model.localModeBusy ? "Обновление…" : model.localModeSubtitle
+                    label: String(localized: .settingsLocalServer),
+                    sub: model.localModeBusy ? String(localized: .settingsLocalServerUpdating) : model.localModeSubtitle
                 )
                 if model.localModeBusy {
                     ProgressView()
                 } else {
-                    Toggle("Локальный сервер (Wi-Fi гонки)", isOn: Binding(
+                    Toggle(.settingsLocalServer, isOn: Binding(
                         get: { model.localModeOn },
                         set: { model.toggleLocalMode($0) }
                     ))
@@ -235,8 +252,8 @@ struct SettingsView: View {
                 SettingsRow(
                     systemImage: "trash",
                     iconBg: Color.brandRed,
-                    label: "Удалить карту гонки",
-                    sub: model.mapFileSizeLabel ?? "Карта не скачана",
+                    label: String(localized: .settingsDeleteMap),
+                    sub: model.mapFileSizeLabel ?? String(localized: .readinessMapMissingTitle),
                     tint: Color.brandRed
                 )
             }
@@ -244,7 +261,7 @@ struct SettingsView: View {
             .disabled(model.mapFileSizeLabel == nil)
             .listRowBackground(Color.card)
         } header: {
-            Text("Данные")
+            Text(.settingsDataSection)
         }
     }
 
@@ -258,8 +275,8 @@ struct SettingsView: View {
                 SettingsRow(
                     systemImage: "arrow.counterclockwise",
                     iconBg: Color.brandRed,
-                    label: "Сбросить команду",
-                    sub: "Debug: вернуться к выбору команды"
+                    label: String(localized: .settingsDebugResetTeam),
+                    sub: String(localized: .settingsDebugResetTeamSub)
                 )
             }
             .buttonStyle(.plain)
@@ -271,14 +288,14 @@ struct SettingsView: View {
                 SettingsRow(
                     systemImage: "trash.slash",
                     iconBg: Color.brandRed,
-                    label: "Очистить базу данных",
-                    sub: "Debug: удалить гонки, команды, легенду и ETag"
+                    label: String(localized: .settingsDebugClearDb),
+                    sub: String(localized: .settingsDebugClearDbSub)
                 )
             }
             .buttonStyle(.plain)
             .listRowBackground(Color.card)
         } header: {
-            Text("Отладка")
+            Text(.settingsDebugSection)
         }
     }
 
@@ -295,7 +312,7 @@ struct SettingsView: View {
                 SettingsRow(
                     systemImage: "person.badge.key.fill",
                     iconBg: Color.charcoal,
-                    label: "Администратор",
+                    label: String(localized: .settingsAdmin),
                     sub: model.adminSubtitle,
                     showChevron: true
                 )
@@ -303,7 +320,7 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .listRowBackground(Color.card)
         } header: {
-            Text("Организатор")
+            Text(.settingsOrganizerSection)
         }
     }
 
@@ -316,20 +333,20 @@ struct SettingsView: View {
                 versionTaps += 1
                 if versionTaps >= 10 {
                     debugUnlocked = true
-                    appModel.toastMessage = "Меню отладки включено"
+                    appModel.toastMessage = String(localized: .settingsDebugUnlocked)
                 }
             } label: {
                 SettingsRow(
                     systemImage: "info.circle",
                     iconBg: Color.charcoal,
-                    label: "Версия",
+                    label: String(localized: .settingsVersion),
                     sub: model.versionLabel
                 )
             }
             .buttonStyle(.plain)
             .listRowBackground(Color.card)
         } header: {
-            Text("О приложении")
+            Text(.settingsAboutSection)
         }
     }
 }
@@ -343,22 +360,22 @@ private enum DebugConfirmKind: Identifiable {
 
     var title: String {
         switch self {
-        case .resetTeam: return "Сбросить команду?"
-        case .clearDatabase: return "Очистить базу данных?"
+        case .resetTeam: return String(localized: .settingsDebugResetTeamTitle)
+        case .clearDatabase: return String(localized: .settingsDebugClearDbTitle)
         }
     }
 
     var message: String {
         switch self {
-        case .resetTeam: return "Текущая команда будет сброшена — придётся выбрать её заново."
-        case .clearDatabase: return "Все локальные данные (гонки, команды, легенда, ETag) будут удалены и загружены заново."
+        case .resetTeam: return String(localized: .settingsDebugResetTeamMessage)
+        case .clearDatabase: return String(localized: .settingsDebugClearDbMessage)
         }
     }
 
     var confirmLabel: String {
         switch self {
-        case .resetTeam: return "Сбросить"
-        case .clearDatabase: return "Очистить"
+        case .resetTeam: return String(localized: .settingsDebugReset)
+        case .clearDatabase: return String(localized: .commonClear)
         }
     }
 }

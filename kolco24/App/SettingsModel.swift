@@ -46,7 +46,7 @@ final class SettingsModel: Identifiable {
     /// «Обновление из интернета». Спиннер/«Обновление…» при `localModeBusy` рисует вьюха.
     var localModeSubtitle: String {
         guard let raceId, let lease = currentLease, isPinned(lease, raceId: raceId, nowMs: nowMs()) else {
-            return "Обновление из интернета"
+            return String(localized: .localModeSubtitleCloud)
         }
         return localModeUntilLabel(expiresAtMs: lease.expiresAtMs)
     }
@@ -145,7 +145,7 @@ final class SettingsModel: Identifiable {
         Task { @MainActor [weak self] in
             try? await database.wipeAllTables()
             leaseHolder.set(nil)
-            self?.appModel.toastMessage = "База очищена"
+            self?.appModel.toastMessage = String(localized: .settingsToastDbCleared)
         }
     }
 
@@ -199,7 +199,7 @@ final class SettingsModel: Identifiable {
         )
         // Синхронный снимок размера скачанной карты гонки (файл-как-флаг не наблюдаем — читаем на открытии).
         if let raceId, let bytes = env.mapFileSize(raceId) {
-            self.mapFileSizeLabel = formatBytesRu(bytes)
+            self.mapFileSizeLabel = formatBytes(bytes)
         } else {
             self.mapFileSizeLabel = nil
         }
@@ -235,11 +235,15 @@ final class SettingsModel: Identifiable {
     }
 }
 
-/// Человекочитаемый размер файла на русском (Б/КБ/МБ/ГБ, 1024-based). Локаленезависимо и детерминированно
-/// (в отличие от `ByteCountFormatter`) — сабтайтл «Удалить карту гонки» и тест читают один и тот же вывод.
-/// Целое для Б/точных значений, одна дробь для нецелых КБ+ (12582912 → «12 МБ», 1536 → «1,5 КБ»).
-private func formatBytesRu(_ bytes: Int64) -> String {
-    let units = ["Б", "КБ", "МБ", "ГБ"]
+/// Человекочитаемый размер файла (Б/КБ/МБ/ГБ, 1024-based). Детерминированно (в отличие от
+/// `ByteCountFormatter`) — сабтайтл «Удалить карту гонки» и тест читают один и тот же вывод.
+/// Целое для Б/точных значений, одна дробь для нецелых КБ+ (12582912 → «12 МБ», 1536 → «1,5 КБ»;
+/// разделитель дроби — по локали).
+private func formatBytes(_ bytes: Int64) -> String {
+    let units = [
+        String(localized: .commonBytesB), String(localized: .commonBytesKb),
+        String(localized: .commonBytesMb), String(localized: .commonBytesGb),
+    ]
     var value = Double(max(bytes, 0))
     var idx = 0
     while value >= 1024, idx < units.count - 1 {
@@ -253,6 +257,6 @@ private func formatBytesRu(_ bytes: Int64) -> String {
     if rounded == rounded.rounded() {
         return "\(Int(rounded)) \(units[idx])"
     }
-    // Русская запятичная дробь.
-    return String(format: "%.1f %@", rounded, units[idx]).replacingOccurrences(of: ".", with: ",")
+    let number = rounded.formatted(.number.precision(.fractionLength(1)).grouping(.never))
+    return "\(number) \(units[idx])"
 }

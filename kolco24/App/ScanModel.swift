@@ -420,7 +420,7 @@ final class ScanModel: Identifiable {
         // Гвард «команда не выбрана» (§2): пустой ростер — нечего зачитывать, открывать взятие с
         // expectedCount = 0 нельзя (оно никогда не завершится и осиротит строку).
         guard !roster.isEmpty else {
-            applyFeedback(.badKp(reason: "команда не выбрана"), now: now)
+            applyFeedback(.badKp(reason: String(localized: .scanBadKpNoTeam)), now: now)
             return
         }
 
@@ -570,7 +570,7 @@ final class ScanModel: Identifiable {
     private func applyFeedback(_ event: ScanEvent, now: Int64) {
         switch event {
         case .unboundChip:
-            diagnostic = "Чип не привязан к команде"
+            diagnostic = String(localized: .scanDiagnosticUnboundChip)
             feedback.play(feedbackFor(event: event))
         case let .badKp(reason):
             diagnostic = reason
@@ -608,9 +608,9 @@ final class ScanModel: Identifiable {
         if let diagnostic {
             text = diagnostic
         } else if let number = checkpointNumber {
-            text = "КП \(number) · чипы \(scannedSlots.count)/\(roster.count)"
+            text = String(localized: .scanStatusProgress(String(number), scannedSlots.count, roster.count))
         } else {
-            text = "Приложите чип КП"
+            text = String(localized: .nfcAlertTapCpChip)
         }
         scanner?.setStatus(text)
     }

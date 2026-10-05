@@ -82,4 +82,9 @@ struct MemberProvisioningLogicTests {
         #expect(memberProvisionStatusLine(.success(number: 7), hint: nil) == "Записано: №7")
         #expect(memberProvisionStatusLine(.failed(reason: "Нет сети"), hint: nil) == "Ошибка: Нет сети")
     }
+
+    @Test func englishTexts() {
+        #expect(en(.memberProvisioningStatusWaitingWrite("Hold the wristband again", "1234")) == "Hold the wristband again (#1234)")
+        #expect(en(.memberProvisioningStatusWritten("1234")) == "Written: #1234")
+    }
 }

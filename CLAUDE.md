@@ -28,6 +28,8 @@ xcodebuild test -project kolco24.xcodeproj -scheme kolco24 \
 If the name-based destination is flaky, resolve a UDID via `xcrun simctl list devices available` and use
 `-destination 'platform=iOS Simulator,id=<UDID>'`
 (may also need `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`).
+Tests run in **Russian**: the shared scheme's Test action sets `language = ru` (CLI fallback:
+`-testLanguage ru -testRegion RU`); `LocalizationTests.testsRunInRussian` guards it.
 
 ## Secrets & project setup
 
@@ -49,7 +51,7 @@ If the name-based destination is flaky, resolve a UDID via `xcrun simctl list de
 
 ## What the app is
 
-SwiftUI iOS app (target iOS 18) for a rogaine/orienteering event; UI language is Russian. A staged port of the
+SwiftUI iOS app (target iOS 18) for a rogaine/orienteering event; UI in Russian (source) and English. A staged port of the
 Android app `kolco24_app_v2` (Kotlin/Room/OkHttp), functionally complete, plus an iOS-only offline map tab.
 Four tabs: Отметки (`MarksView` — taken-КП grid + NFC/photo scan), Легенда (`LegendView`),
 Карта (`MapTabView`), Команда (`TeamView` — roster/chip-binding/track/settings/upload entry points).
@@ -58,7 +60,7 @@ Four tabs: Отметки (`MarksView` — taken-КП grid + NFC/photo scan), Л
 
 - **`kolco24/` (root, flat)** — all SwiftUI views + `DesignTokens`, `SharedComponents`, `Secrets`.
 - **`kolco24/Core/`** — pure-Foundation logic, grouped by concern (stages 1, 4–11, map): `Util` (HexBytes,
-  PluralRu, RaceDates), `Nfc` (ChipRecord/K24 format, NfcUid), `Api` (HMAC signing), `Crypto` (LegendCrypto),
+  RelativeTime, RaceDates), `Nfc` (ChipRecord/K24 format, NfcUid), `Api` (HMAC signing), `Crypto` (LegendCrypto),
   `Scan` (ScanSession reducer, ChipScanning seams), `Team` (BindDecision, TeamPickerLogic), `Legend`,
   `Marks` (KpTake, PhotoMark, PhotoPaths, MarksDisplay, ControlTime, CheckMethod), `Sync`,
   `Track` (Segments, TrackPoints, TrackLines spike filter, GpxExport, TrackEngine seam), `Upload`,
@@ -99,6 +101,8 @@ server 200.
   `AVFoundation` → `Audio/` + `Photo/`; `ImageIO` → `Photo/`; `Security`/`SecItem*` → `Keychain/`;
   `MapKit` → `Map/`; UIKit-for-haptics → `Audio/` (plus the pre-existing UIKit in `DesignTokens.swift`).
 - SwiftUI views live flat in the root `kolco24/` (plus `Photo/CameraPreviewView`, `Map/TrackMapView`).
+- No Cyrillic in string literals outside comments, `log.*(…)` calls and `#if DEBUG` blocks
+  (`CyrillicLiteralTests`) — user-visible text lives in `kolco24/Localizable.xcstrings`.
 
 ## Recurring idioms (follow these when extending)
 
@@ -174,6 +178,15 @@ server 200.
   admin «Записать браслет») go through `parseChipRecord(pages:type:)`; scanner reads use `decodeTagPages`.
 - **CoreNFC sheet is modal**: a screen needing text input mid-scan must `stop()` the scanner and restart after
   `waitUntilStopped()` (see `MemberProvisioningModel.resumeScanning`).
+- **Localization** (`docs/plans/completed/20261005-english-localization.md`): semantic keys
+  `<screen>.<element>[.<state>]`, letters only (the symbol generator uppercases after a digit); every key
+  `extractionState: manual` with ru + en (`SWIFT_EMIT_LOC_STRINGS = NO`, but the Xcode IDE indexer still syncs
+  literal `Text("…")` into the catalog → numbers/separators go through `Text(verbatim:)`). Use the
+  generated symbols: `Text(.key)`, `String(localized: .key)`. Plurals are whole phrases with `%lld`. `%lld` is
+  locale-grouped (ru «1 500») → ids/numbers-as-labels go as `%@` + `String(n)`. No `LocalizedStringResource`
+  overload on iOS 18 for `TextField`/`SecureField` (→ `String(localized:)`) or `accessibilityLabel`
+  (→ `Text(.key)`). `InfoPlist.xcstrings` repeats ru from `INFOPLIST_KEY_*` — a missing ru value compiles
+  as the key itself.
 - `ClockAnchorStore` parse: trailing `|` with nil bootCount — use `components(separatedBy:)`
   (Swift `split` drops the empty segment).
 

@@ -254,12 +254,12 @@ final class UploadModel {
     /// «Всё отправлено» / «Пока нечего загружать».
     var pendingLabel: String {
         let totalItems = (counts?.total ?? 0) + (trackCounts?.total ?? 0) + (judgeCounts?.total ?? 0)
-        guard totalItems > 0 else { return "Пока нечего загружать" }
+        guard totalItems > 0 else { return String(localized: .uploadPendingNothing) }
         let markPending = max(0, (counts?.total ?? 0) - (counts?.cloud ?? 0))
         let trackPending = max(0, (trackCounts?.total ?? 0) - (trackCounts?.cloud ?? 0))
         let judgePending = max(0, (judgeCounts?.total ?? 0) - (judgeCounts?.cloud ?? 0))
         let pending = markPending + trackPending + judgePending
-        return pending <= 0 ? "Всё отправлено" : "\(pending) не отправлено"
+        return pending <= 0 ? String(localized: .uploadPendingAllSent) : String(localized: .uploadPendingCount(pending))
     }
 
     // MARK: - Карточки целей («Интернет» / «Финиш (LAN)»)
@@ -269,13 +269,13 @@ final class UploadModel {
     /// скоуп рисовал бы вводящий в заблуждение ряд «0/0» отметок.
     private var scopes: [ScopeProgress] {
         let all = [
-            ScopeProgress(title: "Отметки", counts: metadataCounts,
+            ScopeProgress(title: String(localized: .uploadScopeMarks), counts: metadataCounts,
                           cloudOutcome: outcomes[.cloud], localOutcome: outcomes[.local]),
-            ScopeProgress(title: "Фото", counts: photoCounts,
+            ScopeProgress(title: String(localized: .uploadScopePhotos), counts: photoCounts,
                           cloudOutcome: outcomes[.cloud], localOutcome: outcomes[.local]),
-            ScopeProgress(title: "GPS-трек", counts: trackCounts,
+            ScopeProgress(title: String(localized: .uploadScopeTrack), counts: trackCounts,
                           cloudOutcome: trackOutcomes[.cloud], localOutcome: trackOutcomes[.local]),
-            ScopeProgress(title: "Судейские отметки", counts: judgeCounts,
+            ScopeProgress(title: String(localized: .uploadScopeJudgeScans), counts: judgeCounts,
                           cloudOutcome: judgeOutcomes[.cloud], localOutcome: judgeOutcomes[.local]),
         ]
         return all.filter { $0.total > 0 }
@@ -290,7 +290,7 @@ final class UploadModel {
     var internetLines: [ReceiptLine] {
         scopes.map {
             makeLine(label: $0.title, uploaded: $0.cloud, total: $0.total,
-                     outcome: $0.cloudOutcome, offlineLabel: "нет интернета")
+                     outcome: $0.cloudOutcome, offlineLabel: String(localized: .uploadOutcomeNoInternet))
         }
     }
 
@@ -303,7 +303,7 @@ final class UploadModel {
         guard scopes.contains(where: { $0.localOutcome != nil || $0.local > 0 }) else { return [] }
         return scopes.map {
             makeLine(label: $0.title, uploaded: $0.local, total: $0.total,
-                     outcome: $0.localOutcome, offlineLabel: "сервер недоступен")
+                     outcome: $0.localOutcome, offlineLabel: String(localized: .uploadOutcomeServerUnavailable))
         }
     }
 
@@ -327,7 +327,7 @@ final class UploadModel {
         let isError = outcome?.kind == .error || outcome?.kind == .offline
         var secondLine: String?
         if !done, let outcome {
-            secondLine = "\(relativeTimeRu(atWallMs: outcome.atWallMs, nowMs: nowMs())) · \(outcomeLabel(outcome.kind, offlineLabel: offlineLabel))"
+            secondLine = "\(relativeTimeLabel(atWallMs: outcome.atWallMs, nowMs: nowMs())) · \(outcomeLabel(outcome.kind, offlineLabel: offlineLabel))"
         }
         return ReceiptLine(label: label, uploaded: uploaded, total: total, done: done, isError: isError, secondLine: secondLine)
     }
@@ -337,7 +337,7 @@ final class UploadModel {
         switch kind {
         case .ok: return "ok"
         case .offline: return offlineLabel
-        case .error: return "ошибка"
+        case .error: return String(localized: .uploadOutcomeError)
         }
     }
 }

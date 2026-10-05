@@ -1,0 +1,92 @@
+{
+  "sourceLanguage" : "ru",
+  "strings" : {
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kolco24"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kolco24"
+          }
+        }
+      }
+    },
+    "NFCReaderUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NFC is used to record a checkpoint punch by reading its chip, and lets organizers write checkpoint chips and participant wristbands."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NFC нужен, чтобы отмечать взятие контрольного пункта по его чипу, а организаторам — чтобы записывать чипы КП и браслеты участников."
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The camera is used to photograph a checkpoint when its NFC chip cannot be read or is missing. The photo is sent to the organizers as proof of the punch."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Камера нужна, чтобы сфотографировать контрольный пункт, если его NFC-чип не читается или сорван. Фото отправляется организаторам как подтверждение взятия КП."
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app connects to the race server on the local network to send your checkpoint punches."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приложение подключается к серверу гонки в локальной сети, чтобы передавать отметки о взятых контрольных пунктах."
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Location is used to record your track during the race and to save where each checkpoint was punched. The track is sent to the organizers to verify the route."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Геопозиция нужна, чтобы записывать трек во время гонки и сохранять точку взятия КП. Трек передаётся организаторам для проверки маршрута."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

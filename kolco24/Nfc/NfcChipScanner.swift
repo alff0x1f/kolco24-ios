@@ -73,7 +73,7 @@ final class NfcChipScanner: NSObject, ChipScanning, ProvisioningScanning {
     private let debounceInterval: TimeInterval = 1.5
 
     /// Текущая строка системной шторки (обновляет хост по мере взятия; переприменяется после каждого чтения).
-    private var alertMessage = "Приложите чип КП"
+    private var alertMessage = String(localized: .nfcAlertTapCpChip)
 
     /// pending-write ячейка провижининга (этап 10): UID+запись, ожидающие следующего тапа. Защищена `lock`;
     /// читается ТОЛЬКО обработчиком (`defaultProcess`) на `readQueue` — один механизм, не два. При совпадении

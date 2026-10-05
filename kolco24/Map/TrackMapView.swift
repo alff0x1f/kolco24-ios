@@ -381,7 +381,7 @@ final class StopAnnotation: NSObject, MKAnnotation {
 
     var label: String { pin.label }
 
-    var title: String? { "Стоянка \(pin.label)" }
+    var title: String? { String(localized: .mapStopTitle(pin.label)) }
 
     var subtitle: String? {
         "\(Self.hhmm(pin.startMs))–\(Self.hhmm(pin.endMs))"
@@ -483,9 +483,13 @@ final class CheckpointAnnotation: NSObject, MKAnnotation {
         self.timeMs = timeMs
     }
 
-    /// Коллаут «КП N · M баллов · HH:mm» (`pointsLabel` для баллов, время из epoch-ms в локальном HH:mm).
+    /// Коллаут «КП N · M баллов · HH:mm» (`common.points.count` для баллов, время из epoch-ms в локальном HH:mm).
     var title: String? {
-        "КП \(number) · \(pointsLabel(cost)) · \(Self.hhmm.string(from: Date(timeIntervalSince1970: Double(timeMs) / 1000)))"
+        String(localized: .mapCpCallout(
+            String(number),
+            String(localized: .commonPointsCount(cost)),
+            Self.hhmm.string(from: Date(timeIntervalSince1970: Double(timeMs) / 1000))
+        ))
     }
 
     private static let hhmm: DateFormatter = {
