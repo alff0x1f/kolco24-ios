@@ -276,8 +276,8 @@
 - Modify: `kolco24/LegendView.swift`, `MapTabView.swift`, `kolco24/Map/TrackMapView.swift` (remaining text)
 - Modify: `kolco24/Localizable.xcstrings`
 
-- [ ] convert literals; server data (legend text, race name) passes through unchanged
-- [ ] build + run tests - must pass before next task
+- [x] convert literals; server data (legend text, race name) passes through unchanged
+- [x] build + run tests - must pass before next task
 
 ### Task 10: Views — Team tab, Settings, Upload, team picker; «Язык» row
 

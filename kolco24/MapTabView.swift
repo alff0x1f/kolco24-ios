@@ -59,7 +59,7 @@ struct MapTabView: View {
     var body: some View {
         content
             .background(Color.paper)
-            .navigationTitle("Карта")
+            .navigationTitle(.tabMap)
             .navigationBarTitleDisplayMode(.inline)
             // Keep tab icons legible over both Apple maps and arbitrary offline tiles.
             .toolbarBackground(Color.card, for: .tabBar)
@@ -150,7 +150,7 @@ struct MapTabView: View {
                         .font(.mono(11, weight: .semibold))
                 }
             }
-            Text("км/ч")
+            Text(.mapSpeedUnit)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color.sub)
         }
@@ -159,7 +159,7 @@ struct MapTabView: View {
         .padding(.vertical, 5)
         .background(Capsule().fill(.ultraThinMaterial))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Цвет трека по скорости")
+        .accessibilityLabel(Text(.mapSpeedLegendLabel))
     }
 
     /// Чип «Все точки»: выключен — полупрозрачный материал + число скрытых точек; включён — оранжевый
@@ -171,7 +171,7 @@ struct MapTabView: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
                 }
-                Text("Все точки")
+                Text(.mapAllPoints)
                     .font(.system(size: 13, weight: .semibold))
                 if hiddenCount > 0 {
                     Text("· +\(hiddenCount)")
@@ -216,7 +216,7 @@ struct MapTabView: View {
     private func cameraControls(showRaceMap: Bool, showMyLocation: Bool) -> some View {
         VStack(spacing: 0) {
             if showRaceMap {
-                cameraButton(systemImage: "map", label: "Показать карту гонки", command: .raceMap)
+                cameraButton(systemImage: "map", label: String(localized: .mapCameraRaceMap), command: .raceMap)
             }
             if showRaceMap && showMyLocation {
                 Rectangle()
@@ -224,7 +224,7 @@ struct MapTabView: View {
                     .frame(width: 24, height: 1)
             }
             if showMyLocation {
-                cameraButton(systemImage: "location", label: "Моё местоположение", command: .myLocation)
+                cameraButton(systemImage: "location", label: String(localized: .mapCameraMyLocation), command: .myLocation)
             }
         }
         .background(Capsule().fill(.ultraThinMaterial))
@@ -262,7 +262,7 @@ struct MapTabView: View {
         HStack(spacing: 6) {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 11))
-            Text("Оффлайн-карта для этой гонки недоступна")
+            Text(.mapUnavailable)
                 .font(.system(size: 12))
         }
         .foregroundStyle(Color.sub)
@@ -278,7 +278,7 @@ struct MapTabView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Скачать карту гонки")
+                    Text(.mapDownloadAction)
                         .font(.system(size: 16, weight: .bold))
                 }
                 .foregroundStyle(.white)
@@ -290,7 +290,7 @@ struct MapTabView: View {
             }
             .buttonStyle(.plain)
 
-            Text("Скачается один раз по Wi-Fi — дальше карта работает офлайн.")
+            Text(.mapDownloadHint)
                 .font(.system(size: 12))
                 .foregroundStyle(Color.sub)
                 .multilineTextAlignment(.center)
@@ -307,7 +307,7 @@ struct MapTabView: View {
         let clamped = min(max(progress, 0), 1)
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Скачивание карты…")
+                Text(.mapDownloadProgress)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.ink)
                 ProgressView(value: clamped)

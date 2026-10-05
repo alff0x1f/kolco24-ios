@@ -15,9 +15,16 @@
 import SwiftUI
 
 // MARK: - Filter
-private enum CPFilter: String, CaseIterable {
-    case all  = "Все"
-    case open = "Не взятые"
+private enum CPFilter: CaseIterable {
+    case all
+    case open
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .all: .legendFilterAll
+        case .open: .legendFilterOpen
+        }
+    }
 }
 
 // MARK: - LegendView
@@ -31,7 +38,7 @@ struct LegendView: View {
     var body: some View {
         content
             .background(Color.paper)
-            .navigationTitle("Легенда")
+            .navigationTitle(.tabLegend)
             .navigationBarTitleDisplayMode(.inline)
             .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeLegendModel() }
@@ -132,10 +139,10 @@ private struct LockedHeroView: View {
             .frame(width: 64, height: 64)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Скрыто \(lockedCount) КП")
+                Text(.legendLockedCount(lockedCount))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.white)
-                Text("Стоимость и описания КП появятся позже")
+                Text(.legendLockedHint)
                     .font(.system(size: 11.5))
                     .foregroundStyle(.white.opacity(0.68))
             }
@@ -161,7 +168,9 @@ private struct ScoreStripView: View {
 
     private var kpLabel: String {
         // Скрываем «/0» до того, как сервер пришлёт `scoring_count` (порт `totalCount > 0`-гейта).
-        scoringCount > 0 ? "\(takenScoring)/\(scoringCount) КП" : "\(takenScoring) КП"
+        scoringCount > 0
+            ? String(localized: .legendHeaderTakenOfTotal(takenScoring, scoringCount))
+            : String(localized: .legendHeaderTaken(takenScoring))
     }
 
     var body: some View {
@@ -304,7 +313,7 @@ private struct CPFilterPicker: View {
             filter = option
         } label: {
             HStack(spacing: 6) {
-                Text(option.rawValue)
+                Text(option.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.ink)
                 Text("\(count)")
