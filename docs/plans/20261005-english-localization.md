@@ -300,8 +300,9 @@
   `JudgeScanView.swift`, `CheckChipView.swift`, `CheckMemberChipView.swift`
 - Modify: `kolco24/Localizable.xcstrings`
 
-- [ ] convert literals
-- [ ] build + run tests - must pass before next task
+- [x] convert literals
+- [x] build + run tests - must pass before next task
+- [x] ➕ `TextField`/`SecureField(LocalizedStringResource)` is iOS 26+ → `String(localized:)` title
 
 ### Task 12: Cyrillic literal check and English proofread
 

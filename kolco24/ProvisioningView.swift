@@ -45,7 +45,7 @@ struct ProvisioningView: View {
             .padding(.bottom, 28)
         }
         .background(Color.paper)
-        .navigationTitle("Привязка чипов")
+        .navigationTitle(.provisioningTitle)
         .navigationBarTitleDisplayMode(.inline)
         .task { model.beginScanning() }
         .onDisappear { model.stop() }
@@ -58,11 +58,11 @@ struct ProvisioningView: View {
             Image(systemName: model.loaded ? "mappin.slash" : "arrow.triangle.2.circlepath")
                 .font(.system(size: 34, weight: .semibold))
                 .foregroundStyle(Color.sub)
-            Text(model.loaded ? "В легенде нет КП" : "Загрузка КП…")
+            Text(model.loaded ? .provisioningNoCps : .provisioningLoadingCps)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.ink)
             if model.loaded {
-                Text("Синхронизируйте гонку на вкладке «Легенда»")
+                Text(.provisioningSyncHint)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.sub)
                     .multilineTextAlignment(.center)
@@ -138,7 +138,7 @@ struct ProvisioningView: View {
                 .fill(barColor(parseCheckpointColor(cp.color)))
                 .frame(width: 8)
             VStack(spacing: 8) {
-                Text("КП")
+                Text(.commonCp)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.sub)
                 Text(String(format: "%02d", cp.number))
@@ -150,7 +150,7 @@ struct ProvisioningView: View {
 
                 let bound = model.alreadyBound(cp)
                 if bound > 0 {
-                    Text("Уже привязано: \(bound)")
+                    Text(.provisioningAlreadyBound(bound))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.sub)
                         .padding(.top, 2)
@@ -182,22 +182,22 @@ struct ProvisioningView: View {
         switch model.provisionState {
         case .waitingForChip:
             scanCard(icon: "wave.3.right", tint: Color.sub,
-                     title: "Приложите чип к телефону",
-                     subtitle: "Тап 1 — привязка чипа к этому КП")
+                     title: String(localized: .provisioningCardTapChip),
+                     subtitle: String(localized: .provisioningCardTapOne))
         case .binding:
             scanCard(icon: "arrow.triangle.2.circlepath", tint: Color.kolcoOrange,
-                     title: "Привязка на сервере…", subtitle: nil, spinning: true)
+                     title: String(localized: .commonBinding), subtitle: nil, spinning: true)
         case .waitingForWrite:
             scanCard(icon: "square.and.arrow.down", tint: Color.kolcoOrange,
                      title: model.writeHint ?? ProvisionMessage.kpWriteAgainHint,
-                     subtitle: "Тап 2 — запись кода на чип")
+                     subtitle: String(localized: .provisioningCardTapTwo))
         case let .success(number):
             scanCard(icon: "checkmark.circle.fill", tint: Color.good,
-                     title: "Записано: КП \(String(format: "%02d", number))",
-                     subtitle: "Переход к следующему КП")
+                     title: String(localized: .provisioningStatusWritten(String(format: "%02d", number))),
+                     subtitle: String(localized: .provisioningCardNext))
         case let .failed(reason):
             scanCard(icon: "xmark.circle.fill", tint: Color.brandRed,
-                     title: "Ошибка", subtitle: reason)
+                     title: String(localized: .commonError), subtitle: reason)
         }
     }
 
@@ -206,7 +206,7 @@ struct ProvisioningView: View {
         Button {
             model.resumeScanning()
         } label: {
-            Label("Сканировать", systemImage: "wave.3.right")
+            Label(.adminScan, systemImage: "wave.3.right")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)

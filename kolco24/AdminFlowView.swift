@@ -97,17 +97,17 @@ private struct AdminHomeView: View {
             }
         }
         .background(Color.paper)
-        .navigationTitle("Администратор")
+        .navigationTitle(.settingsAdmin)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(reLoginShown)
         .toolbar {
             if reLoginShown {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Назад") { reLoginTarget = nil }
+                    Button(.commonBack) { reLoginTarget = nil }
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Готово") { onClose() }
+                Button(.commonDone) { onClose() }
             }
         }
         .task {
@@ -159,11 +159,11 @@ private struct AdminHomeView: View {
                 HStack {
                     Group {
                         if passwordVisible {
-                            TextField("Пароль", text: $password)
+                            TextField(String(localized: .adminLoginPassword), text: $password)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                         } else {
-                            SecureField("Пароль", text: $password)
+                            SecureField(String(localized: .adminLoginPassword), text: $password)
                         }
                     }
                     .textContentType(.password)
@@ -174,7 +174,7 @@ private struct AdminHomeView: View {
                             .foregroundStyle(Color.sub)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(passwordVisible ? "Скрыть пароль" : "Показать пароль")
+                    .accessibilityLabel(Text(passwordVisible ? .adminLoginHidePassword : .adminLoginShowPassword))
                 }
                 .listRowBackground(Color.card)
             } header: {
@@ -194,7 +194,7 @@ private struct AdminHomeView: View {
                         if loggingIn {
                             ProgressView().tint(.white)
                         } else {
-                            Text("Войти")
+                            Text(.adminRowSignIn)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.white)
                         }
@@ -213,9 +213,9 @@ private struct AdminHomeView: View {
 
     private func loginTitle(_ target: AdminServer?) -> String {
         switch target {
-        case .cloud: "Вход на cloud-сервер"
-        case .lan: "Вход на LAN-сервер гонки"
-        case nil: "Вход организатора"
+        case .cloud: String(localized: .adminLoginTitleCloud)
+        case .lan: String(localized: .adminLoginTitleLan)
+        case nil: String(localized: .adminLoginTitleOrganizer)
         }
     }
 
@@ -232,7 +232,7 @@ private struct AdminHomeView: View {
             loggingIn = false
             // Успех → стримы держателей переведут сессии (ветка меню). Иначе — inline-ошибка.
             guard let outcome else {
-                errorText = "Включите локальный режим гонки"
+                errorText = String(localized: .adminLoginEnableLocalMode)
                 return
             }
             errorText = adminErrorMessage(outcome)
@@ -259,79 +259,79 @@ private struct AdminHomeView: View {
     private var menu: some View {
         List {
             Section {
-                ServerStatusRow(label: "Cloud", session: cloudSession, loggedOutText: "нет входа",
+                ServerStatusRow(label: "Cloud", session: cloudSession, loggedOutText: String(localized: .adminStatusNotSignedIn),
                                 onLogin: { openReLogin(.cloud) })
                     .listRowBackground(Color.card)
                 ServerStatusRow(label: "LAN", session: localSession,
-                                loggedOutText: lanActive ? "нет входа" : "включите локальный режим гонки",
+                                loggedOutText: lanActive ? String(localized: .adminStatusNotSignedIn) : String(localized: .adminStatusEnableLocalMode),
                                 onLogin: lanActive ? { openReLogin(.lan) } : nil)
                     .listRowBackground(Color.card)
             } header: {
-                Text("Вход выполнен")
+                Text(.adminSignedIn)
             }
 
             if appModel.selectedRaceId == nil {
                 Section {
-                    Text("Выберите команду на вкладке «Команда», чтобы открыть судейские действия — гонка определяется по выбранной команде.")
+                    Text(.adminChooseTeamHint)
                         .font(.system(size: 13))
                         .foregroundStyle(Color.sub)
                         .listRowBackground(Color.card)
                 } header: {
-                    Text("Действия")
+                    Text(.adminActions)
                 }
             } else if !canAdminSelectedRace {
                 Section {
-                    Text("Нет прав администратора на эту гонку")
+                    Text(.adminNoRights)
                         .font(.system(size: 13))
                         .foregroundStyle(Color.sub)
                         .listRowBackground(Color.card)
                 } header: {
-                    Text("Действия")
+                    Text(.adminActions)
                 }
             } else {
                 Section {
                     NavigationLink(value: AdminRoute.provisioning) {
                         AdminActionRow(systemImage: "link.badge.plus", iconBg: Color.charcoal,
-                                       label: "Привязать чип к КП", sub: "Запись кода на чип", enabled: true)
+                                       label: String(localized: .adminActionBindCpChip), sub: String(localized: .adminActionBindCpChipSub), enabled: true)
                     }
                     .listRowBackground(Color.card)
                     NavigationLink(value: AdminRoute.checkChip) {
                         AdminActionRow(systemImage: "magnifyingglass", iconBg: Color.charcoal,
-                                       label: "Проверить чип КП", sub: "Оффлайн-проверка привязки", enabled: true)
+                                       label: String(localized: .adminActionCheckCpChip), sub: String(localized: .adminActionCheckCpChipSub), enabled: true)
                     }
                     .listRowBackground(Color.card)
                 } header: {
-                    Text("Чипы КП")
+                    Text(.adminSectionCpChips)
                 }
 
                 Section {
                     NavigationLink(value: AdminRoute.memberProvisioning) {
                         AdminActionRow(systemImage: "person.badge.key.fill", iconBg: Color.charcoal,
-                                       label: "Записать браслет", sub: "Запись кода на браслет", enabled: true)
+                                       label: String(localized: .adminActionWriteWristband), sub: String(localized: .adminActionWriteWristbandSub), enabled: true)
                     }
                     .listRowBackground(Color.card)
                     NavigationLink(value: AdminRoute.checkMemberChip) {
                         AdminActionRow(systemImage: "person.crop.circle.badge.questionmark", iconBg: Color.charcoal,
-                                       label: "Проверить браслет", sub: "Оффлайн-проверка браслета", enabled: true)
+                                       label: String(localized: .adminActionCheckWristband), sub: String(localized: .adminActionCheckWristbandSub), enabled: true)
                     }
                     .listRowBackground(Color.card)
                 } header: {
-                    Text("Браслеты участников")
+                    Text(.adminSectionWristbands)
                 }
 
                 Section {
                     NavigationLink(value: AdminRoute.judge(eventType: "start")) {
                         AdminActionRow(systemImage: "flag.fill", iconBg: Color.good,
-                                       label: "Отметка старта", sub: "Сканировать браслеты на старте", enabled: true)
+                                       label: String(localized: .judgeTitleStart), sub: String(localized: .judgeStartSub), enabled: true)
                     }
                     .listRowBackground(Color.card)
                     NavigationLink(value: AdminRoute.judge(eventType: "finish")) {
                         AdminActionRow(systemImage: "flag.checkered", iconBg: Color.brandRed,
-                                       label: "Отметка финиша", sub: "Сканировать браслеты на финише", enabled: true)
+                                       label: String(localized: .judgeTitleFinish), sub: String(localized: .judgeFinishSub), enabled: true)
                     }
                     .listRowBackground(Color.card)
                 } header: {
-                    Text("Судейские отметки")
+                    Text(.adminSectionJudgeScans)
                 }
             }
 
@@ -342,7 +342,7 @@ private struct AdminHomeView: View {
                         if loggingOut {
                             ProgressView()
                         } else {
-                            Text("Выйти")
+                            Text(.adminSignOut)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(Color.brandRed)
                         }
@@ -399,7 +399,7 @@ private struct ServerStatusRow: View {
             }
             Spacer()
             if !loggedIn, let onLogin {
-                Button("Войти", action: onLogin)
+                Button(.adminRowSignIn, action: onLogin)
                     .buttonStyle(.borderless)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Color.kolcoOrange)
@@ -563,7 +563,7 @@ private struct AdminNoTeamPlaceholder: View {
             Image(systemName: "person.3.sequence")
                 .font(.system(size: 40))
                 .foregroundStyle(Color.sub)
-            Text("Сначала выберите команду")
+            Text(.marksEmptyChooseTeamFirst)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.ink)
         }
