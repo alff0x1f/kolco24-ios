@@ -77,17 +77,17 @@ struct PhotoCaptureView: View {
         }
         .onDisappear { camera.stop() }
         .confirmationDialog(
-            "Удалить снимки?",
+            .photoDiscardTitle,
             isPresented: $showDiscardConfirm,
             titleVisibility: .visible
         ) {
-            Button("Удалить", role: .destructive) {
+            Button(.commonDelete, role: .destructive) {
                 model.discard()
                 dismiss()
             }
-            Button("Отмена", role: .cancel) {}
+            Button(.commonCancel, role: .cancel) {}
         } message: {
-            Text("Снятые кадры (\(model.frameCount)) не будут сохранены.")
+            Text(.photoDiscardMessage(model.frameCount))
         }
     }
 
@@ -101,11 +101,11 @@ struct PhotoCaptureView: View {
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
             }
-            Text("КП \(String(format: "%02d", model.cpNumber))")
+            Text(.commonCpNumber(String(format: "%02d", model.cpNumber)))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(.white)
             if attach {
-                Button("изменить") {
+                Button(.photoCaptureChange) {
                     thumbnails.removeAll()
                     model.changeCheckpoint()
                 }
@@ -153,7 +153,7 @@ struct PhotoCaptureView: View {
                 Spacer()
 
                 Button(action: commit) {
-                    Text("Готово (\(model.frameCount))")
+                    Text(.photoCaptureDone(model.frameCount))
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(model.frameCount > 0 ? .white : .white.opacity(0.4))
                         .frame(width: 72)
@@ -213,14 +213,14 @@ struct PhotoCaptureView: View {
 
     private var deniedPlaceholder: some View {
         VStack(spacing: 12) {
-            Text("Нужен доступ к камере")
+            Text(.photoCameraDeniedTitle)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(.white)
-            Text("Чтобы сфотографировать КП, разрешите доступ к камере в настройках приложения.")
+            Text(.photoCameraDeniedBody)
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.7))
                 .multilineTextAlignment(.center)
-            Button("Открыть настройки") {
+            Button(.commonOpenSettings) {
                 if let url = URL(string: "app-settings:") { openURL(url) }
             }
             .font(.system(size: 16, weight: .semibold))

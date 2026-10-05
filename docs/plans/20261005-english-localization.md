@@ -121,7 +121,8 @@
   `func en(_ r: LocalizedStringResource) -> String` + `ru(_:)` (set `r.locale`; verified in Task 1).
 - Catalog test reads compiled `ru.lproj`/`en.lproj` `Localizable.strings` + `.stringsdict` from
   `Bundle.main` and compares key sets.
-- Key pattern: `^[a-z][a-zA-Z0-9]*(\.[a-zA-Z0-9]+)+$` (first segment may be lowerCamel: `controlTime.*`).
+- Key pattern: `^[a-z][a-zA-Z]*(\.[a-zA-Z]+)+$` (first segment may be lowerCamel: `controlTime.*`; **no digits** —
+  the symbol generator uppercases the letter after a digit: `a11y` → `A11Y`).
 - ⚠️ `%lld` is formatted with the locale: ru 1500 → «1 500» (grouping). Fine for counts; identifiers (team/bib/chip numbers, codes, years) go as `%@` with `String(n)`.
 - Byte sizes: replace the hand-made units/decimal comma in `SettingsModel` with
   `ByteCountFormatter`/`.formatted(.byteCount(style: .file))` (locale-aware), or keep the hand-made one with
@@ -262,10 +263,12 @@
   `SharedComponents.swift`, `ContentView.swift` (tab titles)
 - Modify: `kolco24/Localizable.xcstrings`
 
-- [ ] convert literals to symbols; `String` params of own components get `String(localized: .key)` at call
+- [x] convert literals to symbols; `String` params of own components get `String(localized: .key)` at call
       sites
-- [ ] `#Preview` sample data stays as is
-- [ ] build + run tests (catalog tests are the gate) - must pass before next task
+- [x] `#Preview` sample data stays as is
+- [x] ➕ `accessibilityLabel`/`Hint` have no `LocalizedStringResource` overload → `Text(.key)`
+- [x] ➕ fixed `ScanSheet` cost «N баллов» without declension → `common.points.count`
+- [x] build + run tests (catalog tests are the gate) - must pass before next task
 
 ### Task 9: Views — Legend and Map tabs
 

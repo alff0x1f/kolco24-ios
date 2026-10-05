@@ -292,6 +292,57 @@
         }
       }
     },
+    "clock.banner.skewed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Часы телефона расходятся с сервером на %@ — проверьте дату и время"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The phone clock differs from the server by %@ — check the date and time"
+          }
+        }
+      }
+    },
+    "clock.banner.unconfirmedJudge" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Время не подтверждено — синхронизируйте до начала работы"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time not confirmed — sync before you start"
+          }
+        }
+      }
+    },
+    "clock.banner.unconfirmedParticipant" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Время не подтверждено — подключитесь к сети. Отметка всё равно будет сохранена."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time not confirmed — connect to the network. The punch will still be saved."
+          }
+        }
+      }
+    },
     "common.binding" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -394,6 +445,57 @@
         }
       }
     },
+    "common.chooseTeam" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбрать команду"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose team"
+          }
+        }
+      }
+    },
+    "common.close" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закрыть"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        }
+      }
+    },
+    "common.cp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "КП"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CP"
+          }
+        }
+      }
+    },
     "common.cp.number" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -411,6 +513,40 @@
         }
       },
       "comment" : "checkpoint number, zero-padded «07»"
+    },
+    "common.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
+          }
+        }
+      }
+    },
+    "common.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
     },
     "common.duration.hoursMinutes" : {
       "extractionState" : "manual",
@@ -464,6 +600,23 @@
         }
       }
     },
+    "common.openSettings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть настройки"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        }
+      }
+    },
     "common.points.count" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -513,6 +666,23 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "common.retry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повторить"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
           }
         }
       }
@@ -585,6 +755,23 @@
         }
       },
       "comment" : "time left until the control time (КВ) runs out"
+    },
+    "legend.descriptionHidden" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Описание скрыто"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description hidden"
+          }
+        }
+      }
     },
     "localMode.dataStaleSuffix" : {
       "extractionState" : "manual",
@@ -775,6 +962,176 @@
         }
       }
     },
+    "marks.action.photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фото"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo"
+          }
+        }
+      }
+    },
+    "marks.empty.noTeam.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отметки на КП засчитываются по NFC-чипам участников. Выберите команду, чтобы отмечаться на дистанции и видеть общий счёт."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CP punches are counted by the participants' NFC chips. Choose a team to punch on the course and see the total score."
+          }
+        }
+      }
+    },
+    "marks.empty.noTeam.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Команда не выбрана"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No team selected"
+          }
+        }
+      }
+    },
+    "marks.empty.teamGone.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбранная команда снялась или удалена из списка. Выберите команду заново, чтобы продолжить отмечаться."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected team withdrew or was removed. Choose a team again to keep punching."
+          }
+        }
+      }
+    },
+    "marks.empty.teamGone.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Команда больше не зарегистрирована"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Team is no longer registered"
+          }
+        }
+      }
+    },
+    "marks.metric.score" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Баллов"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Points"
+          }
+        }
+      }
+    },
+    "marks.metric.taken" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Взято КП"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CPs taken"
+          }
+        }
+      }
+    },
+    "marks.nfcUnavailable.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " · отметка чипом не сработает, отмечайтесь фото"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " · chip punches won't work, use photos"
+          }
+        }
+      }
+    },
+    "marks.nfcUnavailable.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NFC недоступен"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NFC unavailable"
+          }
+        }
+      }
+    },
+    "marks.photoReview.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Баллы засчитают после проверки судьями"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Points will count after the judges review"
+          }
+        }
+      }
+    },
     "marks.photoReview.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -809,6 +1166,108 @@
         }
       },
       "comment" : "last arg is common.points.count"
+    },
+    "marks.readiness.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готовность к старту"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start readiness"
+          }
+        }
+      }
+    },
+    "marks.ready.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приложите телефон к метке КП — отметка появится здесь."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold your phone to a CP tag — the punch will appear here."
+          }
+        }
+      }
+    },
+    "marks.ready.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Всё готово к старту"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready to start"
+          }
+        }
+      }
+    },
+    "marks.scoreHidden" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Взято, баллы пока скрыты"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taken, points hidden for now"
+          }
+        }
+      }
+    },
+    "marks.unconfirmed.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отметьтесь на КП ещё раз при наличии связи"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Punch the CP again when you have a connection"
+          }
+        }
+      }
+    },
+    "marks.unconfirmed.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не подтверждены сервером (%1$lld): %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not confirmed by the server (%1$lld): %2$@"
+          }
+        }
+      }
     },
     "memberProvisioning.error.conflict" : {
       "extractionState" : "manual",
@@ -947,6 +1406,142 @@
         }
       }
     },
+    "photo.camera.denied.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы сфотографировать КП, разрешите доступ к камере в настройках приложения."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To photograph a CP, allow camera access in the app settings."
+          }
+        }
+      }
+    },
+    "photo.camera.denied.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужен доступ к камере"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera access needed"
+          }
+        }
+      }
+    },
+    "photo.capture.change" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "изменить"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "change"
+          }
+        }
+      }
+    },
+    "photo.capture.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово (%lld)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done (%lld)"
+          }
+        }
+      }
+    },
+    "photo.discard.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Снятые кадры (%lld) не будут сохранены."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The photos taken (%lld) will not be saved."
+          }
+        }
+      }
+    },
+    "photo.discard.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить снимки?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete photos?"
+          }
+        }
+      }
+    },
+    "photo.lightbox.unconfirmed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "не подтверждён сервером"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not confirmed by the server"
+          }
+        }
+      }
+    },
+    "photo.picker.erase" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Стереть номер"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erase number"
+          }
+        }
+      }
+    },
     "photo.picker.error.notInLegend" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -960,6 +1555,125 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No CP with this number in the legend"
+          }
+        }
+      }
+    },
+    "photo.picker.hint.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Номер написан на табличке КП"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The number is on the CP sign"
+          }
+        }
+      }
+    },
+    "photo.picker.hint.exact" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажмите на КП, чтобы открыть камеру"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap the CP to open the camera"
+          }
+        }
+      }
+    },
+    "photo.picker.hint.noMatch" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В легенде нет КП %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No CP %@ in the legend"
+          }
+        }
+      }
+    },
+    "photo.picker.hint.partial" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите номер полностью или выберите из списка"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the full number or pick from the list"
+          }
+        }
+      }
+    },
+    "photo.picker.numberField" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Номер КП"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CP number"
+          }
+        }
+      }
+    },
+    "photo.picker.openCamera" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть камеру"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open camera"
+          }
+        }
+      }
+    },
+    "photo.picker.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фото КП"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CP photo"
           }
         }
       }
@@ -1938,6 +2652,40 @@
         }
       }
     },
+    "scan.allMembersPunched" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Все участники отмечены"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All team members punched"
+          }
+        }
+      }
+    },
+    "scan.anyOrder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сканировать чипы можно в любом порядке"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can scan the chips in any order"
+          }
+        }
+      }
+    },
     "scan.badKp.decryptFailed" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2006,6 +2754,91 @@
         }
       }
     },
+    "scan.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменить"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "scan.chip.none" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет чипа"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No chip"
+          }
+        }
+      }
+    },
+    "scan.chip.number" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чип %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chip %@"
+          }
+        }
+      }
+    },
+    "scan.cpNotScanned" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "КП не отсканирован"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CP not scanned"
+          }
+        }
+      }
+    },
+    "scan.cpTag" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Метка КП"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CP tag"
+          }
+        }
+      }
+    },
     "scan.diagnostic.unboundChip" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2019,6 +2852,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chip is not bound to the team"
+          }
+        }
+      }
+    },
+    "scan.holdToCpChip" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поднесите телефон к чипу на КП"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold your phone to the chip on the CP"
           }
         }
       }
@@ -2040,6 +2890,40 @@
         }
       },
       "comment" : "CP number · scanned chips / team size"
+    },
+    "scan.success" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово!"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done!"
+          }
+        }
+      }
+    },
+    "scan.teamChips" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чипы команды"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Team chips"
+          }
+        }
+      }
     },
     "scan.timer.allScanned" : {
       "extractionState" : "manual",
@@ -2111,6 +2995,57 @@
         }
       }
     },
+    "scan.timer.resetHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Таймер сбрасывается на %lld с при каждом скане"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The timer resets to %lld s on every scan"
+          }
+        }
+      }
+    },
+    "scan.timer.scanNow" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сканируйте"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan now"
+          }
+        }
+      }
+    },
+    "scan.timer.secondsUnit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "сек"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sec"
+          }
+        }
+      }
+    },
     "scan.timer.tapCpTag" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2128,6 +3063,108 @@
         }
       }
     },
+    "scan.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отметить КП"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Punch CP"
+          }
+        }
+      }
+    },
+    "scan.upload.attempt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "попытка %lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "attempt %lld"
+          }
+        }
+      }
+    },
+    "scan.upload.offline" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет связи — КП не подтверждён"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No connection — CP not confirmed"
+          }
+        }
+      }
+    },
+    "scan.upload.rejected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сервер не принял — КП не подтверждён"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server rejected it — CP not confirmed"
+          }
+        }
+      }
+    },
+    "scan.upload.sendingCloud" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправка на сервер…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending to the server…"
+          }
+        }
+      }
+    },
+    "scan.upload.sendingLocal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправка на локальный сервер…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending to the local server…"
+          }
+        }
+      }
+    },
     "settings.toast.dbCleared" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2141,6 +3178,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Database cleared"
+          }
+        }
+      }
+    },
+    "tab.legend" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Легенда"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legend"
+          }
+        }
+      }
+    },
+    "tab.map" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Map"
+          }
+        }
+      }
+    },
+    "tab.marks" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отметки"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Punches"
+          }
+        }
+      }
+    },
+    "tab.team" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Команда"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Team"
           }
         }
       }

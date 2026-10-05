@@ -96,7 +96,7 @@ struct ScanSheet: View {
 
                 // Chips header
                 HStack {
-                    Text("Чипы команды")
+                    Text(.scanTeamChips)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.sub)
                         .textCase(.uppercase)
@@ -110,7 +110,7 @@ struct ScanSheet: View {
 
                 chipGrid
 
-                Text("Сканировать чипы можно в любом порядке")
+                Text(.scanAnyOrder)
                     .font(.system(size: 12))
                     .foregroundStyle(Color.sub)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -162,7 +162,7 @@ struct ScanSheet: View {
         HStack {
             Color.clear.frame(width: 30)
             Spacer()
-            Text("Отметить КП")
+            Text(.scanTitle)
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(Color.ink)
             Spacer()
@@ -211,7 +211,7 @@ struct ScanSheet: View {
 
     private var actions: some View {
         HStack(spacing: 10) {
-            Button("Отменить") { close() }
+            Button(.scanCancel) { close() }
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.ink)
                 .frame(maxWidth: .infinity)
@@ -219,7 +219,7 @@ struct ScanSheet: View {
                 .background(Color.sub.opacity(0.2))
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            Button("Готово") { close() }
+            Button(.commonDone) { close() }
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -245,30 +245,30 @@ private struct CPCardView: View {
             CPBadge(number: number.map(String.init) ?? "?", size: 62)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Метка КП")
+                Text(.scanCpTag)
                     .font(.system(size: 9.5, weight: .bold))
                     .foregroundStyle(Color.sub)
                     .textCase(.uppercase)
                     .tracking(1.2)
                 if completed {
-                    Text("Готово!")
+                    Text(.scanSuccess)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(Color.good)
-                    Text("Все участники отмечены")
+                    Text(.scanAllMembersPunched)
                         .font(.system(size: 12))
                         .foregroundStyle(Color.sub)
                 } else if let number {
-                    Text("КП \(number)")
+                    Text(.commonCpNumber(String(number)))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(Color.ink)
-                    Text(cost.map { "\($0) баллов" } ?? "—")
+                    Text(verbatim: cost.map { String(localized: .commonPointsCount($0)) } ?? "—")
                         .font(.mono(12, weight: .semibold))
                         .foregroundStyle(Color.sub)
                 } else {
-                    Text("КП не отсканирован")
+                    Text(.scanCpNotScanned)
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(Color.ink)
-                    Text("Поднесите телефон к чипу на КП")
+                    Text(.scanHoldToCpChip)
                         .font(.system(size: 12))
                         .foregroundStyle(Color.sub)
                 }
@@ -305,7 +305,7 @@ private struct ConfirmStatusView: View {
                     Text(Self.sendingText(target))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.ink)
-                    Text("попытка \(attempt)")
+                    Text(.scanUploadAttempt(attempt))
                         .font(.mono(11, weight: .medium))
                         .foregroundStyle(Color.sub)
                 }
@@ -323,20 +323,20 @@ private struct ConfirmStatusView: View {
                     Image(systemName: "icloud.slash")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.brandRed)
-                    Text(offline ? "Нет связи — КП не подтверждён" : "Сервер не принял — КП не подтверждён")
+                    Text(offline ? .scanUploadOffline : .scanUploadRejected)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.brandRed)
                     Spacer(minLength: 0)
                 }
                 HStack(spacing: 10) {
-                    Button("Повторить", action: onRetry)
+                    Button(.commonRetry, action: onRetry)
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 40)
                         .background(Color.kolcoOrange)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
-                    Button("Закрыть", action: onClose)
+                    Button(.commonClose, action: onClose)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.ink)
                         .frame(maxWidth: .infinity)
@@ -356,8 +356,8 @@ private struct ConfirmStatusView: View {
 
     static func sendingText(_ target: UploadTarget) -> String {
         switch target {
-        case .cloud: "Отправка на сервер…"
-        case .local: "Отправка на локальный сервер…"
+        case .cloud: String(localized: .scanUploadSendingCloud)
+        case .local: String(localized: .scanUploadSendingLocal)
         }
     }
 }
@@ -418,11 +418,11 @@ private struct ChipSlotView: View {
                     .foregroundStyle(filled ? Color.ink : Color.sub)
                     .lineLimit(1)
                 if let chipNumber {
-                    Text("Чип \(chipNumber)")
+                    Text(.scanChipNumber(String(chipNumber)))
                         .font(.mono(11, weight: .medium))
                         .foregroundStyle(Color.sub)
                 } else {
-                    Text("Нет чипа")
+                    Text(.scanChipNone)
                         .font(.mono(10, weight: .medium))
                         .foregroundStyle(Color.sub.opacity(0.5))
                         .textCase(.uppercase)
@@ -466,7 +466,7 @@ private struct TimerHeroView: View {
                     Text("\(seconds)")
                         .font(.mono(26, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("сек")
+                    Text(.scanTimerSecondsUnit)
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.white.opacity(0.55))
                         .textCase(.uppercase)
@@ -480,7 +480,7 @@ private struct TimerHeroView: View {
                     Circle().fill(Color.good)
                         .frame(width: 6, height: 6)
                         .shadow(color: Color.good.opacity(0.3), radius: 4)
-                    Text("Сканируйте")
+                    Text(.scanTimerScanNow)
                         .font(.mono(10, weight: .bold))
                         .foregroundStyle(.white.opacity(0.7))
                         .textCase(.uppercase)
@@ -490,7 +490,7 @@ private struct TimerHeroView: View {
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                Text("Таймер сбрасывается на \(total)\u{00A0}с при каждом скане")
+                Text(.scanTimerResetHint(total))
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(2)

@@ -27,20 +27,20 @@ struct ContentView: View {
                         onOpenMap: { selectedTab = 2 }
                     )
                 }
-                .tabItem { Label("Отметки", systemImage: "flag.fill") }
+                .tabItem { Label(.tabMarks, systemImage: "flag.fill") }
                 .tag(0)
                 NavigationStack { LegendView(onChooseTeam: { showPicker = true }) }
-                    .tabItem { Label("Легенда", systemImage: "list.bullet.rectangle.fill") }
+                    .tabItem { Label(.tabLegend, systemImage: "list.bullet.rectangle.fill") }
                     .tag(1)
                 NavigationStack {
                     MapTabView(onChooseTeam: { showPicker = true })
                 }
-                .tabItem { Label("Карта", systemImage: "map.fill") }
+                .tabItem { Label(.tabMap, systemImage: "map.fill") }
                 .tag(2)
                 NavigationStack {
                     TeamView(onChooseTeam: { showPicker = true })
                 }
-                .tabItem { Label("Команда", systemImage: "person.3.fill") }
+                .tabItem { Label(.tabTeam, systemImage: "person.3.fill") }
                 .tag(3)
             }
             .tint(Color.kolcoOrange)

@@ -24,16 +24,16 @@ import SwiftUI
 
 /// «Часы телефона расходятся с сервером на N мин — проверьте дату и время» (`ClockWarningBanner.kt`).
 private func skewedText(_ skewMs: Int64) -> String {
-    "Часы телефона расходятся с сервером на \(formatSkewMinutes(skewMs)) — проверьте дату и время"
+    String(localized: .clockBannerSkewed(formatSkewMinutes(skewMs)))
 }
 
 /// Мягкая NoSync-строка участника (`ScanClockBanner`, `ClockStatus.NoSync`).
 private let softNoSyncText =
-    "Время не подтверждено — подключитесь к сети. Отметка всё равно будет сохранена."
+    String(localized: .clockBannerUnconfirmedParticipant)
 
 /// Заголовок заметной судейской NoSync-карточки (`JudgeScanNoSyncCard`).
 private let judgeNoSyncText =
-    "Время не подтверждено — синхронизируйте до начала работы"
+    String(localized: .clockBannerUnconfirmedJudge)
 
 // MARK: - Глобальный баннер (над вкладками)
 

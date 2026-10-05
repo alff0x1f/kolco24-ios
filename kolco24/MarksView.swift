@@ -95,7 +95,7 @@ struct MarksView: View {
                     .allowsHitTesting(false)
             }
             .background(Color.paper)
-            .navigationTitle("Отметки")
+            .navigationTitle(.tabMarks)
             .navigationBarTitleDisplayMode(.inline)
             .task(id: [appModel.selectedRaceId, appModel.selectedTeamId]) {
                 if model == nil { model = appModel.makeMarksModel() }
@@ -558,9 +558,9 @@ private struct MetricsCard: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            MetricView(label: "Взято КП", value: takenValue)
+            MetricView(label: String(localized: .marksMetricTaken), value: takenValue)
             VDivider()
-            MetricView(label: "Баллов", value: scoreValue)
+            MetricView(label: String(localized: .marksMetricScore), value: scoreValue)
             VDivider()
             // «Сейчас» — в trusted-шкале отметок (`trustedNowMs`, `Core/Time/TrustedNow`), подпись/значение —
             // `controlTimeDisplay` (`Core/Marks/ControlTime`). Пока КВ идёт, тик раз в секунду двигает хвост `:SS`;
@@ -614,7 +614,7 @@ private struct HiddenKpNotice: View {
             .frame(width: 28, height: 28)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Взято, баллы пока скрыты")
+                Text(.marksScoreHidden)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.ink)
                 Text(tokensLabel(tokens))
@@ -671,10 +671,10 @@ private struct ReadinessCard: View {
         HStack(spacing: 12) {
             ReadinessStatusIcon(status: .done)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Всё готово к старту")
+                Text(.marksReadyTitle)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Color.ink)
-                Text("Приложите телефон к метке КП — отметка появится здесь.")
+                Text(.marksReadyBody)
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.sub)
                     .fixedSize(horizontal: false, vertical: true)
@@ -713,7 +713,7 @@ private struct ReadinessCard: View {
                     .fill(accent)
                     .frame(width: 6, height: 6)
                     .shadow(color: accent.opacity(0.3), radius: 4)
-                Text("Готовность к старту")
+                Text(.marksReadinessTitle)
                     .font(.mono(10, weight: .bold))
                     .foregroundStyle(Color.sub)
                     .textCase(.uppercase)
@@ -1040,7 +1040,7 @@ private struct PhotoReviewNotice: View {
         NoticeCard(
             icon: "camera.fill",
             title: title,
-            subtitle: "Баллы засчитают после проверки судьями"
+            subtitle: String(localized: .marksPhotoReviewSubtitle)
         )
     }
 }
@@ -1089,8 +1089,8 @@ private struct UnconfirmedNotice: View {
     var body: some View {
         NoticeCard(
             icon: "icloud.slash",
-            title: "Не подтверждены сервером (\(tokens.count)): \(tokensLabel(tokens))",
-            subtitle: "Отметьтесь на КП ещё раз при наличии связи"
+            title: String(localized: .marksUnconfirmedTitle(tokens.count, tokensLabel(tokens))),
+            subtitle: String(localized: .marksUnconfirmedSubtitle)
         )
     }
 }
@@ -1151,8 +1151,8 @@ private struct NfcUnavailableStripView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(Color.amber)
             (
-                Text("NFC недоступен").fontWeight(.semibold).foregroundStyle(Color.ink) +
-                Text(" · отметка чипом не сработает, отмечайтесь фото").foregroundStyle(Color.sub)
+                Text(.marksNfcUnavailableTitle).fontWeight(.semibold).foregroundStyle(Color.ink) +
+                Text(.marksNfcUnavailableDetail).foregroundStyle(Color.sub)
             )
             .font(.system(size: 12))
             .lineLimit(2)
@@ -1172,7 +1172,7 @@ private struct FloatingCTAView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "wave.3.right")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Отметить КП")
+                    Text(.scanTitle)
                         .font(.system(size: 16, weight: .bold))
                 }
                 .foregroundStyle(.white)
@@ -1189,7 +1189,7 @@ private struct FloatingCTAView: View {
                     Image(systemName: "camera")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.kolcoOrange)
-                    Text("Фото")
+                    Text(.marksActionPhoto)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.ink)
                 }

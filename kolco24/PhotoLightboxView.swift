@@ -99,7 +99,7 @@ struct PhotoLightboxView: View {
                         PhotoKpChip(token: markTileToken(current.tile), scale: 1.35)
                         // Неподтверждённое cloud/local-взятие: кадр — лишь довод, КП не засчитан.
                         if current.tile.unconfirmed {
-                            Label("не подтверждён сервером", systemImage: "icloud.slash")
+                            Label(.photoLightboxUnconfirmed, systemImage: "icloud.slash")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 7)

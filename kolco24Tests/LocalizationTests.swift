@@ -33,7 +33,8 @@ struct LocalizationTests {
     }
 
     @Test func keysAreSemantic() throws {
-        let pattern = /^[a-z][a-zA-Z0-9]*(\.[a-zA-Z0-9]+)+$/
+        // Без цифр: генератор символов пишет букву после цифры заглавной (`a11y` → `A11Y`).
+        let pattern = /^[a-z][a-zA-Z]*(\.[a-zA-Z]+)+$/
         for key in try Self.catalog("ru").keys {
             #expect(key.wholeMatch(of: pattern) != nil, "не семантический ключ: \(key)")
         }
