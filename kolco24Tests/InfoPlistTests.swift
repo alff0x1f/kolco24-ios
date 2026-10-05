@@ -99,4 +99,39 @@ struct InfoPlistTests {
         )
         #expect(!nfcUsage.isEmpty)
     }
+
+    private static let usageKeys = [
+        "NFCReaderUsageDescription",
+        "NSCameraUsageDescription",
+        "NSLocalNetworkUsageDescription",
+        "NSLocationWhenInUseUsageDescription",
+    ]
+
+    private static func infoPlistStrings(_ language: String) throws -> [String: String] {
+        let path = try #require(
+            Bundle.main.path(forResource: "InfoPlist", ofType: "strings", inDirectory: nil, forLocalization: language)
+        )
+        return try #require(NSDictionary(contentsOfFile: path) as? [String: String])
+    }
+
+    @Test func usageDescriptionsHaveEnglish() throws {
+        // Без en ревьюер Apple на английском устройстве видит русские промпты.
+        let strings = try Self.infoPlistStrings("en")
+        for key in Self.usageKeys {
+            let value = try #require(strings[key], "нет en для \(key)")
+            #expect(!value.isEmpty)
+            #expect(value.wholeMatch(of: /[^А-Яа-яЁё]+/) != nil, "кириллица в en \(key)")
+        }
+    }
+
+    @Test func russianUsageDescriptionsMatchInfoPlist() throws {
+        // Ключ без ru-значения в InfoPlist.xcstrings компилируется в ru.lproj как
+        // сам ключ — промпт показал бы «NSCameraUsageDescription». ru в каталоге
+        // обязан совпадать с INFOPLIST_KEY_* (база Info.plist).
+        let strings = try Self.infoPlistStrings("ru")
+        for key in Self.usageKeys {
+            let base = try #require(Bundle.main.infoDictionary?[key] as? String)
+            #expect(strings[key] == base, "ru для \(key) расходится с INFOPLIST_KEY_\(key)")
+        }
+    }
 }

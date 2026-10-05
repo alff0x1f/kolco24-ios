@@ -165,12 +165,13 @@
 - Create: `kolco24/InfoPlist.xcstrings`
 - Modify: `kolco24Tests/InfoPlistTests.swift`
 
-- [ ] add `InfoPlist.xcstrings` with en values for the 4 usage descriptions (ru entries added by Xcode from
+- [x] add `InfoPlist.xcstrings` with en values for the 4 usage descriptions (ru entries added by Xcode from
       `INFOPLIST_KEY_*` are fine)
-- [ ] keep ru in `INFOPLIST_KEY_*`; confirm the merged plist builds
-- [ ] extend `InfoPlistTests`: `Bundle.main.path(forResource: "InfoPlist", ofType: "strings",
+- [x] keep ru in `INFOPLIST_KEY_*`; confirm the merged plist builds
+- [x] ➕ ru values duplicated in `InfoPlist.xcstrings`: a key with no ru value compiles into `ru.lproj` as the key itself (prompt would read «NSCameraUsageDescription»); test `russianUsageDescriptionsMatchInfoPlist` keeps them equal to `INFOPLIST_KEY_*`
+- [x] extend `InfoPlistTests`: `Bundle.main.path(forResource: "InfoPlist", ofType: "strings",
       inDirectory: nil, forLocalization: "en")` has all 4 keys, non-empty
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 3: Readiness checklist and refresh errors
 

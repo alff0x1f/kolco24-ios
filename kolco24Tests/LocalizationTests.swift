@@ -28,8 +28,8 @@ struct LocalizationTests {
         let en = try Self.catalog("en")
         #expect(!ru.isEmpty)
         #expect(Set(ru.keys) == Set(en.keys), "без пары: \(Set(ru.keys).symmetricDifference(en.keys).sorted())")
-        for (key, value) in ru { #expect(!value.isEmpty, "пустое ru: \(key)") }
-        for (key, value) in en { #expect(!value.isEmpty, "пустое en: \(key)") }
+        for (key, value) in ru { #expect(!value.isEmpty && value != key, "нет ru: \(key)") }
+        for (key, value) in en { #expect(!value.isEmpty && value != key, "нет en: \(key)") }
     }
 
     @Test func keysAreSemantic() throws {
