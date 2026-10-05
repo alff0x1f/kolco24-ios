@@ -179,11 +179,11 @@
 - Modify: `kolco24/Core/Readiness/ReadinessChecklist.swift`, `kolco24/Core/Sync/RefreshErrorMessage.swift`
 - Modify: `kolco24/Localizable.xcstrings`, matching tests
 
-- [ ] move title/detail strings to `readiness.*` keys (`readiness.chips.bound` with 2 args)
-- [ ] move refresh error texts to `refresh.error.*`
-- [ ] existing Russian tests stay green unchanged
-- [ ] add en symbol assertions for 2–3 keys incl. one with args
-- [ ] run tests - must pass before next task
+- [x] move title/detail strings to `readiness.*` keys (`readiness.chips.bound` with 2 args)
+- [x] move refresh error texts to `refresh.error.*`
+- [x] existing Russian tests stay green unchanged
+- [x] add en symbol assertions for 2–3 keys incl. one with args
+- [x] run tests - must pass before next task
 
 ### Task 4: Control time, track speed, clock skew
 

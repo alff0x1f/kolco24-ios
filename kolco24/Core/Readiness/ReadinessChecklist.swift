@@ -120,7 +120,7 @@ private func teamItem(_ input: ReadinessInput) -> ReadinessItem {
         return ReadinessItem(
             id: .team,
             status: .done,
-            title: "Команда выбрана",
+            title: String(localized: .readinessTeamSelectedTitle),
             detail: input.teamTitle,
             action: .chooseTeam
         )
@@ -128,8 +128,8 @@ private func teamItem(_ input: ReadinessInput) -> ReadinessItem {
     return ReadinessItem(
         id: .team,
         status: .blocked,
-        title: "Команда не выбрана",
-        detail: "Выберите соревнование и команду",
+        title: String(localized: .readinessTeamMissingTitle),
+        detail: String(localized: .readinessTeamMissingDetail),
         action: .chooseTeam
     )
 }
@@ -139,8 +139,8 @@ private func chipsItem(_ input: ReadinessInput) -> ReadinessItem {
         return ReadinessItem(
             id: .chips,
             status: .blocked,
-            title: "Чипы не привязаны",
-            detail: "Сначала выберите команду",
+            title: String(localized: .readinessChipsNoTeamTitle),
+            detail: String(localized: .readinessChipsNoTeamDetail),
             action: nil
         )
     }
@@ -150,8 +150,8 @@ private func chipsItem(_ input: ReadinessInput) -> ReadinessItem {
         return ReadinessItem(
             id: .chips,
             status: .blocked,
-            title: "Состав команды не загружен",
-            detail: "Без участников отметка не сработает — обновите данные",
+            title: String(localized: .readinessChipsNoRosterTitle),
+            detail: String(localized: .readinessChipsNoRosterDetail),
             action: .refresh
         )
     }
@@ -159,16 +159,16 @@ private func chipsItem(_ input: ReadinessInput) -> ReadinessItem {
         return ReadinessItem(
             id: .chips,
             status: .done,
-            title: "Чипы привязаны",
-            detail: "\(input.boundCount) из \(input.memberCount)",
+            title: String(localized: .readinessChipsBoundTitle),
+            detail: String(localized: .readinessChipsBoundOfTotal(input.boundCount, input.memberCount)),
             action: .bindChips
         )
     }
     return ReadinessItem(
         id: .chips,
         status: .blocked,
-        title: "Чипы привязаны не всем",
-        detail: "\(input.boundCount) из \(input.memberCount)",
+        title: String(localized: .readinessChipsPartialTitle),
+        detail: String(localized: .readinessChipsBoundOfTotal(input.boundCount, input.memberCount)),
         action: .bindChips
     )
 }
@@ -179,16 +179,16 @@ private func locationItem(_ input: ReadinessInput) -> ReadinessItem {
         return ReadinessItem(
             id: .location,
             status: .warning,
-            title: "Геолокация",
-            detail: "Доступ не запрошен — нажмите, чтобы разрешить",
+            title: String(localized: .readinessLocationTitle),
+            detail: String(localized: .readinessLocationNotDeterminedDetail),
             action: .requestLocation
         )
     case .denied:
         return ReadinessItem(
             id: .location,
             status: .warning,
-            title: "Геолокация",
-            detail: "Доступ запрещён — включите в Настройках",
+            title: String(localized: .readinessLocationTitle),
+            detail: String(localized: .readinessLocationDeniedDetail),
             action: .openSettings
         )
     case .granted:
@@ -196,16 +196,16 @@ private func locationItem(_ input: ReadinessInput) -> ReadinessItem {
             return ReadinessItem(
                 id: .location,
                 status: .warning,
-                title: "Геолокация",
-                detail: "Дана примерная локация — включите точную геопозицию",
+                title: String(localized: .readinessLocationTitle),
+                detail: String(localized: .readinessLocationReducedDetail),
                 action: .openSettings
             )
         }
         return ReadinessItem(
             id: .location,
             status: .done,
-            title: "Геолокация разрешена",
-            detail: "Точная геопозиция",
+            title: String(localized: .readinessLocationGrantedTitle),
+            detail: String(localized: .readinessLocationGrantedDetail),
             action: nil
         )
     }
@@ -216,16 +216,16 @@ private func legendItem(_ input: ReadinessInput) -> ReadinessItem {
         return ReadinessItem(
             id: .legend,
             status: .done,
-            title: "Легенда загружена",
-            detail: "\(input.checkpointCount) КП",
+            title: String(localized: .readinessLegendLoadedTitle),
+            detail: String(localized: .readinessLegendCpCount(input.checkpointCount)),
             action: nil
         )
     }
     return ReadinessItem(
         id: .legend,
         status: .warning,
-        title: "Легенда не загружена",
-        detail: "Нажмите, чтобы обновить данные",
+        title: String(localized: .readinessLegendMissingTitle),
+        detail: String(localized: .readinessLegendMissingDetail),
         action: .refresh
     )
 }
@@ -238,16 +238,16 @@ private func mapItem(_ input: ReadinessInput) -> ReadinessItem? {
         return ReadinessItem(
             id: .map,
             status: .done,
-            title: "Карта скачана",
-            detail: "Подложка доступна оффлайн",
+            title: String(localized: .readinessMapReadyTitle),
+            detail: String(localized: .readinessMapReadyDetail),
             action: .openMap
         )
     case .missing:
         return ReadinessItem(
             id: .map,
             status: .warning,
-            title: "Карта не скачана",
-            detail: "Скачайте подложку заранее — в лесу может не быть связи",
+            title: String(localized: .readinessMapMissingTitle),
+            detail: String(localized: .readinessMapMissingDetail),
             action: .openMap
         )
     }
@@ -259,24 +259,24 @@ private func clockItem(_ input: ReadinessInput) -> ReadinessItem {
         return ReadinessItem(
             id: .clock,
             status: .done,
-            title: "Часы синхронизированы",
-            detail: "Время совпадает с судейским",
+            title: String(localized: .readinessClockOkTitle),
+            detail: String(localized: .readinessClockOkDetail),
             action: nil
         )
     case .noSync:
         return ReadinessItem(
             id: .clock,
             status: .warning,
-            title: "Часы не синхронизированы",
-            detail: "Нет связи с сервером — время отметок берётся с телефона",
+            title: String(localized: .readinessClockNoSyncTitle),
+            detail: String(localized: .readinessClockNoSyncDetail),
             action: nil
         )
     case .skewed(let skewMs):
         return ReadinessItem(
             id: .clock,
             status: .warning,
-            title: "Часы расходятся",
-            detail: "Расхождение с судейским временем — \(formatSkewMinutes(skewMs))",
+            title: String(localized: .readinessClockSkewedTitle),
+            detail: String(localized: .readinessClockSkewedDetail(formatSkewMinutes(skewMs))),
             action: nil
         )
     }
@@ -290,8 +290,8 @@ private func powerItem(_ input: ReadinessInput) -> ReadinessItem? {
     return ReadinessItem(
         id: .power,
         status: .warning,
-        title: "Включено энергосбережение",
-        detail: "Фоновая запись трека может прерываться — выключите в Настройках → Аккумулятор",
+        title: String(localized: .readinessPowerTitle),
+        detail: String(localized: .readinessPowerDetail),
         action: nil
     )
 }
