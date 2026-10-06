@@ -130,23 +130,31 @@ struct MapFileStorage: Sendable {
         let task = session.downloadTask(with: url)
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                delegate.continuation = continuation
-                task.resume()
+                delegate.start(task, continuation: continuation)
             }
         } onCancel: {
-            task.cancel()
+            delegate.cancel(task)
         }
     }
 }
 
 /// Делегат сессии скачивания подложки: прогресс (`didWriteData`), установка файла
 /// на место (`didFinishDownloadingTo` — temp валиден только до возврата из него) и
-/// завершение (`didCompleteWithError` → `continuation`). Колбэки идут на
-/// последовательной очереди делегата сессии, поэтому состояние без локов.
+/// завершение (`didCompleteWithError` → `continuation`).
+///
+/// Состояние под локом: при уже отменённом `Task` `onCancel` идёт раньше `start`,
+/// и задача может завершиться до появления `continuation` — тогда результат
+/// ждёт её в `result`. После `cancel` файл на место не ставится; установка и
+/// `cancel` взаимоисключены, так что отмена либо успевает до неё, либо
+/// проигрывает уже установленному файлу (и `download` возвращается успешно).
 private final class MapDownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     private let onProgress: @Sendable (Double) -> Void
     private let install: (URL, URLResponse?) throws -> Void
-    var continuation: CheckedContinuation<Void, Error>?
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var result: Result<Void, Error>?
+    private var cancelled = false
+    private var installed = false
     private var installError: Error?
 
     init(
@@ -155,6 +163,23 @@ private final class MapDownloadDelegate: NSObject, URLSessionDownloadDelegate, @
     ) {
         self.onProgress = onProgress
         self.install = install
+    }
+
+    func start(_ task: URLSessionDownloadTask, continuation: CheckedContinuation<Void, Error>) {
+        lock.lock()
+        if let result {
+            lock.unlock()
+            continuation.resume(with: result)
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+        task.resume()
+    }
+
+    func cancel(_ task: URLSessionDownloadTask) {
+        lock.withLock { cancelled = true }
+        task.cancel()
     }
 
     func urlSession(
@@ -175,19 +200,29 @@ private final class MapDownloadDelegate: NSObject, URLSessionDownloadDelegate, @
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        do {
-            try install(location, downloadTask.response)
-        } catch {
-            installError = error
+        lock.withLock {
+            guard !cancelled else { return }
+            do {
+                try install(location, downloadTask.response)
+                installed = true
+            } catch {
+                installError = error
+            }
         }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error = error ?? installError {
-            continuation?.resume(throwing: error)
+        lock.lock()
+        let outcome: Result<Void, Error>
+        if installed {
+            outcome = .success(())
         } else {
-            continuation?.resume()
+            outcome = .failure(error ?? installError ?? URLError(.cancelled))
         }
+        let waiting = continuation
         continuation = nil
+        if waiting == nil { result = outcome }
+        lock.unlock()
+        waiting?.resume(with: outcome)
     }
 }
