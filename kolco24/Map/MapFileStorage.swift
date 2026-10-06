@@ -108,41 +108,78 @@ struct MapFileStorage: Sendable {
     /// атомарно поставить файл на место. Отмена (`Task.cancel`) / сетевая ошибка
     /// → бросок; временный файл убирается системой, файл подложки не появляется.
     ///
-    /// `URLSessionDownloadTask` через делегат (`didWriteData` → прогресс), а **не**
-    /// `URLSession.bytes` с побайтовой итерацией: для 20–60 МБ это O(n) await'ов и
-    /// мучительно медленно.
+    /// Делегат — у сессии, а не у задачи: async `session.download(from:delegate:)`
+    /// не зовёт у task-делегата `didWriteData`, и прогресс стоял на 0.
     func download(
         from url: URL,
         raceId: Int,
         onProgress: @escaping @Sendable (Double) -> Void
     ) async throws {
-        let session = URLSession(configuration: .ephemeral)
+        let delegate = MapDownloadDelegate(onProgress: onProgress) { tempURL, response in
+            guard let http = response as? HTTPURLResponse else {
+                throw MapDownloadError.httpError(0)
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                mapStorageLog.error("map download HTTP \(http.statusCode) for race \(raceId)")
+                throw MapDownloadError.httpError(http.statusCode)
+            }
+            try moveIntoPlace(from: tempURL, raceId: raceId)
+        }
+        let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
-        let delegate = MapDownloadDelegate(onProgress: onProgress)
-        // `download(for:delegate:)` завершает `didFinishDownloadingTo` внутри и
-        // возвращает временный файл (валиден до возврата из этого вызова — потому
-        // ставим на место здесь же). Делегат нужен лишь для прогресса.
-        let (tempURL, response) = try await session.download(from: url, delegate: delegate)
-        guard let http = response as? HTTPURLResponse else {
-            try? FileManager.default.removeItem(at: tempURL)
-            throw MapDownloadError.httpError(0)
+        let task = session.downloadTask(with: url)
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                delegate.start(task, continuation: continuation)
+            }
+        } onCancel: {
+            delegate.cancel(task)
         }
-        guard (200..<300).contains(http.statusCode) else {
-            try? FileManager.default.removeItem(at: tempURL)
-            mapStorageLog.error("map download HTTP \(http.statusCode) for race \(raceId)")
-            throw MapDownloadError.httpError(http.statusCode)
-        }
-        try moveIntoPlace(from: tempURL, raceId: raceId)
     }
 }
 
-/// Делегат `URLSessionDownloadTask` — только прогресс скачивания. `didWriteData`
-/// вызывается на очереди делегата сессии; `onProgress` захвачен как `@Sendable`.
+/// Делегат сессии скачивания подложки: прогресс (`didWriteData`), установка файла
+/// на место (`didFinishDownloadingTo` — temp валиден только до возврата из него) и
+/// завершение (`didCompleteWithError` → `continuation`).
+///
+/// Состояние под локом: при уже отменённом `Task` `onCancel` идёт раньше `start`,
+/// и задача может завершиться до появления `continuation` — тогда результат
+/// ждёт её в `result`. После `cancel` файл на место не ставится; установка и
+/// `cancel` взаимоисключены, так что отмена либо успевает до неё, либо
+/// проигрывает уже установленному файлу (и `download` возвращается успешно).
 private final class MapDownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     private let onProgress: @Sendable (Double) -> Void
+    private let install: (URL, URLResponse?) throws -> Void
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var result: Result<Void, Error>?
+    private var cancelled = false
+    private var installed = false
+    private var installError: Error?
 
-    init(onProgress: @escaping @Sendable (Double) -> Void) {
+    init(
+        onProgress: @escaping @Sendable (Double) -> Void,
+        install: @escaping (URL, URLResponse?) throws -> Void
+    ) {
         self.onProgress = onProgress
+        self.install = install
+    }
+
+    func start(_ task: URLSessionDownloadTask, continuation: CheckedContinuation<Void, Error>) {
+        lock.lock()
+        if let result {
+            lock.unlock()
+            continuation.resume(with: result)
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+        task.resume()
+    }
+
+    func cancel(_ task: URLSessionDownloadTask) {
+        lock.withLock { cancelled = true }
+        task.cancel()
     }
 
     func urlSession(
@@ -158,11 +195,34 @@ private final class MapDownloadDelegate: NSObject, URLSessionDownloadDelegate, @
         onProgress(progress)
     }
 
-    // Требование протокола: с async `download(for:delegate:)` система обрабатывает
-    // завершение сама и возвращает временный файл — здесь ничего не делаем.
     func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
-    ) {}
+    ) {
+        lock.withLock {
+            guard !cancelled else { return }
+            do {
+                try install(location, downloadTask.response)
+                installed = true
+            } catch {
+                installError = error
+            }
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        lock.lock()
+        let outcome: Result<Void, Error>
+        if installed {
+            outcome = .success(())
+        } else {
+            outcome = .failure(error ?? installError ?? URLError(.cancelled))
+        }
+        let waiting = continuation
+        continuation = nil
+        if waiting == nil { result = outcome }
+        lock.unlock()
+        waiting?.resume(with: outcome)
+    }
 }
