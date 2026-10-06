@@ -231,7 +231,8 @@ final class MapModel {
                 try await download(url, raceId) { progress in
                     Task { @MainActor [weak self] in
                         guard let self, self.boundRaceId == raceId,
-                              case .downloading = self.availability else { return }
+                              case let .downloading(current) = self.availability,
+                              Int(progress * 100) != Int(current * 100) else { return }
                         self.availability = .downloading(progress: progress)
                     }
                 }
