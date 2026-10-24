@@ -35,17 +35,24 @@ final class SettingsModel: Identifiable {
     /// Последний известный lease (обновляется стримом `LeaseHolder`). Стор для derived-тумблера/сабтайтла.
     private(set) var currentLease: RaceLease?
 
+    /// Без выбранной команды тумблер смотрит на ближайшую гонку — ту же, что пинит
+    /// `SyncCoordinator.enterLocalMode` (паритет с Android `localModeRaceId`).
+    private(set) var nearestRaceIdFallback: Int?
+
+    private var localModeRaceId: Int? { raceId ?? nearestRaceIdFallback }
+
     /// Тумблер «Локальный сервер» — derived: гонка скоупа запинена к LAN и lease жив. Wall-clock `nowMs`
     /// (deviation плана — `isPinned` нужен синхронно, `TrustedClock` — actor-async).
     var localModeOn: Bool {
-        guard let raceId else { return false }
+        guard let raceId = localModeRaceId else { return false }
         return isPinned(currentLease, raceId: raceId, nowMs: nowMs())
     }
 
     /// Сабтайтл ряда LAN-режима: пин → «Локальный режим до HH:mm» (локальная таймзона), иначе
     /// «Обновление из интернета». Спиннер/«Обновление…» при `localModeBusy` рисует вьюха.
     var localModeSubtitle: String {
-        guard let raceId, let lease = currentLease, isPinned(lease, raceId: raceId, nowMs: nowMs()) else {
+        guard let raceId = localModeRaceId, let lease = currentLease,
+              isPinned(lease, raceId: raceId, nowMs: nowMs()) else {
             return String(localized: .localModeSubtitleCloud)
         }
         return localModeUntilLabel(expiresAtMs: lease.expiresAtMs)
@@ -172,6 +179,7 @@ final class SettingsModel: Identifiable {
     @ObservationIgnored private let nowMs: () -> Int64
     @ObservationIgnored private var leaseTask: Task<Void, Never>?
     @ObservationIgnored private var trackTask: Task<Void, Never>?
+    @ObservationIgnored private var racesTask: Task<Void, Never>?
 
     /// - Parameters:
     ///   - raceId/teamId: скоуп выбранной команды (счётчик трека, пин-чек гонки).
@@ -215,6 +223,18 @@ final class SettingsModel: Identifiable {
             }
         }
 
+        if raceId == nil {
+            let races = env.raceStore.observeRaces()
+            racesTask = Task { [weak self] in
+                do {
+                    for try await list in races {
+                        guard let self, !Task.isCancelled else { return }
+                        self.nearestRaceIdFallback = nearestRaceId(list, today: todayIso())
+                    }
+                } catch {}
+            }
+        }
+
         // Счётчик точек трека выбранной команды (только когда скоуп определён).
         if let teamId, let raceId {
             let observation = env.trackStore.countForTeam(teamId: teamId, raceId: raceId)
@@ -232,6 +252,7 @@ final class SettingsModel: Identifiable {
     deinit {
         leaseTask?.cancel()
         trackTask?.cancel()
+        racesTask?.cancel()
     }
 }
 

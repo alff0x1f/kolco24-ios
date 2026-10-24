@@ -112,9 +112,13 @@ struct TeamView: View {
             // Подавляем мигание empty-состояния до первой эмиссии observation.
             Color.paper
         case .none:
-            TeamEmptyState(onChooseTeam: onChooseTeam)
+            TeamEmptyState(onChooseTeam: onChooseTeam) {
+                miscSection.padding(.bottom, 16)
+            }
         case .missing:
-            TeamEmptyState(missing: true, onChooseTeam: onChooseTeam)
+            TeamEmptyState(missing: true, onChooseTeam: onChooseTeam) {
+                miscSection.padding(.bottom, 16)
+            }
         case .present(let team):
             teamContent(team)
         }
@@ -184,33 +188,38 @@ struct TeamView: View {
                 SectionHeader(String(localized: .teamMiscHeader))
                     .padding(.top, 20)
 
-                VStack(spacing: 0) {
-                    Button { showUpload = true } label: {
-                        MiscRowView(systemImage: "arrow.up.circle.fill", iconBg: Color.good, label: String(localized: .uploadTitle), sub: uploadModel?.pendingLabel ?? String(localized: .uploadPendingNothing))
-                            .padding(.horizontal, DS.hPad)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                    Rectangle()
-                        .fill(Color.hairline)
-                        .frame(height: 0.5)
-                        .padding(.leading, DS.hPad + 30 + 12)
-                    Button {
-                        settingsModel = appModel.makeSettingsModel()
-                    } label: {
-                        MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: String(localized: .settingsTitle), sub: String(localized: .teamMiscSettingsSub))
-                            .padding(.horizontal, DS.hPad)
-                            .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .background(Color.card)
-                .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
-                .padding(.horizontal, DS.hPad)
-                .padding(.bottom, 32)
+                miscSection
+                    .padding(.bottom, 32)
             }
         }
         .refreshable { await appModel.refreshAll() }
+    }
+
+    /// «Загрузка данных» + «Настройки»; показывается и без выбранной команды (паритет с Android).
+    private var miscSection: some View {
+        VStack(spacing: 0) {
+            Button { showUpload = true } label: {
+                MiscRowView(systemImage: "arrow.up.circle.fill", iconBg: Color.good, label: String(localized: .uploadTitle), sub: uploadModel?.pendingLabel ?? String(localized: .uploadPendingNothing))
+                    .padding(.horizontal, DS.hPad)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            Rectangle()
+                .fill(Color.hairline)
+                .frame(height: 0.5)
+                .padding(.leading, DS.hPad + 30 + 12)
+            Button {
+                settingsModel = appModel.makeSettingsModel()
+            } label: {
+                MiscRowView(systemImage: "gearshape.fill", iconBg: Color.charcoal, label: String(localized: .settingsTitle), sub: String(localized: .teamMiscSettingsSub))
+                    .padding(.horizontal, DS.hPad)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+        }
+        .background(Color.card)
+        .clipShape(RoundedRectangle(cornerRadius: DS.cardRadius))
+        .padding(.horizontal, DS.hPad)
     }
 }
 

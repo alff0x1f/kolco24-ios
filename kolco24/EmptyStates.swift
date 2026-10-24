@@ -14,9 +14,11 @@
 import SwiftUI
 
 /// Пустое состояние «нет выбранной команды». `missing == true` — «команда исчезла с сервера».
-struct TeamEmptyState: View {
+/// `footer` — над CTA (вкладка «Команда» кладёт туда «Загрузку данных» и «Настройки», как Android).
+struct TeamEmptyState<Footer: View>: View {
     var missing: Bool = false
     let onChooseTeam: () -> Void
+    @ViewBuilder var footer: Footer
 
     private var title: String {
         missing ? String(localized: .marksEmptyTeamGoneTitle) : String(localized: .marksEmptyNoTeamTitle)
@@ -30,6 +32,17 @@ struct TeamEmptyState: View {
     }
 
     var body: some View {
+        // На коротком экране (SE, landscape, Display Zoom) контент прокручивается, а не сжимается.
+        GeometryReader { geo in
+            ScrollView {
+                content.frame(minHeight: geo.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .background(Color.paper)
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 24)
 
@@ -51,6 +64,8 @@ struct TeamEmptyState: View {
 
             Spacer(minLength: 24)
 
+            footer
+
             Button(action: onChooseTeam) {
                 HStack(spacing: 8) {
                     Image(systemName: "person.3.fill").font(.system(size: 16, weight: .semibold))
@@ -65,8 +80,13 @@ struct TeamEmptyState: View {
             .padding(.horizontal, DS.hPad)
             .padding(.bottom, 24)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.paper)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+extension TeamEmptyState where Footer == EmptyView {
+    init(missing: Bool = false, onChooseTeam: @escaping () -> Void) {
+        self.init(missing: missing, onChooseTeam: onChooseTeam) { EmptyView() }
     }
 }
 
