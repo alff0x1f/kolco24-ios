@@ -32,6 +32,17 @@ struct TeamEmptyState<Footer: View>: View {
     }
 
     var body: some View {
+        // На коротком экране (SE, landscape, Display Zoom) контент прокручивается, а не сжимается.
+        GeometryReader { geo in
+            ScrollView {
+                content.frame(minHeight: geo.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .background(Color.paper)
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 24)
 
@@ -69,8 +80,7 @@ struct TeamEmptyState<Footer: View>: View {
             .padding(.horizontal, DS.hPad)
             .padding(.bottom, 24)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.paper)
+        .frame(maxWidth: .infinity)
     }
 }
 

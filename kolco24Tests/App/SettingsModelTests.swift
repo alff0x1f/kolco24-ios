@@ -125,6 +125,26 @@ struct SettingsModelTests {
         #expect(model.localModeSubtitle == "Обновление из интернета")
     }
 
+    /// Без выбранной команды тумблер смотрит на ближайшую гонку (её пинит `enterLocalMode`) —
+    /// иначе включённый LAN-режим нельзя выключить.
+    @Test func localModeToggle_noTeamUsesNearestRace() async throws {
+        let transport = FakeTransport()
+        let env = try AppEnvironment.inMemory(transport: transport.handle)
+        try await env.raceStore.replaceAll([
+            Race(id: 11, name: "Кольцо24", slug: "race-11", date: "2099-12-31", place: "Сосновый бор", regStatus: "open")
+        ])
+        env.leaseHolder.set(RaceLease(raceId: 11, expiresAtMs: 5000))
+        let appModel = AppModel(env: env)
+        let model = SettingsModel(
+            env: env, appModel: appModel, raceId: nil, teamId: nil,
+            nowMs: { 1000 }
+        )
+
+        await waitUntil { model.localModeOn }
+        #expect(model.localModeOn == true)
+        #expect(model.localModeSubtitle.hasPrefix("Локальный режим до"))
+    }
+
     // MARK: - toggleLocalMode → busy → тост
 
     /// `toggleLocalMode(true)` против LAN-манифеста `data_source: "local"` пинит гонку через `AppModel`,
